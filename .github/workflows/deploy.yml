@@ -100,5 +100,5 @@ jobs:
           DEPLOY_REMOTE_HOST: 104.36.23.197
           DEPLOY_REMOTE_PORT: 2048
           DEPLOY_REMOTE_USER: ubuntu
-          DEPLOY_REMOTE_DIR: www/coldfollow.com/coldfollow-web
+          DEPLOY_REMOTE_DIR: www/qrypt.chat/qryptchat-web
           INSTALL_SERVICE: true

@@ -130,8 +130,8 @@ app.post('/api/stripe-simple/create-checkout', async (c) => {
       },
       body: new URLSearchParams({
         'mode': 'subscription',
-        'success_url': 'https://convert2doc.com/dashboard?success=true',
-        'cancel_url': 'https://convert2doc.com/register?canceled=true',
+        'success_url': 'https://qrypt.chat/dashboard?success=true',
+        'cancel_url': 'https://qrypt.chat/register?canceled=true',
         'customer_email': email, // Pre-fill customer email in checkout
         'line_items[0][price]': priceId,
         'line_items[0][quantity]': '1'
@@ -178,8 +178,8 @@ app.post('/api/stripe-direct/create-checkout', async (c) => {
     // Directly create session with minimal params
     const session = await stripeDirectClient.checkout.sessions.create({
       mode: 'subscription',
-      success_url: 'https://convert2doc.com/dashboard?success=true',
-      cancel_url: 'https://convert2doc.com/register?canceled=true',
+      success_url: 'https://qrypt.chat/dashboard?success=true',
+      cancel_url: 'https://qrypt.chat/register?canceled=true',
       customer_email: email, // Pre-fill customer email in checkout
       line_items: [{ price: priceId, quantity: 1 }]
     });
@@ -216,7 +216,7 @@ app.get('/', async (c) => {
   // Otherwise, return a JSON response
   return c.json({
     status: 'ok',
-    message: 'Document generation service is running',
+    message: 'E2E encrypted chat service is running',
     version: process.env.npm_package_version || '1.0.0'
   });
 });
@@ -290,14 +290,9 @@ const startServer = (portToUse) => {
   }, (info) => {
     console.log(`Server running at http://localhost:${info.port}`);
     console.log('Available endpoints:');
-    console.log(`- HTML to PDF: http://localhost:${info.port}/api/1/html-to-pdf`);
-    console.log(`- HTML to DOC: http://localhost:${info.port}/api/1/html-to-doc`);
-    console.log(`- HTML to Excel: http://localhost:${info.port}/api/1/html-to-excel`);
-    console.log(`- HTML to PowerPoint: http://localhost:${info.port}/api/1/html-to-ppt`);
-    console.log(`- HTML to EPUB: http://localhost:${info.port}/api/1/html-to-epub`);
-    console.log(`- HTML to Markdown: http://localhost:${info.port}/api/1/html-to-markdown`);
-    console.log(`- Markdown to HTML: http://localhost:${info.port}/api/1/markdown-to-html`);
-    console.log(`- Document History: http://localhost:${info.port}/api/1/document-history`);
+    console.log(`- WebSocket: http://localhost:${info.port}/api/1/ws`);
+    console.log(`- Chat API: http://localhost:${info.port}/api/1/chat`);
+    console.log(`- Chat UI: http://localhost:${info.port}/chat`);
     console.log(`- Subscription: http://localhost:${info.port}/api/1/subscription`);
     console.log(`- Subscription Status: http://localhost:${info.port}/api/1/subscription-status`);
     console.log(`- Stripe Checkout: http://localhost:${info.port}/api/1/payments/stripe/create-checkout-session`);
@@ -306,9 +301,6 @@ const startServer = (portToUse) => {
     console.log(`- Stripe Cancel: http://localhost:${info.port}/api/1/payments/stripe/cancel-subscription`);
     console.log(`- Payment Callback: http://localhost:${info.port}/api/1/payments/cryptapi/callback`);
     console.log(`- Payment Logs: http://localhost:${info.port}/api/1/payments/cryptapi/logs`);
-    console.log(`- WebSocket: http://localhost:${info.port}/api/1/ws`);
-    console.log(`- Chat API: http://localhost:${info.port}/api/1/chat`);
-    console.log(`- Chat UI: http://localhost:${info.port}/chat`);
     console.log(`- Web interface: http://localhost:${info.port}`);
     
     // Create a separate WebSocket server on a different port
