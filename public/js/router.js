@@ -395,6 +395,9 @@ export function defineRoutes(router) {
     '/': {
       view: () => loadPage('/views/home.html')
     },
+    '/chat': {
+      view: () => loadPage('/views/chat.html')
+    },
     '/login': {
       view: () => loadPage('/views/login.html'),
       afterRender: () => initLoginPage()

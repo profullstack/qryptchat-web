@@ -29,6 +29,7 @@ import {
 import { authStatusRoute } from './auth-status.js';
 import { supabaseConfigRoute } from './config.js';
 import { websocketRoute } from './websocket.js';
+import { chatRoute } from './chat.js';
 import { authMiddleware } from '../middleware/auth-middleware.js';
 
 // Routes that require authentication
@@ -65,6 +66,7 @@ const publicRoutes = [
   authStatusRoute,
   supabaseConfigRoute,
   websocketRoute,
+  chatRoute,
   // Subscription management routes
   {
     method: 'GET',

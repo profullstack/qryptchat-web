@@ -283,58 +283,154 @@ app.get('*', async (c) => {
 
 // Start the server
 const port = process.env.PORT || 3000;
-serve({
-  fetch: app.fetch,
-  port
-}, (info) => {
-  console.log(`Server running at http://localhost:${info.port}`);
-  console.log('Available endpoints:');
-  console.log(`- HTML to PDF: http://localhost:${info.port}/api/1/html-to-pdf`);
-  console.log(`- HTML to DOC: http://localhost:${info.port}/api/1/html-to-doc`);
-  console.log(`- HTML to Excel: http://localhost:${info.port}/api/1/html-to-excel`);
-  console.log(`- HTML to PowerPoint: http://localhost:${info.port}/api/1/html-to-ppt`);
-  console.log(`- HTML to EPUB: http://localhost:${info.port}/api/1/html-to-epub`);
-  console.log(`- HTML to Markdown: http://localhost:${info.port}/api/1/html-to-markdown`);
-  console.log(`- Markdown to HTML: http://localhost:${info.port}/api/1/markdown-to-html`);
-  console.log(`- Document History: http://localhost:${info.port}/api/1/document-history`);
-  console.log(`- Subscription: http://localhost:${info.port}/api/1/subscription`);
-  console.log(`- Subscription Status: http://localhost:${info.port}/api/1/subscription-status`);
-  console.log(`- Stripe Checkout: http://localhost:${info.port}/api/1/payments/stripe/create-checkout-session`);
-  console.log(`- Stripe Webhook: http://localhost:${info.port}/api/1/payments/stripe/webhook`);
-  console.log(`- Stripe Subscription: http://localhost:${info.port}/api/1/payments/stripe/subscription`);
-  console.log(`- Stripe Cancel: http://localhost:${info.port}/api/1/payments/stripe/cancel-subscription`);
-  console.log(`- Payment Callback: http://localhost:${info.port}/api/1/payments/cryptapi/callback`);
-  console.log(`- Payment Logs: http://localhost:${info.port}/api/1/payments/cryptapi/logs`);
-  console.log(`- WebSocket: http://localhost:${info.port}/api/1/ws`);
-  console.log(`- Web interface: http://localhost:${info.port}`);
-});
-
-// Create a separate WebSocket server on a different port
-const wsPort = parseInt(port) + 1;
-const wss = new WebSocketServer({ port: wsPort });
-
-// Handle WebSocket connections
-wss.on('connection', (ws) => {
-  console.log('WebSocket connection established');
-  
-  // Send a welcome message
-  ws.send('Connected to WebSocket server');
-  
-  // Handle messages
-  ws.on('message', (message) => {
-    console.log(`Received message: ${message}`);
-    ws.send(`Echo: ${message}`);
+const startServer = (portToUse) => {
+  serve({
+    fetch: app.fetch,
+    port: portToUse
+  }, (info) => {
+    console.log(`Server running at http://localhost:${info.port}`);
+    console.log('Available endpoints:');
+    console.log(`- HTML to PDF: http://localhost:${info.port}/api/1/html-to-pdf`);
+    console.log(`- HTML to DOC: http://localhost:${info.port}/api/1/html-to-doc`);
+    console.log(`- HTML to Excel: http://localhost:${info.port}/api/1/html-to-excel`);
+    console.log(`- HTML to PowerPoint: http://localhost:${info.port}/api/1/html-to-ppt`);
+    console.log(`- HTML to EPUB: http://localhost:${info.port}/api/1/html-to-epub`);
+    console.log(`- HTML to Markdown: http://localhost:${info.port}/api/1/html-to-markdown`);
+    console.log(`- Markdown to HTML: http://localhost:${info.port}/api/1/markdown-to-html`);
+    console.log(`- Document History: http://localhost:${info.port}/api/1/document-history`);
+    console.log(`- Subscription: http://localhost:${info.port}/api/1/subscription`);
+    console.log(`- Subscription Status: http://localhost:${info.port}/api/1/subscription-status`);
+    console.log(`- Stripe Checkout: http://localhost:${info.port}/api/1/payments/stripe/create-checkout-session`);
+    console.log(`- Stripe Webhook: http://localhost:${info.port}/api/1/payments/stripe/webhook`);
+    console.log(`- Stripe Subscription: http://localhost:${info.port}/api/1/payments/stripe/subscription`);
+    console.log(`- Stripe Cancel: http://localhost:${info.port}/api/1/payments/stripe/cancel-subscription`);
+    console.log(`- Payment Callback: http://localhost:${info.port}/api/1/payments/cryptapi/callback`);
+    console.log(`- Payment Logs: http://localhost:${info.port}/api/1/payments/cryptapi/logs`);
+    console.log(`- WebSocket: http://localhost:${info.port}/api/1/ws`);
+    console.log(`- Chat API: http://localhost:${info.port}/api/1/chat`);
+    console.log(`- Chat UI: http://localhost:${info.port}/chat`);
+    console.log(`- Web interface: http://localhost:${info.port}`);
+    
+    // Create a separate WebSocket server on a different port
+    const wsPort = parseInt(portToUse) + 1;
+    startWebSocketServer(wsPort);
+  }).catch(err => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${portToUse} is already in use, trying ${portToUse + 2}...`);
+      startServer(portToUse + 2);
+    } else {
+      console.error('Server error:', err);
+    }
   });
-  
-  // Handle connection close
-  ws.on('close', () => {
-    console.log('WebSocket connection closed');
-  });
-  
-  // Handle errors
-  ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
-  });
-});
+};
 
-console.log(`WebSocket server running at ws://localhost:${wsPort}`);
+// Try to start the server on the initial port
+startServer(port);
+
+// Function to start the WebSocket server
+function startWebSocketServer(wsPort) {
+  try {
+    // Create a separate WebSocket server
+    const wss = new WebSocketServer({ port: wsPort });
+    
+    // Store connected clients
+    const clients = new Set();
+    
+    // Handle WebSocket connections
+    wss.on('connection', (ws) => {
+      console.log('WebSocket connection established');
+      
+      // Add client to the set
+      clients.add(ws);
+      
+      // Send a welcome message
+      const welcomeMessage = JSON.stringify({
+        type: 'system',
+        content: 'Connected to WebSocket server'
+      });
+      ws.send(welcomeMessage);
+      
+      // Handle messages
+      ws.on('message', (message) => {
+        try {
+          console.log(`Received message: ${message}`);
+          
+          // Parse the message
+          const parsedMessage = JSON.parse(message);
+          
+          // Handle different message types
+          switch (parsedMessage.type) {
+            case 'key_exchange':
+              // Forward key exchange message to all other clients
+              forwardMessage(ws, parsedMessage);
+              break;
+            
+            case 'chat_message':
+              // Forward chat message to all other clients
+              forwardMessage(ws, parsedMessage);
+              break;
+            
+            default:
+              console.warn('Unknown message type:', parsedMessage.type);
+              ws.send(JSON.stringify({
+                type: 'system',
+                content: `Unknown message type: ${parsedMessage.type}`
+              }));
+          }
+        } catch (error) {
+          console.error('Error handling WebSocket message:', error);
+          ws.send(JSON.stringify({
+            type: 'system',
+            content: `Error: ${error.message}`
+          }));
+        }
+      });
+      
+      // Handle connection close
+      ws.on('close', () => {
+        console.log('WebSocket connection closed');
+        // Remove client from the set
+        clients.delete(ws);
+      });
+      
+      // Handle errors
+      ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        clients.delete(ws);
+      });
+    });
+    
+    console.log(`WebSocket server running at ws://localhost:${wsPort}`);
+    
+    // Handle WebSocket server errors
+    wss.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.log(`WebSocket port ${wsPort} is already in use, trying ${wsPort + 2}...`);
+        startWebSocketServer(wsPort + 2);
+      } else {
+        console.error('WebSocket server error:', error);
+      }
+    });
+  } catch (error) {
+    console.error('Error starting WebSocket server:', error);
+    if (error.code === 'EADDRINUSE') {
+      console.log(`WebSocket port ${wsPort} is already in use, trying ${wsPort + 2}...`);
+      startWebSocketServer(wsPort + 2);
+    }
+  }
+  /**
+   * Forward a message to all other connected clients
+   * @param {WebSocket} sender - The client that sent the message
+   * @param {Object} message - The message to forward
+   */
+  function forwardMessage(sender, message) {
+    const messageStr = JSON.stringify(message);
+    
+    // Send to all clients except the sender
+    clients.forEach(client => {
+      if (client !== sender && client.readyState === WebSocket.OPEN) {
+        client.send(messageStr);
+      }
+    });
+  }
+}

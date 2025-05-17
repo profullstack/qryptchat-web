@@ -1,0 +1,61 @@
+<div class="chat-container">
+  <h1>Quantum-Resistant E2EE Chat</h1>
+  
+  <div class="chat-status">
+    Status: <span id="connectionStatus" class="disconnected">Disconnected</span>
+  </div>
+  
+  <div class="chat-controls">
+    <button id="generateKeysButton" class="action-button">Generate Keys</button>
+    <button id="connectButton" class="action-button" disabled>Connect</button>
+    <button id="disconnectButton" class="action-button" disabled>Disconnect</button>
+  </div>
+  
+  <div class="key-exchange-container">
+    <h2>Key Exchange</h2>
+    <div class="key-info">
+      <div class="key-field">
+        <label for="publicKeyDisplay">Your Public Key:</label>
+        <div class="key-display-container">
+          <textarea id="publicKeyDisplay" readonly></textarea>
+          <button id="copyPublicKeyButton" class="copy-button" disabled>Copy</button>
+        </div>
+      </div>
+      
+      <div class="key-field">
+        <label for="recipientPublicKey">Recipient's Public Key:</label>
+        <div class="key-input-container">
+          <textarea id="recipientPublicKey" placeholder="Paste recipient's public key here"></textarea>
+          <button id="setRecipientKeyButton" class="action-button" disabled>Set Key</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="chat-area">
+    <h2>Messages</h2>
+    <div id="messagesContainer" class="messages-container"></div>
+    
+    <div class="message-input-container">
+      <textarea id="messageInput" placeholder="Type your message here..." disabled></textarea>
+      <button id="sendButton" class="action-button" disabled>Send</button>
+    </div>
+  </div>
+  
+  <div class="encryption-info">
+    <h3>Encryption Information</h3>
+    <p>This chat uses CRYSTALS-Kyber for quantum-resistant key exchange and AES-GCM for message encryption.</p>
+    <details>
+      <summary>How it works</summary>
+      <ol>
+        <li>Generate a Kyber key pair (public/private keys)</li>
+        <li>Exchange public keys with your chat partner</li>
+        <li>Use Kyber to establish a shared secret</li>
+        <li>Encrypt messages with AES-GCM using the shared secret</li>
+      </ol>
+    </details>
+  </div>
+</div>
+
+<link rel="stylesheet" href="/css/chat.css">
+<script type="module" src="/js/views/chat.js"></script>
