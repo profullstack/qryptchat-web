@@ -1,4 +1,4 @@
-# Document Generation API - Future Enhancements
+# Qrypt Chat - Future Enhancements
 
 This document outlines planned features and enhancements to provide additional value to paying customers.
 

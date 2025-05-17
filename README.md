@@ -1,6 +1,6 @@
-# PDF Document Generation Service
+# Qrypt Chat
 
-A service for generating various document formats from HTML and Markdown.
+A service for generating Qrypt Chat.
 
 ## Automatic Deployment with GitHub Actions
 
