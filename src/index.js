@@ -284,36 +284,38 @@ app.get('*', async (c) => {
 // Start the server
 const port = process.env.PORT || 3000;
 const startServer = (portToUse) => {
-  serve({
-    fetch: app.fetch,
-    port: portToUse
-  }, (info) => {
-    console.log(`Server running at http://localhost:${info.port}`);
-    console.log('Available endpoints:');
-    console.log(`- WebSocket: http://localhost:${info.port}/api/1/ws`);
-    console.log(`- Chat API: http://localhost:${info.port}/api/1/chat`);
-    console.log(`- Chat UI: http://localhost:${info.port}/chat`);
-    console.log(`- Subscription: http://localhost:${info.port}/api/1/subscription`);
-    console.log(`- Subscription Status: http://localhost:${info.port}/api/1/subscription-status`);
-    console.log(`- Stripe Checkout: http://localhost:${info.port}/api/1/payments/stripe/create-checkout-session`);
-    console.log(`- Stripe Webhook: http://localhost:${info.port}/api/1/payments/stripe/webhook`);
-    console.log(`- Stripe Subscription: http://localhost:${info.port}/api/1/payments/stripe/subscription`);
-    console.log(`- Stripe Cancel: http://localhost:${info.port}/api/1/payments/stripe/cancel-subscription`);
-    console.log(`- Payment Callback: http://localhost:${info.port}/api/1/payments/cryptapi/callback`);
-    console.log(`- Payment Logs: http://localhost:${info.port}/api/1/payments/cryptapi/logs`);
-    console.log(`- Web interface: http://localhost:${info.port}`);
-    
-    // Create a separate WebSocket server on a different port
-    const wsPort = parseInt(portToUse) + 1;
-    startWebSocketServer(wsPort);
-  }).catch(err => {
+  try {
+    serve({
+      fetch: app.fetch,
+      port: portToUse
+    }, (info) => {
+      console.log(`Server running at http://localhost:${info.port}`);
+      console.log('Available endpoints:');
+      console.log(`- WebSocket: http://localhost:${info.port}/api/1/ws`);
+      console.log(`- Chat API: http://localhost:${info.port}/api/1/chat`);
+      console.log(`- Chat UI: http://localhost:${info.port}/chat`);
+      console.log(`- Subscription: http://localhost:${info.port}/api/1/subscription`);
+      console.log(`- Subscription Status: http://localhost:${info.port}/api/1/subscription-status`);
+      console.log(`- Stripe Checkout: http://localhost:${info.port}/api/1/payments/stripe/create-checkout-session`);
+      console.log(`- Stripe Webhook: http://localhost:${info.port}/api/1/payments/stripe/webhook`);
+      console.log(`- Stripe Subscription: http://localhost:${info.port}/api/1/payments/stripe/subscription`);
+      console.log(`- Stripe Cancel: http://localhost:${info.port}/api/1/payments/stripe/cancel-subscription`);
+      console.log(`- Payment Callback: http://localhost:${info.port}/api/1/payments/cryptapi/callback`);
+      console.log(`- Payment Logs: http://localhost:${info.port}/api/1/payments/cryptapi/logs`);
+      console.log(`- Web interface: http://localhost:${info.port}`);
+      
+      // Create a separate WebSocket server on a different port
+      const wsPort = parseInt(portToUse) + 1;
+      startWebSocketServer(wsPort);
+    });
+  } catch (err) {
     if (err.code === 'EADDRINUSE') {
       console.log(`Port ${portToUse} is already in use, trying ${portToUse + 2}...`);
       startServer(portToUse + 2);
     } else {
       console.error('Server error:', err);
     }
-  });
+  }
 };
 
 // Try to start the server on the initial port
