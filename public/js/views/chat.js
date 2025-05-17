@@ -2,7 +2,7 @@
  * Quantum-resistant end-to-end encrypted chat using CRYSTALS-Kyber
  * This module handles the chat UI, WebSocket communication, and encryption/decryption
  */
-import { Kyber768 } from 'https://esm.sh/crystals-kyber-js';
+import { MlKem768 } from 'https://esm.sh/crystals-kyber-js';
 
 // Chat state
 const chatState = {
@@ -67,7 +67,7 @@ async function generateKeys() {
     elements.generateKeysButton.disabled = true;
     
     // Generate key pair
-    const kyber = new Kyber768();
+    const kyber = new MlKem768();
     const keyPair = await kyber.keyPair();
     
     // Store key pair
@@ -193,7 +193,7 @@ async function performKeyEncapsulation() {
   try {
     addSystemMessage('Performing key encapsulation...');
     
-    const kyber = new Kyber768();
+    const kyber = new MlKem768();
     
     // Encapsulate using recipient's public key to generate a shared secret
     const { ciphertext, sharedSecret } = await kyber.encap(chatState.recipientPublicKey);
@@ -256,7 +256,7 @@ async function handleKeyExchange(message) {
     const ciphertext = base64ToArrayBuffer(message.ciphertext);
     
     // Perform key decapsulation
-    const kyber = new Kyber768();
+    const kyber = new MlKem768();
     const sharedSecret = await kyber.decap(ciphertext, chatState.keyPair.secretKey);
     
     // Store shared secret
