@@ -70,7 +70,7 @@ SELECT populate_auth_users();
 DROP FUNCTION IF EXISTS populate_auth_users();
 
 -- Add a comment explaining the migration
-COMMENT ON TABLE auth.users IS 'Auth users table populated from public.users. Users will need to reset their passwords.';
+-- COMMENT ON TABLE auth.users IS 'Auth users table populated from public.users. Users will need to reset their passwords.';
 
 -- Create a view to help monitor the sync between auth.users and public.users
 CREATE OR REPLACE VIEW user_auth_status AS
