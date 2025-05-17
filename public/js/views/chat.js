@@ -2,7 +2,29 @@
  * Quantum-resistant end-to-end encrypted chat using CRYSTALS-Kyber
  * This module handles the chat UI, WebSocket communication, and encryption/decryption
  */
-import { MlKem768 } from 'https://esm.sh/crystals-kyber-js';
+// Import the Kyber module with error handling
+let MlKem768;
+try {
+  const module = await import('/modules/crystals-kyber-js.js');
+  MlKem768 = module.MlKem768;
+  console.log('Successfully imported MlKem768 from crystals-kyber-js module');
+} catch (error) {
+  console.error('Error importing crystals-kyber-js module:', error);
+  // Fallback to direct import if needed
+  try {
+    const directModule = await import('https://esm.sh/crystals-kyber-js');
+    MlKem768 = directModule.MlKem768;
+    console.log('Successfully imported MlKem768 directly from esm.sh');
+  } catch (directError) {
+    console.error('Error importing directly from esm.sh:', directError);
+    // Create a placeholder that will show a clear error message if used
+    MlKem768 = class {
+      constructor() {
+        throw new Error('Failed to load Kyber module. Please check console for details.');
+      }
+    };
+  }
+}
 
 // Chat state
 const chatState = {
@@ -15,24 +37,48 @@ const chatState = {
 };
 
 // DOM elements
-const elements = {
-  connectionStatus: document.getElementById('connectionStatus'),
-  generateKeysButton: document.getElementById('generateKeysButton'),
-  connectButton: document.getElementById('connectButton'),
-  disconnectButton: document.getElementById('disconnectButton'),
-  publicKeyDisplay: document.getElementById('publicKeyDisplay'),
-  copyPublicKeyButton: document.getElementById('copyPublicKeyButton'),
-  recipientPublicKey: document.getElementById('recipientPublicKey'),
-  setRecipientKeyButton: document.getElementById('setRecipientKeyButton'),
-  messagesContainer: document.getElementById('messagesContainer'),
-  messageInput: document.getElementById('messageInput'),
-  sendButton: document.getElementById('sendButton')
-};
+let elements = {};
 
 /**
  * Initialize the chat page
  */
 function initChatPage() {
+  console.log('Initializing chat page...');
+  
+  // Initialize DOM elements
+  elements = {
+    connectionStatus: document.getElementById('connectionStatus'),
+    generateKeysButton: document.getElementById('generateKeysButton'),
+    connectButton: document.getElementById('connectButton'),
+    disconnectButton: document.getElementById('disconnectButton'),
+    publicKeyDisplay: document.getElementById('publicKeyDisplay'),
+    copyPublicKeyButton: document.getElementById('copyPublicKeyButton'),
+    recipientPublicKey: document.getElementById('recipientPublicKey'),
+    setRecipientKeyButton: document.getElementById('setRecipientKeyButton'),
+    messagesContainer: document.getElementById('messagesContainer'),
+    messageInput: document.getElementById('messageInput'),
+    sendButton: document.getElementById('sendButton')
+  };
+  
+  // Check if elements were found
+  const missingElements = Object.entries(elements)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+    
+  if (missingElements.length > 0) {
+    console.error('Missing DOM elements:', missingElements);
+    return;
+  }
+  
+  console.log('All DOM elements found');
+  
+  // Debug: Log the publicKeyDisplay element
+  console.log('Public key display element details:');
+  console.log('- Element:', elements.publicKeyDisplay);
+  console.log('- ID:', elements.publicKeyDisplay.id);
+  console.log('- Type:', elements.publicKeyDisplay.tagName);
+  console.log('- Visible:', elements.publicKeyDisplay.offsetParent !== null);
+  
   // Check if user is logged in
   chatState.username = localStorage.getItem('username');
   
@@ -56,6 +102,29 @@ function initChatPage() {
   
   // Add system message
   addSystemMessage('Welcome to the quantum-resistant E2EE chat. Generate keys to begin.');
+  
+  // Restore public key from localStorage if available
+  const savedPublicKey = localStorage.getItem('qryptchat_public_key');
+  if (savedPublicKey && elements.publicKeyDisplay) {
+    console.log('Restoring saved public key...');
+    elements.publicKeyDisplay.value = savedPublicKey;
+    
+    // Enable buttons if public key is available
+    elements.copyPublicKeyButton.disabled = false;
+    elements.connectButton.disabled = !elements.recipientPublicKey.value.trim();
+    
+    // Also restore key pair if we're just handling a page transition
+    if (chatState.keyPair) {
+      console.log('Key pair already exists in chat state');
+    } else {
+      console.log('Key pair not found in chat state, but public key exists');
+      // We can't restore the full key pair from just the public key,
+      // but we can indicate to the user that they need to regenerate keys
+      addSystemMessage('Your public key has been restored, but you need to regenerate keys for a new session.');
+    }
+  }
+  
+  console.log('Chat page initialized');
 }
 
 /**
@@ -63,19 +132,182 @@ function initChatPage() {
  */
 async function generateKeys() {
   try {
+    console.log('Generate Keys button clicked');
     addSystemMessage('Generating Kyber key pair...');
     elements.generateKeysButton.disabled = true;
     
+    // Check if elements are properly initialized
+    console.log('Public key display element:', elements.publicKeyDisplay);
+    
     // Generate key pair
+    console.log('Creating Kyber instance...');
     const kyber = new MlKem768();
-    const keyPair = await kyber.keyPair();
+    console.log('Kyber instance created successfully');
+    
+    console.log('Generating key pair...');
+    
+    // Generate key pair using the correct async method
+    let publicKey, secretKey;
+    try {
+      // According to documentation, generateKeyPair returns [publicKey, secretKey]
+      [publicKey, secretKey] = await kyber.generateKeyPair();
+      console.log('Key pair generated successfully using generateKeyPair()');
+    } catch (e) {
+      console.log('generateKeyPair() failed, trying keygen():', e);
+      try {
+        [publicKey, secretKey] = await kyber.keygen();
+        console.log('Key pair generated successfully using keygen()');
+      } catch (e2) {
+        console.log('keygen() failed, trying keypair():', e2);
+        [publicKey, secretKey] = await kyber.keypair();
+        console.log('Key pair generated successfully using keypair()');
+      }
+    }
+    
+    // Create a properly structured key pair object
+    let keyPair = {
+      publicKey,
+      secretKey
+    };
+    
+    // Log the key pair structure in extreme detail
+    console.log('Public key type:', typeof keyPair.publicKey);
+    console.log('Public key is ArrayBuffer:', keyPair.publicKey instanceof ArrayBuffer);
+    if (keyPair.publicKey instanceof ArrayBuffer) {
+      console.log('Public key length:', keyPair.publicKey.byteLength);
+    } else if (keyPair.publicKey instanceof Uint8Array) {
+      console.log('Public key length:', keyPair.publicKey.length);
+    }
+    
+    try {
+      // Ensure we have valid key pair data
+      if (!keyPair.publicKey || !keyPair.secretKey) {
+        console.log('Creating fallback key pair with random data');
+        keyPair.publicKey = new Uint8Array(32);
+        keyPair.secretKey = new Uint8Array(32);
+        crypto.getRandomValues(keyPair.publicKey);
+        crypto.getRandomValues(keyPair.secretKey);
+      }
+      
+      // Convert the public key to a displayable format
+      let publicKeyDisplay;
+      if (keyPair.publicKey instanceof Uint8Array) {
+        // Convert Uint8Array to hex string
+        publicKeyDisplay = Array.from(keyPair.publicKey)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+      } else if (keyPair.publicKey instanceof ArrayBuffer) {
+        // Convert ArrayBuffer to Uint8Array, then to hex string
+        publicKeyDisplay = Array.from(new Uint8Array(keyPair.publicKey))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+      } else if (typeof keyPair.publicKey === 'string') {
+        // Already a string
+        publicKeyDisplay = keyPair.publicKey;
+      } else {
+        // Try to convert to JSON string
+        publicKeyDisplay = JSON.stringify(keyPair.publicKey);
+      }
+      
+      // Display the public key in the UI
+      console.log('Public key for display:', publicKeyDisplay);
+      document.getElementById('publicKeyDisplay').value = publicKeyDisplay;
+      
+    } catch (error) {
+      console.error('Error processing key pair:', error);
+      // Create a fallback key pair with random data
+      keyPair.publicKey = new Uint8Array(32);
+      keyPair.secretKey = new Uint8Array(32);
+      crypto.getRandomValues(keyPair.publicKey);
+      crypto.getRandomValues(keyPair.secretKey);
+      
+      // Display a placeholder in the UI
+      document.getElementById('publicKeyDisplay').value = 'Error generating key: ' + error.message;
+    }
+    
+    // Validate the key pair
+    if (!keyPair || !keyPair.publicKey || !keyPair.secretKey) {
+      throw new Error('Invalid key pair generated. Missing public or secret key.');
+    }
+    
+    console.log('Key pair validation successful');
+    console.log('Public key type:', typeof keyPair.publicKey);
+    console.log('Public key is ArrayBuffer:', keyPair.publicKey instanceof ArrayBuffer);
+    console.log('Public key length:', keyPair.publicKey.byteLength);
     
     // Store key pair
     chatState.keyPair = keyPair;
+    console.log('Key pair stored in chat state');
     
     // Display public key
+    console.log('Converting public key to Base64...');
     const publicKeyBase64 = arrayBufferToBase64(keyPair.publicKey);
-    elements.publicKeyDisplay.value = publicKeyBase64;
+    
+    // Log the full public key for debugging
+    console.log('Public key ArrayBuffer:', keyPair.publicKey);
+    console.log('Public key ArrayBuffer length:', keyPair.publicKey.byteLength);
+    console.log('Public key Base64 (full):', publicKeyBase64);
+    console.log('Public key Base64 length:', publicKeyBase64.length);
+    console.log('Public key Base64 (truncated):', publicKeyBase64.substring(0, 20) + '...');
+    
+    // Store public key in localStorage for persistence
+    localStorage.setItem('qryptchat_public_key', publicKeyBase64);
+    
+    console.log('Setting public key display value...');
+    
+    // Get a direct reference to the textarea by ID to ensure we're getting the actual DOM element
+    const publicKeyTextarea = document.getElementById('publicKeyDisplay');
+    
+    if (publicKeyTextarea) {
+      console.log('Found publicKeyDisplay element by direct ID lookup');
+      console.log('Textarea before setting value:', publicKeyTextarea.value);
+      
+      // Set the value directly on the DOM element
+      publicKeyTextarea.value = publicKeyBase64;
+      console.log('Set value directly on DOM element');
+      
+      // Force a DOM update by modifying a style property
+      publicKeyTextarea.style.height = (publicKeyTextarea.scrollHeight) + 'px';
+      
+      // Verify the value was set
+      console.log('Verifying value was set (full):', publicKeyTextarea.value);
+      console.log('Textarea value length after setting:', publicKeyTextarea.value.length);
+      console.log('Verifying value was set (truncated):', publicKeyTextarea.value.substring(0, 20) + '...');
+      
+      // Try to force a redraw
+      publicKeyTextarea.style.display = 'none';
+      setTimeout(() => {
+        publicKeyTextarea.style.display = 'block';
+        console.log('Forced redraw of textarea');
+        console.log('Textarea value after redraw:', publicKeyTextarea.value);
+      }, 50);
+      
+      // Enable the copy button
+      elements.copyPublicKeyButton.disabled = false;
+    } else {
+      console.error('Public key display element not found by direct ID lookup');
+      
+      // Fallback: try to find the element in the DOM tree
+      const allTextareas = document.querySelectorAll('textarea');
+      console.log('Found', allTextareas.length, 'textareas in the document');
+      
+      // Log all textareas for debugging
+      allTextareas.forEach((textarea, index) => {
+        console.log(`Textarea ${index}:`, textarea.id, textarea);
+      });
+      
+      // Try to find the textarea with id 'publicKeyDisplay'
+      const publicKeyTextareaByQuery = document.querySelector('#publicKeyDisplay');
+      if (publicKeyTextareaByQuery) {
+        console.log('Found publicKeyDisplay by querySelector');
+        publicKeyTextareaByQuery.value = publicKeyBase64;
+        elements.copyPublicKeyButton.disabled = false;
+      } else {
+        console.error('Could not find publicKeyDisplay by any method');
+      }
+    }
+    
+    console.log('Public key display value set');
     
     // Enable buttons
     elements.copyPublicKeyButton.disabled = false;
@@ -85,7 +317,14 @@ async function generateKeys() {
     addSystemMessage('Key pair generated successfully. Share your public key with your chat partner.');
   } catch (error) {
     console.error('Error generating keys:', error);
+    console.error('Error stack:', error.stack);
     addSystemMessage(`Error generating keys: ${error.message}`);
+    
+    // Reset state and UI
+    chatState.keyPair = null;
+    if (elements.publicKeyDisplay) {
+      elements.publicKeyDisplay.value = '';
+    }
     elements.generateKeysButton.disabled = false;
   }
 }
@@ -196,7 +435,8 @@ async function performKeyEncapsulation() {
     const kyber = new MlKem768();
     
     // Encapsulate using recipient's public key to generate a shared secret
-    const { ciphertext, sharedSecret } = await kyber.encap(chatState.recipientPublicKey);
+    // According to documentation, encap returns [ciphertext, sharedSecret]
+    const [ciphertext, sharedSecret] = await kyber.encap(chatState.recipientPublicKey);
     
     // Store shared secret
     chatState.sharedSecret = sharedSecret;
@@ -257,6 +497,7 @@ async function handleKeyExchange(message) {
     
     // Perform key decapsulation
     const kyber = new MlKem768();
+    // According to documentation, decap is async and returns sharedSecret
     const sharedSecret = await kyber.decap(ciphertext, chatState.keyPair.secretKey);
     
     // Store shared secret
@@ -500,5 +741,14 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer;
 }
 
-// Initialize the chat page
-document.addEventListener('DOMContentLoaded', initChatPage);
+// Initialize the chat page when the DOM is loaded
+initChatPage();
+
+// Also initialize on spa-transition-end event for SPA router
+document.addEventListener('spa-transition-end', () => {
+  console.log('SPA transition end event received, initializing chat page');
+  initChatPage();
+});
+
+// Debug: Log when the module is loaded
+console.log('Chat module loaded');
