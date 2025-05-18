@@ -8,7 +8,7 @@ export const chatRoute = {
   handler: async (c) => {
     // Get the WebSocket port from the environment or use default (port + 1)
     const serverPort = parseInt(process.env.PORT || '3000');
-    const wsPort = serverPort + 1;
+    const wsPort = serverPort;
     
     return c.json({
       status: 'ok',
