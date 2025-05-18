@@ -6,10 +6,12 @@ import { fileURLToPath } from 'url';
 import dotenvFlow from 'dotenv-flow';
 import fs from 'fs';
 import { WebSocketServer } from 'ws';
-
+import { createNodeWebSocket } from '@hono/node-ws'
 import { registerRoutes } from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { enableSafeHttpDebugging } from './utils/safe-http-debug.js';
+
+
 
 // Enable HTTP debugging for detailed request/response logging
 console.log('Enabling HTTP debugging for detailed request/response logging');
@@ -36,6 +38,7 @@ if (fs.existsSync(publicPath)) {
 
 // Create Hono app for both static files and API endpoints
 const app = new Hono();
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
 // Add CORS middleware
 app.use('*', async (c, next) => {
@@ -221,6 +224,13 @@ app.get('/', async (c) => {
   });
 });
 
+app.get(
+  '/ws',
+  upgradeWebSocket((c) => ({
+    // https://hono.dev/helpers/websocket
+  }))
+);
+
 // Serve static files from the public directory, but skip API routes
 app.use('*', async (c, next) => {
   const reqPath = c.req.path;
@@ -285,7 +295,7 @@ app.get('*', async (c) => {
 const port = process.env.PORT || 3000;
 const startServer = (portToUse) => {
   try {
-    serve({
+    const server = serve({
       fetch: app.fetch,
       port: portToUse
     }, (info) => {
@@ -303,11 +313,8 @@ const startServer = (portToUse) => {
       console.log(`- Payment Callback: http://localhost:${info.port}/api/1/payments/cryptapi/callback`);
       console.log(`- Payment Logs: http://localhost:${info.port}/api/1/payments/cryptapi/logs`);
       console.log(`- Web interface: http://localhost:${info.port}`);
-      
-      // Create a separate WebSocket server on a different port
-      const wsPort = parseInt(portToUse) + 1;
-      startWebSocketServer(wsPort);
     });
+    injectWebSocket(server);
   } catch (err) {
     if (err.code === 'EADDRINUSE') {
       console.log(`Port ${portToUse} is already in use, trying ${portToUse + 2}...`);
@@ -320,111 +327,3 @@ const startServer = (portToUse) => {
 
 // Try to start the server on the initial port
 startServer(port);
-
-// Function to start the WebSocket server
-function startWebSocketServer(wsPort) {
-  try {
-    // Create a separate WebSocket server
-    const wss = new WebSocketServer({ port: wsPort });
-    
-    // Store connected clients
-    const clients = new Set();
-    
-    // Handle WebSocket connections
-    wss.on('connection', (ws) => {
-      console.log('WebSocket connection established');
-      
-      // Add client to the set
-      clients.add(ws);
-      
-      // Send a welcome message
-      const welcomeMessage = JSON.stringify({
-        type: 'system',
-        content: 'Connected to WebSocket server'
-      });
-      ws.send(welcomeMessage);
-      
-      // Handle messages
-      ws.on('message', (message) => {
-        try {
-          console.log(`Received message: ${message}`);
-          
-          // Parse the message
-          const parsedMessage = JSON.parse(message);
-          
-          // Handle different message types
-          switch (parsedMessage.type) {
-            case 'key_exchange':
-              // Forward key exchange message to all other clients
-              forwardMessage(ws, parsedMessage);
-              break;
-            
-            case 'chat_message':
-              // Forward chat message to all other clients
-              forwardMessage(ws, parsedMessage);
-              break;
-            
-            default:
-              console.warn('Unknown message type:', parsedMessage.type);
-              ws.send(JSON.stringify({
-                type: 'system',
-                content: `Unknown message type: ${parsedMessage.type}`
-              }));
-          }
-        } catch (error) {
-          console.error('Error handling WebSocket message:', error);
-          ws.send(JSON.stringify({
-            type: 'system',
-            content: `Error: ${error.message}`
-          }));
-        }
-      });
-      
-      // Handle connection close
-      ws.on('close', () => {
-        console.log('WebSocket connection closed');
-        // Remove client from the set
-        clients.delete(ws);
-      });
-      
-      // Handle errors
-      ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-        clients.delete(ws);
-      });
-    });
-    
-    console.log(`WebSocket server running at ws://localhost:${wsPort}`);
-    
-    // Handle WebSocket server errors
-    wss.on('error', (error) => {
-      if (error.code === 'EADDRINUSE') {
-        console.log(`WebSocket port ${wsPort} is already in use, trying ${wsPort + 2}...`);
-        startWebSocketServer(wsPort + 2);
-      } else {
-        console.error('WebSocket server error:', error);
-      }
-    });
-  } catch (error) {
-    console.error('Error starting WebSocket server:', error);
-    if (error.code === 'EADDRINUSE') {
-      console.log(`WebSocket port ${wsPort} is already in use, trying ${wsPort + 2}...`);
-      startWebSocketServer(wsPort + 2);
-    }
-  }
-  /**
-   * Forward a message to all other connected clients
-   * @param {WebSocket} sender - The client that sent the message
-   * @param {Object} message - The message to forward
-   */
-  function forwardMessage(sender, message) {
-    const messageStr = JSON.stringify(message);
-    
-    // Send to all clients except the sender
-    clients.forEach(client => {
-      if (client !== sender && client.readyState === WebSocket.OPEN) {
-        client.send(messageStr);
-      }
-    });
-  }
-}
