@@ -385,7 +385,7 @@ async function connect() {
     // Create the WebSocket URL
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Use port + 1 for WebSocket connections (the separate WebSocket server)
-    const wsPort = parseInt(window.location.port || '80') + 1;
+    const wsPort = parseInt(window.location.port || '80');
     const wsUrl = `${wsProtocol}//${host}:${wsPort}`;
     
     addSystemMessage(`Connecting to ${wsUrl}...`);
