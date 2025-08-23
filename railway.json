@@ -37,6 +37,6 @@
     "us-west1"
   ],
   "runtime": {
-    "nodeVersion": "24.0.0"
+    "nodeVersion": "24"
   }
 }

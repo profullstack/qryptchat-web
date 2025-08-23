@@ -1,5 +1,5 @@
 [variables]
-NODE_VERSION = "24.0.0"
+NODE_VERSION = "24"
 PNPM_VERSION = "9.7.0"
 NODE_ENV = "production"
 
