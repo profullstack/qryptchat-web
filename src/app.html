@@ -57,41 +57,9 @@
 	<body data-sveltekit-preload-data="hover" class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
 		<div style="display: contents">%sveltekit.body%</div>
 
-		<!-- PWA Install Prompt -->
-		<div id="pwa-install-prompt" class="hidden fixed bottom-4 left-4 right-4 bg-indigo-600 text-white p-4 rounded-lg shadow-lg z-50">
-			<div class="flex items-center justify-between">
-				<div class="flex-1">
-					<h3 class="font-semibold">Install QryptChat</h3>
-					<p class="text-sm opacity-90">Get the full app experience with offline support</p>
-				</div>
-				<div class="flex gap-2 ml-4">
-					<button id="pwa-install-dismiss" class="px-3 py-1 text-sm bg-indigo-500 rounded hover:bg-indigo-400">
-						Later
-					</button>
-					<button id="pwa-install-accept" class="px-3 py-1 text-sm bg-white text-indigo-600 rounded hover:bg-gray-100">
-						Install
-					</button>
-				</div>
-			</div>
-		</div>
-
-		<!-- PWA Update Available -->
-		<div id="pwa-update-prompt" class="hidden fixed top-4 left-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg z-50">
-			<div class="flex items-center justify-between">
-				<div class="flex-1">
-					<h3 class="font-semibold">Update Available</h3>
-					<p class="text-sm opacity-90">A new version of QryptChat is ready</p>
-				</div>
-				<div class="flex gap-2 ml-4">
-					<button id="pwa-update-dismiss" class="px-3 py-1 text-sm bg-green-500 rounded hover:bg-green-400">
-						Later
-					</button>
-					<button id="pwa-update-accept" class="px-3 py-1 text-sm bg-white text-green-600 rounded hover:bg-gray-100">
-						Update
-					</button>
-				</div>
-			</div>
-		</div>
+		<!-- PWA Toast Notifications will be handled by Svelte components -->
+		<div id="pwa-install-toast" class="hidden"></div>
+		<div id="pwa-update-toast" class="hidden"></div>
 
 		<script>
 			// PWA Install Prompt
@@ -101,28 +69,23 @@
 				e.preventDefault();
 				deferredPrompt = e;
 				
-				const installPrompt = document.getElementById('pwa-install-prompt');
-				const installAccept = document.getElementById('pwa-install-accept');
-				const installDismiss = document.getElementById('pwa-install-dismiss');
-				
 				// Show install prompt if not already installed
 				if (!window.matchMedia('(display-mode: standalone)').matches) {
-					installPrompt.classList.remove('hidden');
+					// Dispatch custom event for Svelte components to handle
+					window.dispatchEvent(new CustomEvent('pwa-install-available', {
+						detail: {
+							prompt: deferredPrompt,
+							install: async () => {
+								if (deferredPrompt) {
+									deferredPrompt.prompt();
+									const { outcome } = await deferredPrompt.userChoice;
+									console.log(`User response to install prompt: ${outcome}`);
+									deferredPrompt = null;
+								}
+							}
+						}
+					}));
 				}
-				
-				installAccept.addEventListener('click', async () => {
-					installPrompt.classList.add('hidden');
-					if (deferredPrompt) {
-						deferredPrompt.prompt();
-						const { outcome } = await deferredPrompt.userChoice;
-						console.log(`User response to install prompt: ${outcome}`);
-						deferredPrompt = null;
-					}
-				});
-				
-				installDismiss.addEventListener('click', () => {
-					installPrompt.classList.add('hidden');
-				});
 			});
 
 			// Service Worker Registration and Update Handling
@@ -139,7 +102,19 @@
 							newWorker.addEventListener('statechange', () => {
 								if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
 									// New service worker is available
-									showUpdatePrompt(registration);
+									window.dispatchEvent(new CustomEvent('pwa-update-available', {
+										detail: {
+											registration,
+											update: () => {
+												// Tell the new service worker to skip waiting
+												if (registration.waiting) {
+													registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+												}
+												// Reload the page to use the new service worker
+												window.location.reload();
+											}
+										}
+									}));
 								}
 							});
 						});
@@ -158,36 +133,10 @@
 				});
 			}
 
-			function showUpdatePrompt(registration) {
-				const updatePrompt = document.getElementById('pwa-update-prompt');
-				const updateAccept = document.getElementById('pwa-update-accept');
-				const updateDismiss = document.getElementById('pwa-update-dismiss');
-				
-				updatePrompt.classList.remove('hidden');
-				
-				updateAccept.addEventListener('click', () => {
-					updatePrompt.classList.add('hidden');
-					
-					// Tell the new service worker to skip waiting
-					if (registration.waiting) {
-						registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-					}
-					
-					// Reload the page to use the new service worker
-					window.location.reload();
-				});
-				
-				updateDismiss.addEventListener('click', () => {
-					updatePrompt.classList.add('hidden');
-				});
-			}
-
 			// Handle app installed event
 			window.addEventListener('appinstalled', () => {
 				console.log('QryptChat was installed');
-				// Hide install prompt if visible
-				const installPrompt = document.getElementById('pwa-install-prompt');
-				installPrompt.classList.add('hidden');
+				window.dispatchEvent(new CustomEvent('pwa-installed'));
 			});
 
 			// Dark mode detection
