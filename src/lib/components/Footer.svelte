@@ -81,16 +81,16 @@
 		<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
 			<div class="flex flex-col sm:flex-row justify-center items-center space-y-2 sm:space-y-0 sm:space-x-6 text-xs text-gray-500 dark:text-gray-400">
 				<a href="/privacy" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-					{$i18n.footer?.privacy || 'Privacy Policy'}
+					{$t('footer.privacy')}
 				</a>
 				<a href="/terms" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-					{$i18n.footer?.terms || 'Terms of Service'}
+					{$t('footer.terms')}
 				</a>
 				<a href="/security" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-					{$i18n.footer?.security || 'Security'}
+					{$t('footer.security')}
 				</a>
 				<a href="/contact" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-					{$i18n.footer?.contact || 'Contact'}
+					{$t('footer.contact')}
 				</a>
 			</div>
 		</div>
