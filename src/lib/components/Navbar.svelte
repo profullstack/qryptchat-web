@@ -1,6 +1,9 @@
 <script>
 	import { currentTheme, themeUtils, themes } from '$lib/stores/theme.js';
 	import { currentLanguage, t, i18nUtils, languages } from '$lib/stores/i18n.js';
+	import { auth, user, isAuthenticated } from '$lib/stores/auth.js';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	
 	// Component state
@@ -53,6 +56,19 @@
 	function closeMobileMenu() {
 		mobileMenuOpen = false;
 	}
+
+	// Handle logout
+	async function handleLogout() {
+		await auth.logout();
+		closeMobileMenu();
+		goto('/');
+	}
+
+	// Navigate to auth page
+	function goToAuth() {
+		closeMobileMenu();
+		goto('/auth');
+	}
 	
 	onMount(() => {
 		document.addEventListener('click', handleClickOutside);
@@ -80,9 +96,10 @@
 			
 			<!-- Desktop Navigation -->
 			<div class="navbar-nav desktop-nav">
-				<a href="/" class="nav-link">{$t('nav.home')}</a>
-				<a href="/chat" class="nav-link">{$t('nav.chat')}</a>
-				<a href="/settings" class="nav-link">{$t('nav.settings')}</a>
+				<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>{$t('nav.home')}</a>
+				{#if $isAuthenticated}
+					<a href="/chat" class="nav-link" class:active={$page.url.pathname === '/chat'}>{$t('nav.chat')}</a>
+				{/if}
 			</div>
 			
 			<!-- Desktop Actions -->
@@ -169,8 +186,26 @@
 				
 				<!-- Auth Actions -->
 				<div class="auth-actions">
-					<a href="/login" class="btn btn-ghost">{$t('nav.login')}</a>
-					<a href="/register" class="btn btn-primary">{$t('nav.register')}</a>
+					{#if $isAuthenticated}
+						<div class="user-info">
+							<div class="user-avatar">
+								{#if $user?.avatarUrl}
+									<img src={$user.avatarUrl} alt={$user.displayName} />
+								{:else}
+									<div class="avatar-placeholder">
+										{($user?.displayName || $user?.username || 'U').charAt(0).toUpperCase()}
+									</div>
+								{/if}
+							</div>
+							<span class="user-name">{$user?.displayName || $user?.username}</span>
+							<button class="btn btn-ghost logout-btn" on:click={handleLogout}>
+								{$t('nav.logout')}
+							</button>
+						</div>
+					{:else}
+						<button class="btn btn-ghost" on:click={goToAuth}>{$t('nav.login')}</button>
+						<button class="btn btn-primary" on:click={goToAuth}>{$t('nav.register')}</button>
+					{/if}
 				</div>
 			</div>
 			
@@ -386,6 +421,48 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
+	}
+
+	.user-info {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+
+	.user-avatar {
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		overflow: hidden;
+		flex-shrink: 0;
+	}
+
+	.user-avatar img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.avatar-placeholder {
+		width: 100%;
+		height: 100%;
+		background: var(--color-brand-primary);
+		color: white;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 600;
+		font-size: 0.875rem;
+	}
+
+	.user-name {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text-primary);
+	}
+
+	.logout-btn {
+		font-size: 0.875rem;
 	}
 	
 	/* Mobile Menu Button */

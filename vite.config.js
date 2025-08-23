@@ -108,7 +108,16 @@ export default defineConfig(({ mode }) => {
 				]
 			},
 			workbox: {
-				globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+				globPatterns: ['client/**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+				globIgnores: [
+					'**/server/**',
+					'server/**',
+					'server/sw.js',
+					'server/workbox-*.js'
+				],
+				dontCacheBustURLsMatching: /\.\w{8}\./,
+				skipWaiting: true,
+				clientsClaim: true,
 				runtimeCaching: [
 					{
 						urlPattern: /^https:\/\/.*\.supabase\.co\/(?!.*\/auth\/).*/i,

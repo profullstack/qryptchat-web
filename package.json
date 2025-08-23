@@ -36,6 +36,7 @@
 	},
 	"dependencies": {
 		"@supabase/ssr": "^0.7.0",
-		"@supabase/supabase-js": "^2.56.0"
+		"@supabase/supabase-js": "^2.56.0",
+		"twilio": "^5.8.0"
 	}
 }
