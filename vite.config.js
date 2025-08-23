@@ -14,10 +14,11 @@ export default defineConfig(({ mode }) => {
 		sveltekit(),
 		SvelteKitPWA({
 			srcDir: './src',
-			mode: 'development',
+			mode: mode === 'production' ? 'production' : 'development',
 			strategies: 'generateSW',
 			scope: '/',
 			base: '/',
+			disable: mode === 'development', // Disable PWA in development to avoid conflicts
 			manifest: {
 				short_name: 'QryptChat',
 				name: 'QryptChat - Quantum-Resistant Messaging',
