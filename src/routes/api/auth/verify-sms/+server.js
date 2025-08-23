@@ -273,6 +273,7 @@ export async function POST(event) {
 				avatarUrl: user.avatar_url,
 				createdAt: user.created_at
 			},
+			session: verifyData.session, // Include the Supabase session with JWT tokens
 			isNewUser,
 			message: isNewUser ? 'Account created successfully' : 'Signed in successfully',
 			...(process.env.NODE_ENV === 'development' && {

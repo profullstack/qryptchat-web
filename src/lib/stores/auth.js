@@ -6,6 +6,7 @@
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { createSupabaseClient } from '$lib/supabase.js';
+import { messages } from './messages.js';
 
 /**
  * @typedef {Object} User
@@ -21,14 +22,12 @@ import { createSupabaseClient } from '$lib/supabase.js';
  * @typedef {Object} AuthState
  * @property {User|null} user
  * @property {boolean} loading
- * @property {string|null} error
  */
 
 // Create writable stores
 const authState = writable(/** @type {AuthState} */ ({
 	user: null,
-	loading: true,
-	error: null
+	loading: true
 }));
 
 /**
@@ -41,24 +40,41 @@ function createAuthStore() {
 		subscribe,
 		
 		/**
-		 * Initialize auth state from localStorage
+		 * Initialize auth state from localStorage and restore Supabase session
 		 */
-		init() {
+		async init() {
 			if (!browser) return;
 			
 			update(state => ({ ...state, loading: true }));
 			
 			try {
 				const storedUser = localStorage.getItem('qrypt_user');
-				if (storedUser) {
+				const storedSession = localStorage.getItem('supabase.auth.token');
+				
+				if (storedUser && storedSession) {
 					const user = JSON.parse(storedUser);
-					update(state => ({ ...state, user, loading: false }));
+					const session = JSON.parse(storedSession);
+					
+					// Restore the Supabase session
+					const supabase = createSupabaseClient();
+					const { data: sessionData, error } = await supabase.auth.setSession(session);
+					
+					if (error || !sessionData.session) {
+						// Session is invalid, clear stored data
+						localStorage.removeItem('qrypt_user');
+						localStorage.removeItem('supabase.auth.token');
+						update(state => ({ ...state, loading: false }));
+					} else {
+						// Session is valid, restore user
+						update(state => ({ ...state, user, loading: false }));
+					}
 				} else {
 					update(state => ({ ...state, loading: false }));
 				}
 			} catch (error) {
 				console.error('Failed to load user from localStorage:', error);
-				update(state => ({ ...state, loading: false, error: 'Failed to load user data' }));
+				messages.error('Failed to load user data');
+				update(state => ({ ...state, loading: false }));
 			}
 		},
 
@@ -68,7 +84,8 @@ function createAuthStore() {
 		 * @returns {Promise<{success: boolean, error?: string}>}
 		 */
 		async sendSMS(phoneNumber) {
-			update(state => ({ ...state, loading: true, error: null }));
+			update(state => ({ ...state, loading: true }));
+			messages.clear(); // Clear any existing messages
 
 			try {
 				const response = await fetch('/api/auth/send-sms', {
@@ -82,16 +99,20 @@ function createAuthStore() {
 				const data = await response.json();
 
 				if (!response.ok) {
-					update(state => ({ ...state, loading: false, error: data.error }));
-					return { success: false, error: data.error };
+					const errorMessage = data.error || 'Failed to send SMS';
+					messages.error(errorMessage);
+					update(state => ({ ...state, loading: false }));
+					return { success: false, error: errorMessage };
 				}
 
+				messages.success('Verification code sent successfully!');
 				update(state => ({ ...state, loading: false }));
 				return { success: true };
 
 			} catch (error) {
 				const errorMessage = 'Failed to send SMS. Please try again.';
-				update(state => ({ ...state, loading: false, error: errorMessage }));
+				messages.error(errorMessage);
+				update(state => ({ ...state, loading: false }));
 				return { success: false, error: errorMessage };
 			}
 		},
@@ -105,7 +126,8 @@ function createAuthStore() {
 		 * @returns {Promise<{success: boolean, error?: string, user?: User, isNewUser?: boolean}>}
 		 */
 		async verifySMS(phoneNumber, verificationCode, username, displayName) {
-			update(state => ({ ...state, loading: true, error: null }));
+			update(state => ({ ...state, loading: true }));
+			messages.clear(); // Clear any existing messages
 
 			try {
 				const response = await fetch('/api/auth/verify-sms', {
@@ -124,22 +146,43 @@ function createAuthStore() {
 				const data = await response.json();
 
 				if (!response.ok) {
-					update(state => ({ ...state, loading: false, error: data.error }));
-					return { success: false, error: data.error };
+					const errorMessage = data.error || 'Failed to verify code';
+					messages.error(errorMessage);
+					update(state => ({ ...state, loading: false }));
+					return { success: false, error: errorMessage };
 				}
 
-				// Store user data
+				// Store user data and session
 				const user = data.user;
+				const session = data.session;
+				
 				if (browser) {
 					localStorage.setItem('qrypt_user', JSON.stringify(user));
+					// Store the Supabase session for JWT tokens
+					if (session) {
+						localStorage.setItem('supabase.auth.token', JSON.stringify(session));
+					}
+				}
+
+				// Set the session in the Supabase client
+				if (session) {
+					const supabase = createSupabaseClient();
+					await supabase.auth.setSession(session);
+				}
+
+				if (data.isNewUser) {
+					messages.success('Account created successfully! Welcome to QryptChat!');
+				} else {
+					messages.success('Welcome back!');
 				}
 
 				update(state => ({ ...state, user, loading: false }));
-				return { success: true, user, isNewUser: data.isNewUser };
+				return { success: true, user, isNewUser: data.isNewUser, session };
 
 			} catch (error) {
 				const errorMessage = 'Failed to verify code. Please try again.';
-				update(state => ({ ...state, loading: false, error: errorMessage }));
+				messages.error(errorMessage);
+				update(state => ({ ...state, loading: false }));
 				return { success: false, error: errorMessage };
 			}
 		},
@@ -165,14 +208,14 @@ function createAuthStore() {
 				localStorage.removeItem('qrypt_user');
 			}
 
-			set({ user: null, loading: false, error: null });
+			set({ user: null, loading: false });
 		},
 
 		/**
-		 * Clear error state
+		 * Clear messages
 		 */
-		clearError() {
-			update(state => ({ ...state, error: null }));
+		clearMessages() {
+			messages.clear();
 		},
 
 		/**
@@ -202,7 +245,6 @@ export const auth = createAuthStore();
 export const user = derived(auth, $auth => $auth.user);
 export const isAuthenticated = derived(auth, $auth => !!$auth.user);
 export const isLoading = derived(auth, $auth => $auth.loading);
-export const authError = derived(auth, $auth => $auth.error);
 
 // Initialize auth on module load
 if (browser) {

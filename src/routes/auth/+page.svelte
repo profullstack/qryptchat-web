@@ -1,8 +1,10 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { auth, isAuthenticated, isLoading, authError } from '$lib/stores/auth.js';
+	import { auth, isAuthenticated, isLoading } from '$lib/stores/auth.js';
+	import { messages } from '$lib/stores/messages.js';
 	import { t } from '$lib/stores/i18n.js';
+	import Message from '$lib/components/Message.svelte';
 
 	/** @type {'phone' | 'verify' | 'profile'} */
 	let step = 'phone';
@@ -68,7 +70,6 @@
 	 */
 	async function sendSMS() {
 		if (!phoneNumber.trim()) {
-			auth.clearError();
 			return;
 		}
 
@@ -136,7 +137,6 @@
 	 * Go back to previous step
 	 */
 	function goBack() {
-		auth.clearError();
 		if (step === 'verify') {
 			step = 'phone';
 		} else if (step === 'profile') {
@@ -182,6 +182,20 @@
 			<p class="subtitle">{$t('auth.subtitle')}</p>
 		</div>
 
+		<!-- Messages -->
+		<div class="messages-container">
+			{#each $messages as message (message.id)}
+				<Message
+					type={message.type}
+					message={message.message}
+					title={message.title}
+					dismissible={message.dismissible}
+					autoDismiss={message.autoDismiss}
+					on:dismiss={() => messages.remove(message.id)}
+				/>
+			{/each}
+		</div>
+
 		<!-- Phone Number Step -->
 		{#if step === 'phone'}
 			<div class="auth-step">
@@ -203,11 +217,6 @@
 						/>
 					</div>
 					
-					{#if $authError}
-						<div class="error-message">
-							{$authError}
-						</div>
-					{/if}
 					
 					<button 
 						type="submit" 
@@ -253,11 +262,6 @@
 						/>
 					</div>
 					
-					{#if $authError}
-						<div class="error-message">
-							{$authError}
-						</div>
-					{/if}
 					
 					<button 
 						type="submit" 
@@ -323,11 +327,6 @@
 						/>
 					</div>
 					
-					{#if $authError}
-						<div class="error-message">
-							{$authError}
-						</div>
-					{/if}
 					
 					<button 
 						type="submit" 
@@ -524,14 +523,8 @@
 		font-size: 0.875rem;
 	}
 
-	.error-message {
-		background: var(--color-error-50);
-		color: var(--color-error-700);
-		padding: 0.75rem;
-		border-radius: 0.5rem;
+	.messages-container {
 		margin-bottom: 1rem;
-		font-size: 0.875rem;
-		border: 1px solid var(--color-error-200);
 	}
 
 	.loading-spinner {
