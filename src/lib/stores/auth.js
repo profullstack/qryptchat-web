@@ -49,31 +49,35 @@ function createAuthStore() {
 			
 			try {
 				const storedUser = localStorage.getItem('qrypt_user');
-				const storedSession = localStorage.getItem('supabase.auth.token');
+				const storedSession = localStorage.getItem('qrypt_session');
 				
 				if (storedUser && storedSession) {
 					const user = JSON.parse(storedUser);
 					const session = JSON.parse(storedSession);
 					
-					// Restore the Supabase session
-					const supabase = createSupabaseClient();
-					const { data: sessionData, error } = await supabase.auth.setSession(session);
-					
-					if (error || !sessionData.session) {
-						// Session is invalid, clear stored data
-						localStorage.removeItem('qrypt_user');
-						localStorage.removeItem('supabase.auth.token');
-						update(state => ({ ...state, loading: false }));
-					} else {
-						// Session is valid, restore user
-						update(state => ({ ...state, user, loading: false }));
+					// Check if session is still valid (not expired)
+					if (session.access_token && session.expires_at) {
+						const expiresAt = new Date(session.expires_at * 1000);
+						const now = new Date();
+						
+						if (expiresAt > now) {
+							// Session is still valid, restore user
+							update(state => ({ ...state, user, loading: false }));
+							return;
+						}
 					}
-				} else {
-					update(state => ({ ...state, loading: false }));
+					
+					// Session is expired or invalid, clear stored data
+					localStorage.removeItem('qrypt_user');
+					localStorage.removeItem('qrypt_session');
 				}
+				
+				update(state => ({ ...state, loading: false }));
 			} catch (error) {
 				console.error('Failed to load user from localStorage:', error);
-				messages.error('Failed to load user data');
+				// Clear potentially corrupted data
+				localStorage.removeItem('qrypt_user');
+				localStorage.removeItem('qrypt_session');
 				update(state => ({ ...state, loading: false }));
 			}
 		},
@@ -88,11 +92,23 @@ function createAuthStore() {
 			messages.clear(); // Clear any existing messages
 
 			try {
+				/** @type {Record<string, string>} */
+				const headers = {
+					'Content-Type': 'application/json'
+				};
+
+				// Add Authorization header if we have a session
+				const storedSession = browser ? localStorage.getItem('qrypt_session') : null;
+				if (storedSession) {
+					const session = JSON.parse(storedSession);
+					if (session.access_token) {
+						headers['Authorization'] = `Bearer ${session.access_token}`;
+					}
+				}
+
 				const response = await fetch('/api/auth/send-sms', {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
+					headers,
 					body: JSON.stringify({ phoneNumber })
 				});
 
@@ -123,23 +139,36 @@ function createAuthStore() {
 		 * @param {string} verificationCode - 6-digit verification code
 		 * @param {string} [username] - Username for new users
 		 * @param {string} [displayName] - Display name for new users
-		 * @returns {Promise<{success: boolean, error?: string, user?: User, isNewUser?: boolean, requiresUsername?: boolean, session?: any}>}
+		 * @returns {Promise<{success: boolean, error?: string, user?: User, isNewUser?: boolean, requiresUsername?: boolean, session?: any, message?: string}>}
 		 */
 		async verifySMS(phoneNumber, verificationCode, username, displayName) {
 			update(state => ({ ...state, loading: true }));
 			messages.clear(); // Clear any existing messages
 
 			try {
+				/** @type {Record<string, string>} */
+				const headers = {
+					'Content-Type': 'application/json'
+				};
+
+				// Add Authorization header if we have a session (for profile completion)
+				const storedSession = browser ? localStorage.getItem('qrypt_session') : null;
+				if (storedSession) {
+					const session = JSON.parse(storedSession);
+					if (session.access_token) {
+						headers['Authorization'] = `Bearer ${session.access_token}`;
+					}
+				}
+
 				const response = await fetch('/api/auth/verify-sms', {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
+					headers,
 					body: JSON.stringify({
 						phoneNumber,
 						verificationCode,
 						username,
-						displayName
+						displayName,
+						useSession: !!storedSession // Flag to indicate session-based request
 					})
 				});
 
@@ -147,6 +176,10 @@ function createAuthStore() {
 
 				// Handle special case where username is required
 				if (data.requiresUsername) {
+					// Store the session for profile completion
+					if (browser && data.session) {
+						localStorage.setItem('qrypt_session', JSON.stringify(data.session));
+					}
 					update(state => ({ ...state, loading: false }));
 					return {
 						success: false,
@@ -173,16 +206,10 @@ function createAuthStore() {
 				
 				if (browser) {
 					localStorage.setItem('qrypt_user', JSON.stringify(user));
-					// Store the Supabase session for JWT tokens
+					// Store the session with proper key
 					if (session) {
-						localStorage.setItem('supabase.auth.token', JSON.stringify(session));
+						localStorage.setItem('qrypt_session', JSON.stringify(session));
 					}
-				}
-
-				// Set the session in the Supabase client
-				if (session) {
-					const supabase = createSupabaseClient();
-					await supabase.auth.setSession(session);
 				}
 
 				if (data.isNewUser) {
@@ -222,6 +249,7 @@ function createAuthStore() {
 			// Clear local storage and state
 			if (browser) {
 				localStorage.removeItem('qrypt_user');
+				localStorage.removeItem('qrypt_session');
 			}
 
 			set({ user: null, loading: false });
