@@ -5,6 +5,9 @@
 
 import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { SMSDebugLogger, formatSMSError } from '$lib/utils/sms-debug.js';
 
 /**
@@ -28,26 +31,78 @@ export async function POST(event) {
 	const logger = new SMSDebugLogger();
 	
 	try {
-		const { phoneNumber, verificationCode, username, displayName } = await request.json();
+		const { phoneNumber, verificationCode, username, displayName, useSession } = await request.json();
+		const authHeader = request.headers.get('authorization');
 		
 		logger.info('SMS verification request received', {
 			phoneNumber: phoneNumber ? `${phoneNumber.substring(0, 3)}***${phoneNumber.substring(phoneNumber.length - 2)}` : null,
 			hasCode: !!verificationCode,
 			codeLength: verificationCode?.length,
 			hasUsername: !!username,
+			useSession: !!useSession,
+			hasAuthHeader: !!authHeader,
 			userAgent: request.headers.get('user-agent'),
 			ip: event.getClientAddress()
 		});
 
-		// Validate input
-		if (!phoneNumber || !verificationCode) {
-			logger.error('Missing required fields', { phoneNumber: !!phoneNumber, verificationCode: !!verificationCode });
-			return json(
-				{ error: 'Phone number and verification code are required' },
-				{ status: 400 }
-			);
+		// Check if this is a session-based request (profile completion)
+		if (useSession && authHeader) {
+			logger.info('Processing session-based profile completion');
+			
+			// Validate input for session-based request
+			if (!phoneNumber || !username) {
+				logger.error('Missing required fields for session-based request', { phoneNumber: !!phoneNumber, username: !!username });
+				return json(
+					{ error: 'Phone number and username are required' },
+					{ status: 400 }
+				);
+			}
+			
+			// Create Supabase client and set the session from JWT
+			const supabase = createSupabaseServerClient(event);
+			const token = authHeader.replace('Bearer ', '');
+			
+			try {
+				// Verify the JWT token and get user info
+				const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+				
+				if (userError || !user) {
+					logger.error('Invalid or expired session token', { error: userError });
+					return json(
+						{ error: 'Session expired. Please verify your phone number again.' },
+						{ status: 401 }
+					);
+				}
+				
+				logger.info('Session validated successfully', { userId: user.id, userPhone: user.phone });
+				
+				// Proceed with account creation using the authenticated user
+				const verifyData = { user, session: { access_token: token } };
+				const verifyError = null;
+				
+				// Continue with the existing account creation logic...
+				// (The rest of the function will handle this)
+				
+			} catch (sessionError) {
+				logger.error('Session validation failed', { error: sessionError });
+				return json(
+					{ error: 'Invalid session. Please verify your phone number again.' },
+					{ status: 401 }
+				);
+			}
+		} else {
+			// Original OTP verification flow
+			// Validate input
+			if (!phoneNumber || !verificationCode) {
+				logger.error('Missing required fields', { phoneNumber: !!phoneNumber, verificationCode: !!verificationCode });
+				return json(
+					{ error: 'Phone number and verification code are required' },
+					{ status: 400 }
+				);
+			}
 		}
 
+		// Validate phone number format for all requests
 		if (!isValidPhoneNumber(phoneNumber)) {
 			logger.error('Invalid phone number format', { phoneNumber });
 			return json(
@@ -59,31 +114,77 @@ export async function POST(event) {
 			);
 		}
 
-		if (!/^\d{6}$/.test(verificationCode)) {
-			logger.error('Invalid verification code format', {
-				codeLength: verificationCode?.length,
-				codePattern: verificationCode?.replace(/\d/g, 'X')
-			});
-			return json(
-				{
-					error: 'Verification code must be 6 digits',
-					suggestion: 'Enter the 6-digit code you received via SMS'
-				},
-				{ status: 400 }
-			);
-		}
-
 		// Create Supabase client
 		const supabase = createSupabaseServerClient(event);
 		
-		logger.info('Attempting to verify OTP with Supabase Auth');
+		let verifyData;
+		let verifyError;
 
-		// Verify the OTP using Supabase Auth
-		const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-			phone: phoneNumber,
-			token: verificationCode,
-			type: 'sms'
-		});
+		// Check if this is a session-based request (profile completion)
+		if (useSession && authHeader) {
+			logger.info('Processing session-based profile completion');
+			
+			const token = authHeader.replace('Bearer ', '');
+			
+			try {
+				// Validate the JWT token by getting user info
+				const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+				
+				if (userError || !user) {
+					logger.error('Invalid or expired session token', { error: userError });
+					return json(
+						{ error: 'Session expired. Please verify your phone number again.' },
+						{ status: 401 }
+					);
+				}
+				
+				logger.info('Session validated successfully', {
+					userId: user.id,
+					userPhone: user.phone
+				});
+				
+				// Use the authenticated user data
+				verifyData = {
+					user,
+					session: { access_token: token }
+				};
+				verifyError = null;
+				
+			} catch (sessionError) {
+				logger.error('Session validation failed', { error: sessionError });
+				return json(
+					{ error: 'Invalid session. Please verify your phone number again.' },
+					{ status: 401 }
+				);
+			}
+		} else {
+			// Original OTP verification flow
+			if (!/^\d{6}$/.test(verificationCode)) {
+				logger.error('Invalid verification code format', {
+					codeLength: verificationCode?.length,
+					codePattern: verificationCode?.replace(/\d/g, 'X')
+				});
+				return json(
+					{
+						error: 'Verification code must be 6 digits',
+						suggestion: 'Enter the 6-digit code you received via SMS'
+					},
+					{ status: 400 }
+				);
+			}
+
+			logger.info('Attempting to verify OTP with Supabase Auth');
+
+			// Verify the OTP using Supabase Auth
+			const otpResult = await supabase.auth.verifyOtp({
+				phone: phoneNumber,
+				token: verificationCode,
+				type: 'sms'
+			});
+			
+			verifyData = otpResult.data;
+			verifyError = otpResult.error;
+		}
 
 		if (verifyError) {
 			const errorInfo = formatSMSError(verifyError, {
@@ -163,9 +264,17 @@ export async function POST(event) {
 			userPhone: verifyData.user.phone
 		});
 
+		// Create service role client for database operations (bypasses RLS)
+		const serviceSupabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+			auth: {
+				autoRefreshToken: false,
+				persistSession: false
+			}
+		});
+		
 		// Check if user already exists in our custom users table
 		logger.info('Checking for existing user in database');
-		const { data: existingUser, error: userLookupError } = await supabase
+		const { data: existingUser, error: userLookupError } = await serviceSupabase
 			.from('users')
 			.select('*')
 			.eq('phone_number', phoneNumber)
@@ -208,7 +317,7 @@ export async function POST(event) {
 
 			// Check if username is already taken
 			logger.info('Checking username availability', { username });
-			const { data: usernameCheck, error: usernameError } = await supabase
+			const { data: usernameCheck, error: usernameError } = await serviceSupabase
 				.from('users')
 				.select('id')
 				.eq('username', username)
@@ -237,7 +346,7 @@ export async function POST(event) {
 
 			// Create user record
 			logger.info('Creating user record in database');
-			const { data: newUser, error: createError } = await supabase
+			const { data: newUser, error: createError } = await serviceSupabase
 				.from('users')
 				.insert({
 					phone_number: phoneNumber,

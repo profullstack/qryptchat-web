@@ -1,4 +1,4 @@
-/**
+t/**
  * @fileoverview Integration test for SMS authentication flow
  * Tests the complete authentication process from SMS sending to account creation
  */

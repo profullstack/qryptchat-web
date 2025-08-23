@@ -1,9 +1,11 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import { auth, isAuthenticated, isLoading } from '$lib/stores/auth.js';
 	import { messages } from '$lib/stores/messages.js';
 	import { t } from '$lib/stores/i18n.js';
+	import { createSupabaseClient } from '$lib/supabase.js';
 	import Message from '$lib/components/Message.svelte';
 
 	/** @type {'phone' | 'verify' | 'profile'} */
@@ -16,6 +18,7 @@
 	let countdown = 0;
 	let canResend = true;
 	let expiresAt = null;
+	/** @type {any} */
 	let verifiedSession = null; // Store the verified session for account creation
 
 	// Redirect if already authenticated
@@ -123,17 +126,50 @@
 			return;
 		}
 
-		// Use the verified session to create account - call verify-sms with username
-		// The session is already verified, so we just need to provide the username
-		const result = await auth.verifySMS(
-			phoneNumber,
-			verificationCode, // This will be the original code that was verified
-			username,
-			displayName || username
-		);
-		
-		if (result.success) {
-			goto('/chat?welcome=true');
+		// Use the verified session JWT token to create account
+		// Call the verify-sms endpoint with the session token instead of OTP
+		if (!verifiedSession?.access_token) {
+			messages.error('Session expired. Please verify your phone number again.');
+			step = 'verify';
+			return;
+		}
+
+		try {
+			const response = await fetch('/api/auth/verify-sms', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${verifiedSession.access_token}`
+				},
+				body: JSON.stringify({
+					phoneNumber,
+					username,
+					displayName: displayName || username,
+					useSession: true // Flag to indicate we're using session auth
+				})
+			});
+
+			const data = await response.json();
+
+			if (response.ok && data.success) {
+				// Store user data and session
+				if (browser) {
+					localStorage.setItem('qrypt_user', JSON.stringify(data.user));
+					localStorage.setItem('supabase.auth.token', JSON.stringify(verifiedSession));
+				}
+				
+				// Set the session in the Supabase client
+				const supabase = createSupabaseClient();
+				await supabase.auth.setSession(verifiedSession);
+				
+				messages.success('Account created successfully! Welcome to QryptChat!');
+				goto('/chat?welcome=true');
+			} else {
+				messages.error(data.error || 'Failed to create account');
+			}
+		} catch (error) {
+			console.error('Profile completion error:', error);
+			messages.error('Failed to create account. Please try again.');
 		}
 	}
 

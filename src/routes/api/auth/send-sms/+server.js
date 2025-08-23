@@ -101,6 +101,8 @@ export async function POST(event) {
 				userMessage = 'SMS service is temporarily unavailable. Please try again later.';
 			} else if (smsError.message?.includes('Too many requests')) {
 				userMessage = 'Too many attempts. Please wait a few minutes before trying again.';
+			} else if (smsError.message?.includes('Signups not allowed')) {
+				userMessage = 'SMS authentication is currently unavailable. Please contact support.';
 			}
 
 			return json(
