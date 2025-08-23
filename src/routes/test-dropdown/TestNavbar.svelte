@@ -1,7 +1,7 @@
 <script>
 	import { currentTheme, themeUtils, themes } from '$lib/stores/theme.js';
 	import { currentLanguage, t, i18nUtils, languages } from '$lib/stores/i18n.js';
-	import { auth, user, isAuthenticated } from '$lib/stores/auth.js';
+	import { testAuth, testUser, testIsAuthenticated } from '$lib/stores/test-auth.js';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
@@ -61,23 +61,15 @@
 
 	// Handle logout
 	async function handleLogout() {
-		await auth.logout();
+		await testAuth.logout();
 		closeMobileMenu();
-		goto('/');
+		goto('/test-dropdown');
 	}
 
 	// Navigate to auth page
 	function goToAuth() {
 		closeMobileMenu();
 		goto('/auth');
-	}
-
-	// Navigate to profile
-	function goToProfile() {
-		userDropdownOpen = false;
-		if ($user?.username) {
-			goto(`/u/${$user.username}`);
-		}
 	}
 
 	// Navigate to settings
@@ -95,8 +87,8 @@
 	// Handle logout from dropdown
 	async function handleDropdownLogout() {
 		userDropdownOpen = false;
-		await auth.logout();
-		goto('/');
+		await testAuth.logout();
+		goto('/test-dropdown');
 	}
 	
 	onMount(() => {
@@ -110,17 +102,23 @@
 <nav class="navbar">
 	<div class="container">
 		<div class="navbar-content">
-			<!-- Logo -->
+			<!-- Logo and Brand -->
 			<div class="navbar-brand">
-				<a href="/" class="brand-link" on:click={closeMobileMenu}>
-					<img src="/logo.svg" alt="QryptChat" class="brand-logo" />
+				<a href="/test-dropdown" class="brand-link" on:click={closeMobileMenu}>
+					<div class="brand-icon">
+						<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="16" cy="16" r="14" fill="var(--color-brand-primary)" />
+							<text x="16" y="22" text-anchor="middle" fill="white" font-size="18" font-weight="600">Q</text>
+						</svg>
+					</div>
+					<span class="brand-text">{$t('app.name')}</span>
 				</a>
 			</div>
 			
 			<!-- Desktop Navigation -->
 			<div class="navbar-nav desktop-nav">
-				<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>{$t('nav.home')}</a>
-				{#if $isAuthenticated}
+				<a href="/test-dropdown" class="nav-link" class:active={$page.url.pathname === '/test-dropdown'}>Test</a>
+				{#if $testIsAuthenticated}
 					<a href="/chat" class="nav-link" class:active={$page.url.pathname === '/chat'}>{$t('nav.chat')}</a>
 				{/if}
 			</div>
@@ -209,41 +207,31 @@
 				
 				<!-- Auth Actions -->
 				<div class="auth-actions">
-					{#if $isAuthenticated}
+					{#if $testIsAuthenticated}
 						<!-- User Dropdown -->
 						<div class="dropdown user-dropdown" class:open={userDropdownOpen}>
-							<button
+							<button 
 								class="btn btn-ghost dropdown-trigger user-trigger"
 								on:click={() => userDropdownOpen = !userDropdownOpen}
 								aria-label="User menu"
 							>
 								<div class="user-avatar">
-									{#if $user?.avatarUrl}
-										<img src={$user.avatarUrl} alt={$user.displayName} />
+									{#if $testUser?.avatarUrl}
+										<img src={$testUser.avatarUrl} alt={$testUser.displayName} />
 									{:else}
 										<div class="avatar-placeholder">
-											{($user?.displayName || $user?.username || 'U').charAt(0).toUpperCase()}
+											{($testUser?.displayName || $testUser?.username || 'U').charAt(0).toUpperCase()}
 										</div>
 									{/if}
 								</div>
-								<span class="user-name">{$user?.displayName || $user?.username}</span>
+								<span class="user-name">{$testUser?.displayName || $testUser?.username}</span>
 								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<polyline points="6,9 12,15 18,9"/>
 								</svg>
 							</button>
 							
 							<div class="dropdown-content user-dropdown-content">
-								<button
-									class="dropdown-item"
-									on:click={goToProfile}
-								>
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-										<circle cx="12" cy="7" r="4"/>
-									</svg>
-									Profile
-								</button>
-								<button
+								<button 
 									class="dropdown-item"
 									on:click={goToSettings}
 								>
@@ -253,7 +241,7 @@
 									</svg>
 									Settings
 								</button>
-								<button
+								<button 
 									class="dropdown-item premium-item"
 									on:click={goToPremium}
 								>
@@ -263,7 +251,7 @@
 									Upgrade to Premium
 								</button>
 								<div class="dropdown-divider"></div>
-								<button
+								<button 
 									class="dropdown-item logout-item"
 									on:click={handleDropdownLogout}
 								>
@@ -295,74 +283,11 @@
 				<span class="hamburger-line"></span>
 			</button>
 		</div>
-		
-		<!-- Mobile Menu -->
-		{#if mobileMenuOpen}
-			<div class="mobile-menu fade-in">
-				<div class="mobile-nav">
-					<a href="/" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.home')}</a>
-					<a href="/chat" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.chat')}</a>
-					<a href="/settings" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.settings')}</a>
-				</div>
-				
-				<div class="mobile-actions">
-					<!-- Mobile Theme Switcher -->
-					<div class="mobile-action-group">
-						<span class="mobile-action-label">{$t('theme.switch')}</span>
-						<div class="theme-buttons">
-							<button 
-								class="theme-btn"
-								class:active={$currentTheme === 'light'}
-								on:click={() => switchTheme('light')}
-							>
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<circle cx="12" cy="12" r="5"/>
-									<path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-								</svg>
-								{$t('theme.light')}
-							</button>
-							<button 
-								class="theme-btn"
-								class:active={$currentTheme === 'dark'}
-								on:click={() => switchTheme('dark')}
-							>
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-								</svg>
-								{$t('theme.dark')}
-							</button>
-						</div>
-					</div>
-					
-					<!-- Mobile Language Switcher -->
-					<div class="mobile-action-group">
-						<span class="mobile-action-label">{$t('language.switch')}</span>
-						<div class="language-grid">
-							{#each Object.entries(languages) as [code, lang]}
-								<button 
-									class="language-btn"
-									class:active={$currentLanguage === code}
-									on:click={() => switchLanguage(code)}
-								>
-									<span class="language-flag">{lang.flag}</span>
-									<span class="language-name">{lang.name}</span>
-								</button>
-							{/each}
-						</div>
-					</div>
-					
-					<!-- Mobile Auth Actions -->
-					<div class="mobile-auth-actions">
-						<a href="/login" class="btn btn-secondary" on:click={closeMobileMenu}>{$t('nav.login')}</a>
-						<a href="/register" class="btn btn-primary" on:click={closeMobileMenu}>{$t('nav.register')}</a>
-					</div>
-				</div>
-			</div>
-		{/if}
 	</div>
 </nav>
 
 <style>
+	/* Import all the styles from the original Navbar component */
 	.navbar {
 		position: sticky;
 		top: 0;
@@ -400,14 +325,14 @@
 		color: var(--color-brand-primary);
 	}
 	
-	.brand-logo {
-		height: 40px;
-		width: auto;
-		transition: opacity 0.2s ease;
+	.brand-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 	
-	.brand-link:hover .brand-logo {
-		opacity: 0.8;
+	.brand-text {
+		font-weight: 700;
 	}
 	
 	/* Desktop Navigation */
@@ -617,130 +542,6 @@
 		transform: rotate(-45deg) translate(0.25rem, -0.25rem);
 	}
 	
-	/* Mobile Menu */
-	.mobile-menu {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		background-color: var(--color-bg-primary);
-		border-bottom: 1px solid var(--color-border-primary);
-		box-shadow: var(--shadow-lg);
-		padding: var(--space-4);
-	}
-	
-	.mobile-nav {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		margin-bottom: var(--space-6);
-	}
-	
-	.mobile-nav-link {
-		color: var(--color-text-primary);
-		text-decoration: none;
-		font-weight: 500;
-		padding: var(--space-3) var(--space-4);
-		border-radius: var(--radius-md);
-		transition: background-color 0.2s ease;
-	}
-	
-	.mobile-nav-link:hover {
-		background-color: var(--color-bg-secondary);
-	}
-	
-	.mobile-actions {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-6);
-	}
-	
-	.mobile-action-group {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-	
-	.mobile-action-label {
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--color-text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-	
-	.theme-buttons {
-		display: flex;
-		gap: var(--space-2);
-	}
-	
-	.theme-btn {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-2);
-		padding: var(--space-3) var(--space-4);
-		background-color: var(--color-bg-secondary);
-		color: var(--color-text-primary);
-		border: 1px solid var(--color-border-primary);
-		border-radius: var(--radius-md);
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-	
-	.theme-btn:hover {
-		background-color: var(--color-bg-tertiary);
-	}
-	
-	.theme-btn.active {
-		background-color: var(--color-brand-primary);
-		color: white;
-		border-color: var(--color-brand-primary);
-	}
-	
-	.language-grid {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: var(--space-2);
-	}
-	
-	.language-btn {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-3);
-		background-color: var(--color-bg-secondary);
-		color: var(--color-text-primary);
-		border: 1px solid var(--color-border-primary);
-		border-radius: var(--radius-md);
-		font-size: 0.875rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-	
-	.language-btn:hover {
-		background-color: var(--color-bg-tertiary);
-	}
-	
-	.language-btn.active {
-		background-color: var(--color-brand-primary);
-		color: white;
-		border-color: var(--color-brand-primary);
-	}
-	
-	.mobile-auth-actions {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-	
-	.mobile-auth-actions .btn {
-		justify-content: center;
-	}
-	
 	/* Screen reader only */
 	.sr-only {
 		position: absolute;
@@ -763,12 +564,6 @@
 		
 		.mobile-menu-btn {
 			display: none;
-		}
-	}
-	
-	@media (max-width: 767px) {
-		.language-grid {
-			grid-template-columns: 1fr;
 		}
 	}
 </style>

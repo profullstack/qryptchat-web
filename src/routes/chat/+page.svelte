@@ -1,4 +1,4 @@
-a<script>
+<script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -7,10 +7,18 @@ a<script>
 
 	let showWelcome = false;
 
-	// Redirect if not authenticated
-	$: if (!$isAuthenticated) {
-		goto('/auth');
+	// Handle starting a new chat
+	function handleNewChat() {
+		// For now, show a simple alert - this would be replaced with actual chat functionality
+		alert('New chat functionality coming soon! This will open a dialog to start a new conversation.');
 	}
+
+	// Redirect if not authenticated
+	onMount(() => {
+		if (!$isAuthenticated) {
+			goto('/auth');
+		}
+	});
 
 	onMount(() => {
 		// Check for welcome parameter
@@ -30,13 +38,6 @@ a<script>
 		}
 	});
 
-	/**
-	 * Handle logout
-	 */
-	async function handleLogout() {
-		await auth.logout();
-		goto('/');
-	}
 </script>
 
 <svelte:head>
@@ -78,15 +79,12 @@ a<script>
 							<div class="user-status">Online</div>
 						</div>
 					</div>
-					<button class="logout-button" on:click={handleLogout} title="Logout">
-						🚪
-					</button>
 				</div>
 
 				<div class="conversations-section">
 					<div class="section-header">
 						<h3>Conversations</h3>
-						<button class="new-chat-button" title="New Chat">
+						<button class="new-chat-button" on:click={handleNewChat} title="New Chat">
 							+
 						</button>
 					</div>
@@ -130,7 +128,7 @@ a<script>
 							</div>
 						</div>
 					</div>
-					<button class="start-chat-button">
+					<button class="start-chat-button" on:click={handleNewChat}>
 						Start Your First Chat
 					</button>
 				</div>
@@ -265,19 +263,6 @@ a<script>
 		color: var(--color-success-600);
 	}
 
-	.logout-button {
-		background: none;
-		border: none;
-		font-size: 1.25rem;
-		cursor: pointer;
-		padding: 0.5rem;
-		border-radius: 0.375rem;
-		transition: background-color 0.2s ease;
-	}
-
-	.logout-button:hover {
-		background: var(--color-error-50);
-	}
 
 	.conversations-section {
 		flex: 1;

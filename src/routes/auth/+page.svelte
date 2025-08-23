@@ -7,6 +7,7 @@
 	import { t } from '$lib/stores/i18n.js';
 	import { createSupabaseClient } from '$lib/supabase.js';
 	import Message from '$lib/components/Message.svelte';
+	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 
 	/** @type {'phone' | 'verify' | 'profile'} */
 	let step = 'phone';
@@ -20,11 +21,15 @@
 	let expiresAt = null;
 	/** @type {any} */
 	let verifiedSession = null; // Store the verified session for account creation
+	let avatarUrl = null; // Store uploaded avatar URL
+	let createdUserId = null; // Store user ID after account creation for avatar upload
 
 	// Redirect if already authenticated
-	$: if ($isAuthenticated) {
-		goto('/chat');
-	}
+	onMount(() => {
+		if ($isAuthenticated) {
+			goto('/chat');
+		}
+	});
 
 	/**
 	 * Format phone number as user types
@@ -162,6 +167,9 @@
 				const supabase = createSupabaseClient();
 				await supabase.auth.setSession(verifiedSession);
 				
+				// Store user ID for potential avatar upload
+				createdUserId = data.user.id;
+				
 				messages.success('Account created successfully! Welcome to QryptChat!');
 				goto('/chat?welcome=true');
 			} else {
@@ -196,6 +204,31 @@
 		if (verificationCode.length === 6) {
 			setTimeout(verifySMS, 100);
 		}
+	}
+
+	/**
+	 * Handle avatar upload success
+	 * @param {CustomEvent} event
+	 */
+	function handleAvatarUploaded(event) {
+		avatarUrl = event.detail.avatarUrl;
+		messages.success('Profile picture uploaded successfully!');
+	}
+
+	/**
+	 * Handle avatar upload error
+	 * @param {CustomEvent} event
+	 */
+	function handleAvatarError(event) {
+		messages.error(event.detail.message || 'Failed to upload profile picture');
+	}
+
+	/**
+	 * Handle avatar removal
+	 */
+	function handleAvatarRemoved() {
+		avatarUrl = null;
+		messages.info('Profile picture removed');
 	}
 
 	onMount(() => {
@@ -342,6 +375,25 @@
 				<p class="step-description">{$t('auth.profileDescription')}</p>
 				
 				<form on:submit|preventDefault={completeProfile}>
+					<!-- Avatar Upload Section -->
+					<div class="avatar-section">
+						<label class="avatar-label">Profile Picture (Optional)</label>
+						<div class="avatar-upload-container">
+							<AvatarUpload
+								userId={createdUserId}
+								currentAvatarUrl={avatarUrl}
+								size="medium"
+								disabled={$isLoading}
+								on:uploaded={handleAvatarUploaded}
+								on:error={handleAvatarError}
+								on:removed={handleAvatarRemoved}
+							/>
+						</div>
+						<p class="avatar-description">
+							Add a profile picture to help others recognize you. You can skip this step and add one later.
+						</p>
+					</div>
+
 					<div class="input-group">
 						<label for="username">{$t('auth.username')} *</label>
 						<input
@@ -594,6 +646,36 @@
 		margin: 0;
 	}
 
+	/* Avatar Upload Styles */
+	.avatar-section {
+		margin-bottom: 1.5rem;
+		text-align: center;
+	}
+
+	.avatar-label {
+		display: block;
+		font-weight: 500;
+		margin-bottom: 0.75rem;
+		color: var(--color-text-primary);
+		font-size: 0.875rem;
+	}
+
+	.avatar-upload-container {
+		display: flex;
+		justify-content: center;
+		margin-bottom: 0.5rem;
+	}
+
+	.avatar-description {
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		line-height: 1.4;
+		margin: 0;
+		max-width: 280px;
+		margin-left: auto;
+		margin-right: auto;
+	}
+
 	@media (max-width: 480px) {
 		.auth-card {
 			padding: 1.5rem;
@@ -601,6 +683,10 @@
 		
 		.logo h1 {
 			font-size: 1.25rem;
+		}
+
+		.avatar-description {
+			font-size: 0.7rem;
 		}
 	}
 </style>

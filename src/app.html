@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		
 		<!-- PWA Meta Tags -->
@@ -88,8 +88,14 @@
 				}
 			});
 
-			// Service Worker Registration and Update Handling
-			if ('serviceWorker' in navigator) {
+			// Service Worker Registration and Update Handling (Production only)
+			// Only register service worker in production (not on localhost or dev servers)
+			const isProduction = !window.location.hostname.includes('localhost') &&
+								  !window.location.hostname.includes('127.0.0.1') &&
+								  !window.location.hostname.includes('0.0.0.0') &&
+								  window.location.protocol === 'https:';
+			
+			if ('serviceWorker' in navigator && isProduction) {
 				window.addEventListener('load', async () => {
 					try {
 						const registration = await navigator.serviceWorker.register('/sw.js');

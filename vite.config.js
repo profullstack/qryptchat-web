@@ -145,7 +145,7 @@ export default defineConfig(({ mode }) => {
 				]
 			},
 			devOptions: {
-				enabled: true,
+				enabled: false, // Disable service worker in development
 				type: 'module'
 			}
 		})
