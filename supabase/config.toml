@@ -104,7 +104,7 @@ enable_confirmations = true
 # Template for sending a confirmation message via SMS.
 # Use {{ .Code }} to insert the confirmation code.
 template = "Your confirmation code is {{ .Code }}"
-# How long OTP tokens are valid for, in seconds. Defaults to 60, maximum 3600 (1 hour).
+# How frequently SMS can be sent, in seconds. Defaults to 60.
 max_frequency = 60
 
 [auth.external.apple]

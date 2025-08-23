@@ -100,23 +100,44 @@ export async function POST(event) {
 				logs: logger.getLogsAsString()
 			});
 
-			// Return user-friendly error message
+			// Determine error type and provide specific user guidance
 			let userMessage = 'Invalid verification code';
 			let statusCode = 400;
+			let errorCode = 'VERIFICATION_FAILED';
+			let canRetry = true;
+			let suggestedAction = 'Please try again';
 			
-			if (verifyError.message?.includes('expired')) {
-				userMessage = 'Verification code has expired. Please request a new one.';
-			} else if (verifyError.message?.includes('invalid')) {
-				userMessage = 'Invalid verification code. Please check and try again.';
+			if (verifyError.message?.includes('expired') || verifyError.message?.includes('Token has expired')) {
+				userMessage = 'Your verification code has expired';
+				errorCode = 'CODE_EXPIRED';
+				canRetry = false;
+				suggestedAction = 'Please request a new verification code';
+			} else if (verifyError.message?.includes('invalid') || verifyError.message?.includes('Token has expired or is invalid')) {
+				// This covers both expired and invalid tokens from the logs
+				userMessage = 'The verification code is incorrect or has expired';
+				errorCode = 'CODE_INVALID_OR_EXPIRED';
+				canRetry = false;
+				suggestedAction = 'Please check the code or request a new one';
 			} else if (verifyError.message?.includes('Too many requests')) {
-				userMessage = 'Too many attempts. Please wait before trying again.';
+				userMessage = 'Too many verification attempts';
+				errorCode = 'TOO_MANY_ATTEMPTS';
 				statusCode = 429;
+				canRetry = false;
+				suggestedAction = 'Please wait a few minutes before trying again';
+			} else if (verifyError.message?.includes('rate limit')) {
+				userMessage = 'Rate limit exceeded';
+				errorCode = 'RATE_LIMITED';
+				statusCode = 429;
+				canRetry = false;
+				suggestedAction = 'Please wait before requesting a new code';
 			}
 
 			return json(
 				{
 					error: userMessage,
-					code: verifyError.status || 'VERIFICATION_FAILED',
+					code: errorCode,
+					canRetry,
+					suggestedAction,
 					...(process.env.NODE_ENV === 'development' && {
 						debug: errorInfo,
 						logs: logger.getLogs()
