@@ -47,16 +47,10 @@ export async function POST(event) {
 
 		// Prepare update data
 		const updateData = {
-			updated_at: new Date().toISOString()
+			updated_at: new Date().toISOString(),
+			...(bio !== undefined && { bio: bio.trim() || null }),
+			...(website !== undefined && { website: website.trim() || null })
 		};
-
-		if (bio !== undefined) {
-			updateData.bio = bio.trim() || null;
-		}
-
-		if (website !== undefined) {
-			updateData.website = website.trim() || null;
-		}
 
 		// Update user profile
 		const { data: updatedUser, error: updateError } = await supabase
