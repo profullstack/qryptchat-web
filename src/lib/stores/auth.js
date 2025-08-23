@@ -63,31 +63,29 @@ function createAuthStore() {
 		},
 
 		/**
-		 * Send SMS verification code
+		 * Send SMS verification code using Supabase Auth
 		 * @param {string} phoneNumber - Phone number in E.164 format
-		 * @returns {Promise<{success: boolean, error?: string, expiresAt?: string}>}
+		 * @returns {Promise<{success: boolean, error?: string}>}
 		 */
 		async sendSMS(phoneNumber) {
 			update(state => ({ ...state, loading: true, error: null }));
 
 			try {
-				const response = await fetch('/api/auth/send-sms', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({ phoneNumber })
+				const supabase = createSupabaseClient();
+				const { error } = await supabase.auth.signInWithOtp({
+					phone: phoneNumber,
+					options: {
+						channel: 'sms'
+					}
 				});
 
-				const data = await response.json();
-
-				if (!response.ok) {
-					update(state => ({ ...state, loading: false, error: data.error }));
-					return { success: false, error: data.error };
+				if (error) {
+					update(state => ({ ...state, loading: false, error: error.message }));
+					return { success: false, error: error.message };
 				}
 
 				update(state => ({ ...state, loading: false }));
-				return { success: true, expiresAt: data.expiresAt };
+				return { success: true };
 
 			} catch (error) {
 				const errorMessage = 'Failed to send SMS. Please try again.';

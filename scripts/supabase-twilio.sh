@@ -66,7 +66,7 @@ fi
 ENABLE_PHONE_CONFIRMATIONS="${ENABLE_PHONE_CONFIRMATIONS:-true}"
 ENABLE_PHONE_CHANGE_CONFIRMATIONS="${ENABLE_PHONE_CHANGE_CONFIRMATIONS:-true}"
 SMS_TEMPLATE="${SMS_TEMPLATE:-Your code is {{ .Code }}}"
-SITE_URL="${SITE_URL:-https://firstpayinguser.com}"
+SITE_URL="${SITE_URL:-https://qrypto.chat}"
 
 # Build JSON payload for Supabase SMS auth configuration
 # Use Message Service SID if provided, otherwise use phone number

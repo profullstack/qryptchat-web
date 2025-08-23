@@ -76,7 +76,8 @@
 		
 		if (result.success) {
 			step = 'verify';
-			expiresAt = result.expiresAt;
+			// Supabase OTP expires in 60 seconds by default
+			expiresAt = new Date(Date.now() + 60 * 1000).toISOString();
 			startCountdown(60); // 60 second cooldown
 		}
 	}
