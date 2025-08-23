@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		
+		<!-- PWA Meta Tags -->
+		<meta name="application-name" content="QryptChat" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+		<meta name="apple-mobile-web-app-title" content="QryptChat" />
+		<meta name="description" content="Secure, quantum-resistant end-to-end encrypted messaging" />
+		<meta name="format-detection" content="telephone=no" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="msapplication-config" content="%sveltekit.assets%/icons/browserconfig.xml" />
+		<meta name="msapplication-TileColor" content="#6366f1" />
+		<meta name="msapplication-tap-highlight" content="no" />
+		<meta name="theme-color" content="#6366f1" />
+
+		<!-- Apple Touch Icons -->
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon.png" />
+		<link rel="apple-touch-icon" sizes="152x152" href="%sveltekit.assets%/icons/icon-152x152.png" />
+		<link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/icon-180x180.png" />
+		<link rel="apple-touch-icon" sizes="167x167" href="%sveltekit.assets%/icons/icon-167x167.png" />
+
+		<!-- Splash Screens -->
+		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-2048-2732.jpg" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1668-2224.jpg" media="(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1536-2048.jpg" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1125-2436.jpg" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1242-2208.jpg" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-750-1334.jpg" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-640-1136.jpg" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+
+		<!-- Security Headers -->
+		<meta http-equiv="Content-Security-Policy" content="
+			default-src 'self';
+			script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co;
+			style-src 'self' 'unsafe-inline';
+			img-src 'self' data: https: blob:;
+			font-src 'self' data:;
+			connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+			media-src 'self' blob:;
+			worker-src 'self';
+			frame-src 'none';
+			object-src 'none';
+			base-uri 'self';
+			form-action 'self';
+		" />
+
+		<!-- Preload critical resources -->
+		<link rel="preload" href="%sveltekit.assets%/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
+		
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover" class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+		<div style="display: contents">%sveltekit.body%</div>
+
+		<!-- PWA Install Prompt -->
+		<div id="pwa-install-prompt" class="hidden fixed bottom-4 left-4 right-4 bg-indigo-600 text-white p-4 rounded-lg shadow-lg z-50">
+			<div class="flex items-center justify-between">
+				<div class="flex-1">
+					<h3 class="font-semibold">Install QryptChat</h3>
+					<p class="text-sm opacity-90">Get the full app experience with offline support</p>
+				</div>
+				<div class="flex gap-2 ml-4">
+					<button id="pwa-install-dismiss" class="px-3 py-1 text-sm bg-indigo-500 rounded hover:bg-indigo-400">
+						Later
+					</button>
+					<button id="pwa-install-accept" class="px-3 py-1 text-sm bg-white text-indigo-600 rounded hover:bg-gray-100">
+						Install
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- PWA Update Available -->
+		<div id="pwa-update-prompt" class="hidden fixed top-4 left-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg z-50">
+			<div class="flex items-center justify-between">
+				<div class="flex-1">
+					<h3 class="font-semibold">Update Available</h3>
+					<p class="text-sm opacity-90">A new version of QryptChat is ready</p>
+				</div>
+				<div class="flex gap-2 ml-4">
+					<button id="pwa-update-dismiss" class="px-3 py-1 text-sm bg-green-500 rounded hover:bg-green-400">
+						Later
+					</button>
+					<button id="pwa-update-accept" class="px-3 py-1 text-sm bg-white text-green-600 rounded hover:bg-gray-100">
+						Update
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// PWA Install Prompt
+			let deferredPrompt;
+			
+			window.addEventListener('beforeinstallprompt', (e) => {
+				e.preventDefault();
+				deferredPrompt = e;
+				
+				const installPrompt = document.getElementById('pwa-install-prompt');
+				const installAccept = document.getElementById('pwa-install-accept');
+				const installDismiss = document.getElementById('pwa-install-dismiss');
+				
+				// Show install prompt if not already installed
+				if (!window.matchMedia('(display-mode: standalone)').matches) {
+					installPrompt.classList.remove('hidden');
+				}
+				
+				installAccept.addEventListener('click', async () => {
+					installPrompt.classList.add('hidden');
+					if (deferredPrompt) {
+						deferredPrompt.prompt();
+						const { outcome } = await deferredPrompt.userChoice;
+						console.log(`User response to install prompt: ${outcome}`);
+						deferredPrompt = null;
+					}
+				});
+				
+				installDismiss.addEventListener('click', () => {
+					installPrompt.classList.add('hidden');
+				});
+			});
+
+			// Service Worker Registration and Update Handling
+			if ('serviceWorker' in navigator) {
+				window.addEventListener('load', async () => {
+					try {
+						const registration = await navigator.serviceWorker.register('/sw.js');
+						console.log('SW registered: ', registration);
+
+						// Handle service worker updates
+						registration.addEventListener('updatefound', () => {
+							const newWorker = registration.installing;
+							
+							newWorker.addEventListener('statechange', () => {
+								if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+									// New service worker is available
+									showUpdatePrompt(registration);
+								}
+							});
+						});
+
+						// Listen for messages from service worker
+						navigator.serviceWorker.addEventListener('message', (event) => {
+							if (event.data && event.data.type === 'NAVIGATE') {
+								// Handle navigation from notification click
+								window.location.href = event.data.url;
+							}
+						});
+
+					} catch (error) {
+						console.log('SW registration failed: ', error);
+					}
+				});
+			}
+
+			function showUpdatePrompt(registration) {
+				const updatePrompt = document.getElementById('pwa-update-prompt');
+				const updateAccept = document.getElementById('pwa-update-accept');
+				const updateDismiss = document.getElementById('pwa-update-dismiss');
+				
+				updatePrompt.classList.remove('hidden');
+				
+				updateAccept.addEventListener('click', () => {
+					updatePrompt.classList.add('hidden');
+					
+					// Tell the new service worker to skip waiting
+					if (registration.waiting) {
+						registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+					}
+					
+					// Reload the page to use the new service worker
+					window.location.reload();
+				});
+				
+				updateDismiss.addEventListener('click', () => {
+					updatePrompt.classList.add('hidden');
+				});
+			}
+
+			// Handle app installed event
+			window.addEventListener('appinstalled', () => {
+				console.log('QryptChat was installed');
+				// Hide install prompt if visible
+				const installPrompt = document.getElementById('pwa-install-prompt');
+				installPrompt.classList.add('hidden');
+			});
+
+			// Dark mode detection
+			if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.classList.add('dark');
+				document.documentElement.setAttribute('data-theme', 'dark');
+			} else {
+				document.documentElement.classList.remove('dark');
+				document.documentElement.setAttribute('data-theme', 'light');
+			}
+		</script>
+	</body>
+</html>
