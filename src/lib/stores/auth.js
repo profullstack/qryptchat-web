@@ -63,7 +63,7 @@ function createAuthStore() {
 		},
 
 		/**
-		 * Send SMS verification code using Supabase Auth
+		 * Send SMS verification code using server-side API
 		 * @param {string} phoneNumber - Phone number in E.164 format
 		 * @returns {Promise<{success: boolean, error?: string}>}
 		 */
@@ -71,17 +71,19 @@ function createAuthStore() {
 			update(state => ({ ...state, loading: true, error: null }));
 
 			try {
-				const supabase = createSupabaseClient();
-				const { error } = await supabase.auth.signInWithOtp({
-					phone: phoneNumber,
-					options: {
-						channel: 'sms'
-					}
+				const response = await fetch('/api/auth/send-sms', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({ phoneNumber })
 				});
 
-				if (error) {
-					update(state => ({ ...state, loading: false, error: error.message }));
-					return { success: false, error: error.message };
+				const data = await response.json();
+
+				if (!response.ok) {
+					update(state => ({ ...state, loading: false, error: data.error }));
+					return { success: false, error: data.error };
 				}
 
 				update(state => ({ ...state, loading: false }));

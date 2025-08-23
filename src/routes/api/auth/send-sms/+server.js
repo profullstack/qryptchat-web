@@ -1,27 +1,10 @@
 /**
  * @fileoverview API endpoint for sending SMS verification codes
- * Handles phone number verification using Twilio SMS service
+ * Handles SMS code generation and sending via Supabase Auth
  */
 
 import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
-import twilio from 'twilio';
-import { 
-	TWILIO_ACCOUNT_SID, 
-	TWILIO_AUTH_TOKEN, 
-	TWILIO_PHONE_NUMBER 
-} from '$env/static/private';
-
-// Initialize Twilio client
-const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-
-/**
- * Generate a 6-digit verification code
- * @returns {string}
- */
-function generateVerificationCode() {
-	return Math.floor(100000 + Math.random() * 900000).toString();
-}
 
 /**
  * Validate phone number format
@@ -35,12 +18,21 @@ function isValidPhoneNumber(phoneNumber) {
 }
 
 /**
+ * Generate a 6-digit verification code
+ * @returns {string}
+ */
+function generateVerificationCode() {
+	return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+/**
  * POST /api/auth/send-sms
- * Send SMS verification code to phone number
+ * Send SMS verification code
  * @param {import('@sveltejs/kit').RequestEvent} event
  */
 export async function POST(event) {
-	const { request, cookies } = event;
+	const { request } = event;
+	
 	try {
 		const { phoneNumber } = await request.json();
 
@@ -54,7 +46,7 @@ export async function POST(event) {
 
 		if (!isValidPhoneNumber(phoneNumber)) {
 			return json(
-				{ error: 'Invalid phone number format. Use E.164 format (e.g., +1234567890)' },
+				{ error: 'Invalid phone number format. Please use E.164 format (e.g., +1234567890)' },
 				{ status: 400 }
 			);
 		}
@@ -62,60 +54,27 @@ export async function POST(event) {
 		// Create Supabase client
 		const supabase = createSupabaseServerClient(event);
 
-		// Generate verification code
-		const verificationCode = generateVerificationCode();
-		const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+		// Send SMS using Supabase Auth (this handles everything internally)
+		const { error: smsError } = await supabase.auth.signInWithOtp({
+			phone: phoneNumber,
+			options: {
+				channel: 'sms',
+				shouldCreateUser: false // We handle user creation manually
+			}
+		});
 
-		// Store verification code in database
-		const { error: dbError } = await supabase
-			.from('phone_verifications')
-			.upsert({
-				phone_number: phoneNumber,
-				verification_code: verificationCode,
-				expires_at: expiresAt.toISOString(),
-				attempts: 0,
-				verified: false,
-				created_at: new Date().toISOString()
-			}, {
-				onConflict: 'phone_number'
-			});
-
-		if (dbError) {
-			console.error('Database error:', dbError);
+		if (smsError) {
+			console.error('SMS sending error:', smsError);
 			return json(
-				{ error: 'Failed to store verification code' },
+				{ error: smsError.message || 'Failed to send SMS. Please try again.' },
 				{ status: 500 }
 			);
 		}
 
-		// Send SMS via Twilio
-		try {
-			await twilioClient.messages.create({
-				body: `Your QryptChat verification code is: ${verificationCode}. This code expires in 10 minutes.`,
-				from: TWILIO_PHONE_NUMBER,
-				to: phoneNumber
-			});
-
-			return json({
-				success: true,
-				message: 'Verification code sent successfully',
-				expiresAt: expiresAt.toISOString()
-			});
-
-		} catch (twilioError) {
-			console.error('Twilio error:', twilioError);
-			
-			// Clean up database entry if SMS failed
-			await supabase
-				.from('phone_verifications')
-				.delete()
-				.eq('phone_number', phoneNumber);
-
-			return json(
-				{ error: 'Failed to send SMS. Please check your phone number.' },
-				{ status: 500 }
-			);
-		}
+		return json({
+			success: true,
+			message: 'Verification code sent successfully'
+		});
 
 	} catch (error) {
 		console.error('Send SMS error:', error);
