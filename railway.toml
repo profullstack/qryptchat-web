@@ -1,0 +1,15 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacksConfig]
+providers = ["node"]
+
+[build.nixpacksConfig.variables]
+NODE_VERSION = "22.12.0"
+
+[deploy]
+startCommand = "pnpm run build && pnpm run preview"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
