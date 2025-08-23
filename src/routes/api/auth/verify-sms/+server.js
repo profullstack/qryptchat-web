@@ -184,19 +184,27 @@ export async function POST(event) {
 			logger.info('Existing user found, signing in', { userId: existingUser.id });
 			user = existingUser;
 		} else {
-			// Create new user
-			logger.info('Creating new user account');
-			
+			// New user - check if username provided
 			if (!username) {
-				logger.error('Username required for new user but not provided');
+				// Username not provided - return special response indicating username needed
+				// But keep the session active so user can complete registration
+				logger.info('New user detected, username required');
 				return json(
 					{
-						error: 'Username is required for new users',
-						suggestion: 'Please provide a username to create your account'
+						success: false,
+						requiresUsername: true,
+						message: 'Username is required for new users',
+						session: verifyData.session, // Keep session for account creation
+						...(process.env.NODE_ENV === 'development' && {
+							logs: logger.getLogs()
+						})
 					},
-					{ status: 400 }
+					{ status: 200 }
 				);
 			}
+
+			// Username provided - create the account using the verified session
+			logger.info('Creating new user account with verified session');
 
 			// Check if username is already taken
 			logger.info('Checking username availability', { username });
@@ -215,8 +223,13 @@ export async function POST(event) {
 				logger.error('Username already taken', { username });
 				return json(
 					{
+						success: false,
 						error: 'Username is already taken',
-						suggestion: 'Please choose a different username'
+						suggestion: 'Please choose a different username',
+						session: verifyData.session, // Keep session for retry
+						...(process.env.NODE_ENV === 'development' && {
+							logs: logger.getLogs()
+						})
 					},
 					{ status: 409 }
 				);

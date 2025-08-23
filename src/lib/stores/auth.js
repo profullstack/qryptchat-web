@@ -123,7 +123,7 @@ function createAuthStore() {
 		 * @param {string} verificationCode - 6-digit verification code
 		 * @param {string} [username] - Username for new users
 		 * @param {string} [displayName] - Display name for new users
-		 * @returns {Promise<{success: boolean, error?: string, user?: User, isNewUser?: boolean}>}
+		 * @returns {Promise<{success: boolean, error?: string, user?: User, isNewUser?: boolean, requiresUsername?: boolean, session?: any}>}
 		 */
 		async verifySMS(phoneNumber, verificationCode, username, displayName) {
 			update(state => ({ ...state, loading: true }));
@@ -135,21 +135,36 @@ function createAuthStore() {
 					headers: {
 						'Content-Type': 'application/json'
 					},
-					body: JSON.stringify({ 
-						phoneNumber, 
-						verificationCode, 
-						username, 
-						displayName 
+					body: JSON.stringify({
+						phoneNumber,
+						verificationCode,
+						username,
+						displayName
 					})
 				});
 
 				const data = await response.json();
 
+				// Handle special case where username is required
+				if (data.requiresUsername) {
+					update(state => ({ ...state, loading: false }));
+					return {
+						success: false,
+						requiresUsername: true,
+						session: data.session,
+						message: data.message
+					};
+				}
+
 				if (!response.ok) {
 					const errorMessage = data.error || 'Failed to verify code';
 					messages.error(errorMessage);
 					update(state => ({ ...state, loading: false }));
-					return { success: false, error: errorMessage };
+					return {
+						success: false,
+						error: errorMessage,
+						session: data.session // Keep session for retry if available
+					};
 				}
 
 				// Store user data and session
@@ -186,6 +201,7 @@ function createAuthStore() {
 				return { success: false, error: errorMessage };
 			}
 		},
+
 
 		/**
 		 * Logout user

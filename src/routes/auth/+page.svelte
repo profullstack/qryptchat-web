@@ -16,6 +16,7 @@
 	let countdown = 0;
 	let canResend = true;
 	let expiresAt = null;
+	let verifiedSession = null; // Store the verified session for account creation
 
 	// Redirect if already authenticated
 	$: if ($isAuthenticated) {
@@ -77,9 +78,9 @@
 		
 		if (result.success) {
 			step = 'verify';
-			// Supabase OTP expires in 60 seconds by default
-			expiresAt = new Date(Date.now() + 60 * 1000).toISOString();
-			startCountdown(60); // 60 second cooldown
+			// Supabase OTP expires in 300 seconds (5 minutes) as configured
+			expiresAt = new Date(Date.now() + 300 * 1000).toISOString();
+			startCountdown(60); // 60 second cooldown for resend (not expiration)
 		}
 	}
 
@@ -92,9 +93,9 @@
 		}
 
 		const result = await auth.verifySMS(
-			phoneNumber, 
-			verificationCode, 
-			username, 
+			phoneNumber,
+			verificationCode,
+			username,
 			displayName
 		);
 		
@@ -106,8 +107,9 @@
 				// Existing user - redirect to chat
 				goto('/chat');
 			}
-		} else if (result.error?.includes('Username is required')) {
-			// New user needs to provide username
+		} else if (result.requiresUsername) {
+			// New user needs to provide username - store session for account creation
+			verifiedSession = result.session;
 			isNewUser = true;
 			step = 'profile';
 		}
@@ -121,10 +123,12 @@
 			return;
 		}
 
+		// Use the verified session to create account - call verify-sms with username
+		// The session is already verified, so we just need to provide the username
 		const result = await auth.verifySMS(
-			phoneNumber, 
-			verificationCode, 
-			username, 
+			phoneNumber,
+			verificationCode, // This will be the original code that was verified
+			username,
 			displayName || username
 		);
 		
