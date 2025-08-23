@@ -106,8 +106,6 @@ enable_confirmations = true
 template = "Your confirmation code is {{ .Code }}"
 # How long OTP tokens are valid for, in seconds. Defaults to 60, maximum 3600 (1 hour).
 max_frequency = 60
-# Extended OTP expiration time - 5 minutes (300 seconds)
-otp_exp = 300
 
 [auth.external.apple]
 enabled = false

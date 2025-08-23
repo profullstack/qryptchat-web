@@ -67,6 +67,8 @@ ENABLE_PHONE_CONFIRMATIONS="${ENABLE_PHONE_CONFIRMATIONS:-true}"
 ENABLE_PHONE_CHANGE_CONFIRMATIONS="${ENABLE_PHONE_CHANGE_CONFIRMATIONS:-true}"
 SMS_TEMPLATE="${SMS_TEMPLATE:-Your code is {{ .Code }}}"
 SITE_URL="${SITE_URL:-https://qrypto.chat}"
+# OTP expiration time in seconds (default: 300 = 5 minutes, max: 3600 = 1 hour)
+SMS_OTP_EXP="${SMS_OTP_EXP:-300}"
 
 # Build JSON payload for Supabase SMS auth configuration
 # Use Message Service SID if provided, otherwise use phone number
@@ -81,6 +83,7 @@ read -r -d '' JSON_PAYLOAD <<EOF || true
   "enable_phone_confirmations": ${ENABLE_PHONE_CONFIRMATIONS},
   "enable_phone_change_confirmations": ${ENABLE_PHONE_CHANGE_CONFIRMATIONS},
   "sms_template": "${SMS_TEMPLATE}",
+  "sms_otp_exp": ${SMS_OTP_EXP},
   "site_url": "${SITE_URL}"
 }
 EOF
@@ -91,6 +94,7 @@ echo "Twilio Phone Number: ${TWILIO_PHONE_NUMBER}"
 echo "Phone confirmations enabled: ${ENABLE_PHONE_CONFIRMATIONS}"
 echo "Phone change confirmations enabled: ${ENABLE_PHONE_CHANGE_CONFIRMATIONS}"
 echo "SMS template: ${SMS_TEMPLATE}"
+echo "SMS OTP expiration: ${SMS_OTP_EXP} seconds"
 echo "Site URL: ${SITE_URL}"
 echo
 
