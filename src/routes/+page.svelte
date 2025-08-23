@@ -16,10 +16,10 @@
 					{$t('app.description')}
 				</p>
 				<div class="hero-actions">
-					<a href="/register" class="btn btn-primary">
+					<a href="/auth" class="btn btn-primary">
 						{$t('nav.register')}
 					</a>
-					<a href="/login" class="btn btn-secondary">
+					<a href="/auth" class="btn btn-secondary">
 						{$t('nav.login')}
 					</a>
 				</div>

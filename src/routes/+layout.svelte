@@ -10,8 +10,13 @@
 	let { children } = $props();
 	
 	onMount(() => {
-		// Initialize theme and language on mount
-		const theme = localStorage.getItem('qrypt-theme') || 'light';
+		// Initialize theme with system preference detection
+		let theme = localStorage.getItem('qrypt-theme');
+		if (!theme) {
+			// Default to system preference if no saved theme
+			theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+		}
+		
 		const language = localStorage.getItem('qrypt-language') || 'en';
 		
 		themeUtils.applyTheme(theme);
@@ -29,6 +34,8 @@
 	<main class="main-content">
 		{@render children?.()}
 	</main>
+	<Footer />
+	<PWAToastManager />
 </div>
 
 <style>

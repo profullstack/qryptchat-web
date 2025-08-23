@@ -14,7 +14,7 @@
 	} = $props();
 	
 	let toastElement;
-	let timeoutId;
+	let timeoutId = null;
 	
 	onMount(() => {
 		if (visible && duration > 0) {
