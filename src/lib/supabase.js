@@ -3,7 +3,6 @@
  * Handles authentication, database operations, and real-time subscriptions
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { createBrowserClient, createServerClient, isBrowser } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 
@@ -155,7 +154,7 @@ export class SupabaseHelpers {
 	 * Get messages for a conversation
 	 * @param {string} conversationId
 	 * @param {number} limit
-	 * @param {string} before - Message ID to paginate before
+	 * @param {string|null} before - Message ID to paginate before
 	 * @returns {Promise<{data: any[], error: any}>}
 	 */
 	async getMessages(conversationId, limit = 50, before = null) {
@@ -280,7 +279,7 @@ export class SupabaseHelpers {
 	/**
 	 * Subscribe to real-time changes for a conversation
 	 * @param {string} conversationId
-	 * @param {object} callbacks
+	 * @param {{onNewMessage?: function, onTypingChange?: function, onPresenceChange?: function}} callbacks
 	 * @returns {import('@supabase/supabase-js').RealtimeChannel}
 	 */
 	subscribeToConversation(conversationId, callbacks = {}) {

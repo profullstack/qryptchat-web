@@ -1,19 +1,21 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 
-export default defineConfig({
-	server: {
-		port: process.env.PORT ? parseInt(process.env.PORT) : 5173,
-		host: true
-	},
+export default defineConfig(({ mode }) => {
+	const env = loadEnv(mode, process.cwd(), '');
+	
+	return {
+		server: {
+			port: env.PORT ? parseInt(env.PORT) : 5173,
+			host: true
+		},
 	plugins: [
 		sveltekit(),
 		SvelteKitPWA({
 			srcDir: './src',
 			mode: 'development',
-			strategies: 'injectManifest',
-			filename: 'sw.js',
+			strategies: 'generateSW',
 			scope: '/',
 			base: '/',
 			manifest: {
@@ -105,9 +107,6 @@ export default defineConfig({
 					}
 				]
 			},
-			injectManifest: {
-				globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}']
-			},
 			workbox: {
 				globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
 				runtimeCaching: [
@@ -144,4 +143,5 @@ export default defineConfig({
 	test: {
 		include: ['src/**/*.{test,spec}.{js,ts}']
 	}
+	};
 });
