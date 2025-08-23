@@ -126,7 +126,14 @@ const translations = {
 		'success.code.sent': 'Verification code sent successfully.',
 		'success.login': 'Successfully signed in.',
 		'success.logout': 'Successfully signed out.',
-		'success.settings.saved': 'Settings saved successfully.'
+		'success.settings.saved': 'Settings saved successfully.',
+		
+		// Footer
+		'footer.followUs': 'Follow us:',
+		'footer.privacy': 'Privacy Policy',
+		'footer.terms': 'Terms of Service',
+		'footer.security': 'Security',
+		'footer.contact': 'Contact'
 	},
 	es: {
 		// Navigation

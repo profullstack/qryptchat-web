@@ -1,6 +1,7 @@
 <script>
 	import '../app.css';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import Footer from '$lib/components/Footer.svelte';
 	import PWAToastManager from '$lib/components/PWAToastManager.svelte';
 	import { onMount } from 'svelte';
 	import { themeUtils } from '$lib/stores/theme.js';
