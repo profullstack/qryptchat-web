@@ -5,6 +5,7 @@
 
 import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
+import { SMSDebugLogger, formatSMSError } from '$lib/utils/sms-debug.js';
 
 /**
  * Validate phone number format
@@ -24,12 +25,23 @@ function isValidPhoneNumber(phoneNumber) {
  */
 export async function POST(event) {
 	const { request } = event;
+	const logger = new SMSDebugLogger();
 	
 	try {
 		const { phoneNumber, verificationCode, username, displayName } = await request.json();
+		
+		logger.info('SMS verification request received', {
+			phoneNumber: phoneNumber ? `${phoneNumber.substring(0, 3)}***${phoneNumber.substring(phoneNumber.length - 2)}` : null,
+			hasCode: !!verificationCode,
+			codeLength: verificationCode?.length,
+			hasUsername: !!username,
+			userAgent: request.headers.get('user-agent'),
+			ip: event.getClientAddress()
+		});
 
 		// Validate input
 		if (!phoneNumber || !verificationCode) {
+			logger.error('Missing required fields', { phoneNumber: !!phoneNumber, verificationCode: !!verificationCode });
 			return json(
 				{ error: 'Phone number and verification code are required' },
 				{ status: 400 }
@@ -37,21 +49,34 @@ export async function POST(event) {
 		}
 
 		if (!isValidPhoneNumber(phoneNumber)) {
+			logger.error('Invalid phone number format', { phoneNumber });
 			return json(
-				{ error: 'Invalid phone number format' },
+				{
+					error: 'Invalid phone number format',
+					suggestion: 'Ensure your phone number is in E.164 format (e.g., +1234567890)'
+				},
 				{ status: 400 }
 			);
 		}
 
 		if (!/^\d{6}$/.test(verificationCode)) {
+			logger.error('Invalid verification code format', {
+				codeLength: verificationCode?.length,
+				codePattern: verificationCode?.replace(/\d/g, 'X')
+			});
 			return json(
-				{ error: 'Verification code must be 6 digits' },
+				{
+					error: 'Verification code must be 6 digits',
+					suggestion: 'Enter the 6-digit code you received via SMS'
+				},
 				{ status: 400 }
 			);
 		}
 
 		// Create Supabase client
 		const supabase = createSupabaseServerClient(event);
+		
+		logger.info('Attempting to verify OTP with Supabase Auth');
 
 		// Verify the OTP using Supabase Auth
 		const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
@@ -61,57 +86,123 @@ export async function POST(event) {
 		});
 
 		if (verifyError) {
-			console.error('OTP verification error:', verifyError);
+			const errorInfo = formatSMSError(verifyError, {
+				phoneNumber,
+				action: 'verify_sms',
+				environment: process.env.NODE_ENV
+			});
+			
+			logger.error('OTP verification failed', errorInfo);
+			
+			// Log to console for production debugging
+			console.error('OTP verification error:', {
+				...errorInfo,
+				logs: logger.getLogsAsString()
+			});
+
+			// Return user-friendly error message
+			let userMessage = 'Invalid verification code';
+			let statusCode = 400;
+			
+			if (verifyError.message?.includes('expired')) {
+				userMessage = 'Verification code has expired. Please request a new one.';
+			} else if (verifyError.message?.includes('invalid')) {
+				userMessage = 'Invalid verification code. Please check and try again.';
+			} else if (verifyError.message?.includes('Too many requests')) {
+				userMessage = 'Too many attempts. Please wait before trying again.';
+				statusCode = 429;
+			}
+
 			return json(
-				{ error: verifyError.message || 'Invalid verification code' },
-				{ status: 400 }
+				{
+					error: userMessage,
+					code: verifyError.status || 'VERIFICATION_FAILED',
+					...(process.env.NODE_ENV === 'development' && {
+						debug: errorInfo,
+						logs: logger.getLogs()
+					})
+				},
+				{ status: statusCode }
 			);
 		}
 
 		if (!verifyData.user) {
+			logger.error('Verification succeeded but no user data returned');
 			return json(
-				{ error: 'Verification failed' },
+				{
+					error: 'Verification failed - no user data',
+					code: 'NO_USER_DATA'
+				},
 				{ status: 400 }
 			);
 		}
 
+		logger.info('OTP verification successful', {
+			supabaseUserId: verifyData.user.id,
+			userPhone: verifyData.user.phone
+		});
+
 		// Check if user already exists in our custom users table
-		const { data: existingUser } = await supabase
+		logger.info('Checking for existing user in database');
+		const { data: existingUser, error: userLookupError } = await supabase
 			.from('users')
 			.select('*')
 			.eq('phone_number', phoneNumber)
 			.single();
+
+		if (userLookupError && userLookupError.code !== 'PGRST116') { // PGRST116 = no rows returned
+			logger.error('Database lookup error', { error: userLookupError });
+			console.error('User lookup error:', userLookupError);
+		}
 
 		let user;
 		let isNewUser = false;
 
 		if (existingUser) {
 			// User exists, just sign them in
+			logger.info('Existing user found, signing in', { userId: existingUser.id });
 			user = existingUser;
 		} else {
 			// Create new user
+			logger.info('Creating new user account');
+			
 			if (!username) {
+				logger.error('Username required for new user but not provided');
 				return json(
-					{ error: 'Username is required for new users' },
+					{
+						error: 'Username is required for new users',
+						suggestion: 'Please provide a username to create your account'
+					},
 					{ status: 400 }
 				);
 			}
 
 			// Check if username is already taken
-			const { data: usernameCheck } = await supabase
+			logger.info('Checking username availability', { username });
+			const { data: usernameCheck, error: usernameError } = await supabase
 				.from('users')
 				.select('id')
 				.eq('username', username)
 				.single();
 
+			if (usernameError && usernameError.code !== 'PGRST116') {
+				logger.error('Username check error', { error: usernameError });
+				console.error('Username check error:', usernameError);
+			}
+
 			if (usernameCheck) {
+				logger.error('Username already taken', { username });
 				return json(
-					{ error: 'Username is already taken' },
+					{
+						error: 'Username is already taken',
+						suggestion: 'Please choose a different username'
+					},
 					{ status: 409 }
 				);
 			}
 
 			// Create user record
+			logger.info('Creating user record in database');
 			const { data: newUser, error: createError } = await supabase
 				.from('users')
 				.insert({
@@ -125,16 +216,52 @@ export async function POST(event) {
 				.single();
 
 			if (createError) {
-				console.error('User creation error:', createError);
+				const errorInfo = formatSMSError(createError, {
+					phoneNumber,
+					username,
+					action: 'create_user',
+					environment: process.env.NODE_ENV
+				});
+				
+				logger.error('User creation failed', errorInfo);
+				
+				console.error('User creation error:', {
+					...errorInfo,
+					logs: logger.getLogsAsString()
+				});
+
 				return json(
-					{ error: 'Failed to create user account' },
+					{
+						error: 'Failed to create user account',
+						code: 'USER_CREATION_FAILED',
+						...(process.env.NODE_ENV === 'development' && {
+							debug: errorInfo,
+							logs: logger.getLogs()
+						})
+					},
 					{ status: 500 }
 				);
 			}
 
 			user = newUser;
 			isNewUser = true;
+			logger.info('User account created successfully', { userId: newUser.id });
 		}
+
+		logger.info('SMS verification completed successfully', {
+			userId: user.id,
+			isNewUser,
+			username: user.username
+		});
+
+		// Log success for monitoring
+		console.log('SMS verification successful:', {
+			phoneNumber: `${phoneNumber.substring(0, 3)}***${phoneNumber.substring(phoneNumber.length - 2)}`,
+			userId: user.id,
+			isNewUser,
+			timestamp: new Date().toISOString(),
+			environment: process.env.NODE_ENV
+		});
 
 		return json({
 			success: true,
@@ -147,13 +274,35 @@ export async function POST(event) {
 				createdAt: user.created_at
 			},
 			isNewUser,
-			message: isNewUser ? 'Account created successfully' : 'Signed in successfully'
+			message: isNewUser ? 'Account created successfully' : 'Signed in successfully',
+			...(process.env.NODE_ENV === 'development' && {
+				logs: logger.getLogs()
+			})
 		});
 
 	} catch (error) {
-		console.error('Verify SMS error:', error);
+		const errorInfo = formatSMSError(error, {
+			action: 'verify_sms',
+			environment: process.env.NODE_ENV
+		});
+		
+		logger.error('Verify SMS exception', errorInfo);
+		
+		// Log to console for production debugging
+		console.error('Verify SMS error:', {
+			...errorInfo,
+			logs: logger.getLogsAsString()
+		});
+
 		return json(
-			{ error: 'Internal server error' },
+			{
+				error: 'Internal server error',
+				code: 'INTERNAL_ERROR',
+				...(process.env.NODE_ENV === 'development' && {
+					debug: errorInfo,
+					logs: logger.getLogs()
+				})
+			},
 			{ status: 500 }
 		);
 	}
