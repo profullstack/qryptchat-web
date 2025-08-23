@@ -5,11 +5,18 @@ builder = "nixpacks"
 providers = ["node"]
 
 [build.nixpacksConfig.variables]
-NODE_VERSION = "22.12.0"
+NODE_VERSION = "24.0.0"
+PNPM_VERSION = "9.7.0"
+
+[build.nixpacksConfig.buildCommand]
+cmd = "pnpm install --frozen-lockfile && pnpm run build"
 
 [deploy]
-startCommand = "pnpm run build && pnpm run preview"
+startCommand = "pnpm start"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
+
+[environments.production.variables]
+NODE_ENV = "production"
