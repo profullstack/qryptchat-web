@@ -3,14 +3,16 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { auth, user, isAuthenticated } from '$lib/stores/auth.js';
+	import { activeConversation } from '$lib/stores/chat.js';
 	import { t } from '$lib/stores/i18n.js';
+	import ChatSidebar from '$lib/components/ChatSidebar.svelte';
 
 	let showWelcome = false;
+	let activeConversationId = null;
 
-	// Handle starting a new chat
-	function handleNewChat() {
-		// For now, show a simple alert - this would be replaced with actual chat functionality
-		alert('New chat functionality coming soon! This will open a dialog to start a new conversation.');
+	// Handle conversation selection
+	function handleConversationSelect(conversationId) {
+		activeConversationId = conversationId;
 	}
 
 	// Redirect if not authenticated
@@ -61,77 +63,51 @@
 
 		<!-- Chat Interface -->
 		<div class="chat-layout">
-			<!-- Sidebar -->
-			<div class="chat-sidebar">
-				<div class="sidebar-header">
-					<div class="user-info">
-						<div class="user-avatar">
-							{#if $user?.avatarUrl}
-								<img src={$user.avatarUrl} alt={$user.displayName} />
-							{:else}
-								<div class="avatar-placeholder">
-									{($user?.displayName || $user?.username || 'U').charAt(0).toUpperCase()}
-								</div>
-							{/if}
-						</div>
-						<div class="user-details">
-							<div class="user-name">{$user?.displayName || $user?.username}</div>
-							<div class="user-status">Online</div>
-						</div>
-					</div>
-				</div>
-
-				<div class="conversations-section">
-					<div class="section-header">
-						<h3>Conversations</h3>
-						<button class="new-chat-button" on:click={handleNewChat} title="New Chat">
-							+
-						</button>
-					</div>
-					
-					<div class="conversations-list">
-						<div class="empty-state">
-							<div class="empty-icon">💬</div>
-							<p>No conversations yet</p>
-							<p class="empty-subtitle">Start a new chat to begin messaging</p>
-						</div>
-					</div>
-				</div>
-			</div>
+			<!-- Enhanced Sidebar -->
+			<ChatSidebar
+				{activeConversationId}
+				onConversationSelect={handleConversationSelect}
+			/>
 
 			<!-- Main Chat Area -->
 			<div class="chat-main">
-				<div class="chat-welcome">
-					<div class="welcome-icon">🔐</div>
-					<h2>Welcome to QryptChat</h2>
-					<p>Your messages are protected with quantum-resistant encryption</p>
-					<div class="features-grid">
-						<div class="feature-item">
-							<div class="feature-icon">🛡️</div>
-							<div class="feature-text">
-								<strong>End-to-End Encrypted</strong>
-								<span>Messages are encrypted on your device</span>
-							</div>
-						</div>
-						<div class="feature-item">
-							<div class="feature-icon">⚡</div>
-							<div class="feature-text">
-								<strong>Quantum-Resistant</strong>
-								<span>Protected against future quantum attacks</span>
-							</div>
-						</div>
-						<div class="feature-item">
-							<div class="feature-icon">🚀</div>
-							<div class="feature-text">
-								<strong>Real-Time</strong>
-								<span>Instant message delivery</span>
-							</div>
-						</div>
+				{#if activeConversationId}
+					<!-- TODO: Add ChatInterface component here -->
+					<div class="chat-placeholder">
+						<h3>Chat Interface Coming Soon</h3>
+						<p>Selected conversation: {activeConversationId}</p>
 					</div>
-					<button class="start-chat-button" on:click={handleNewChat}>
-						Start Your First Chat
-					</button>
-				</div>
+				{:else}
+					<div class="chat-welcome">
+						<div class="welcome-icon">🔐</div>
+						<h2>Welcome to QryptChat</h2>
+						<p>Your messages are protected with quantum-resistant encryption</p>
+						<div class="features-grid">
+							<div class="feature-item">
+								<div class="feature-icon">🛡️</div>
+								<div class="feature-text">
+									<strong>End-to-End Encrypted</strong>
+									<span>Messages are encrypted on your device</span>
+								</div>
+							</div>
+							<div class="feature-item">
+								<div class="feature-icon">⚡</div>
+								<div class="feature-text">
+									<strong>Quantum-Resistant</strong>
+									<span>Protected against future quantum attacks</span>
+								</div>
+							</div>
+							<div class="feature-item">
+								<div class="feature-icon">🚀</div>
+								<div class="feature-text">
+									<strong>Real-Time</strong>
+									<span>Instant message delivery</span>
+								</div>
+							</div>
+						</div>
+						<p class="select-chat-hint">Select a conversation from the sidebar to start chatting</p>
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -153,6 +129,7 @@
 		align-items: center;
 		justify-content: space-between;
 		animation: slideDown 0.3s ease-out;
+		z-index: 10;
 	}
 
 	@keyframes slideDown {
@@ -201,144 +178,30 @@
 		overflow: hidden;
 	}
 
-	.chat-sidebar {
-		width: 320px;
-		background: var(--color-surface);
-		border-right: 1px solid var(--color-border);
-		display: flex;
-		flex-direction: column;
-	}
-
-	.sidebar-header {
-		padding: 1rem;
-		border-bottom: 1px solid var(--color-border);
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.user-info {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.user-avatar {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		overflow: hidden;
-	}
-
-	.user-avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.avatar-placeholder {
-		width: 100%;
-		height: 100%;
-		background: var(--color-primary-500);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 600;
-		font-size: 1.125rem;
-	}
-
-	.user-details {
-		flex: 1;
-	}
-
-	.user-name {
-		font-weight: 600;
-		color: var(--color-text-primary);
-		font-size: 0.875rem;
-	}
-
-	.user-status {
-		font-size: 0.75rem;
-		color: var(--color-success-600);
-	}
-
-
-	.conversations-section {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-
-	.section-header {
-		padding: 1rem;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		border-bottom: 1px solid var(--color-border);
-	}
-
-	.section-header h3 {
-		margin: 0;
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--color-text-primary);
-	}
-
-	.new-chat-button {
-		background: var(--color-primary-500);
-		color: white;
-		border: none;
-		width: 28px;
-		height: 28px;
-		border-radius: 50%;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1rem;
-		font-weight: 600;
-		transition: background-color 0.2s ease;
-	}
-
-	.new-chat-button:hover {
-		background: var(--color-primary-600);
-	}
-
-	.conversations-list {
-		flex: 1;
-		overflow-y: auto;
-		padding: 1rem;
-	}
-
-	.empty-state {
-		text-align: center;
-		padding: 2rem 1rem;
-		color: var(--color-text-secondary);
-	}
-
-	.empty-icon {
-		font-size: 3rem;
-		margin-bottom: 1rem;
-		opacity: 0.5;
-	}
-
-	.empty-state p {
-		margin: 0.5rem 0;
-	}
-
-	.empty-subtitle {
-		font-size: 0.875rem;
-		opacity: 0.7;
-	}
-
 	.chat-main {
 		flex: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		background: var(--color-background);
+		overflow: hidden;
+	}
+
+	.chat-placeholder {
+		text-align: center;
+		padding: 2rem;
+		color: var(--color-text-secondary);
+	}
+
+	.chat-placeholder h3 {
+		margin: 0 0 0.5rem 0;
+		color: var(--color-text-primary);
+		font-size: 1.25rem;
+	}
+
+	.chat-placeholder p {
+		margin: 0;
+		font-size: 0.875rem;
 	}
 
 	.chat-welcome {
@@ -403,29 +266,31 @@
 		font-size: 0.875rem;
 	}
 
-	.start-chat-button {
-		background: var(--color-primary-600);
-		color: white;
-		border: none;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s ease;
+	.select-chat-hint {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+		margin-top: 1rem;
+		font-style: italic;
 	}
 
-	.start-chat-button:hover {
-		background: var(--color-primary-700);
-	}
-
+	/* Responsive */
 	@media (max-width: 768px) {
-		.chat-sidebar {
-			width: 100%;
-			max-width: 320px;
+		.chat-layout {
+			position: relative;
 		}
 		
 		.chat-main {
 			display: none;
+		}
+
+		.chat-main.active {
+			display: flex;
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 5;
 		}
 	}
 </style>
