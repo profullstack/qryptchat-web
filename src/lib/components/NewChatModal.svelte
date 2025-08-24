@@ -196,6 +196,7 @@
 		aria-labelledby="modal-title"
 		tabindex="0"
 	>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
 			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden"
 			transition:fly={{ y: 20, duration: 200 }}

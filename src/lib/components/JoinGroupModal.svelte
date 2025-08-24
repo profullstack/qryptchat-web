@@ -57,6 +57,7 @@
 </script>
 
 <div class="modal-overlay" onclick={handleClose} onkeydown={(e) => e.key === 'Escape' && handleClose()} role="dialog" aria-modal="true" tabindex="0">
+	<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 	<div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="document">
 		<div class="modal-header">
 			<h2>Join a Group</h2>
