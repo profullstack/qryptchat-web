@@ -377,7 +377,7 @@
 				<form on:submit|preventDefault={completeProfile}>
 					<!-- Avatar Upload Section -->
 					<div class="avatar-section">
-						<label class="avatar-label">Profile Picture (Optional)</label>
+						<div class="avatar-label">Profile Picture (Optional)</div>
 						<div class="avatar-upload-container">
 							<AvatarUpload
 								userId={createdUserId}

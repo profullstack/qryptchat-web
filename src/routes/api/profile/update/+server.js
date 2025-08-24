@@ -12,15 +12,22 @@ export async function POST(event) {
 			return json({ error: 'Missing or invalid authorization header' }, { status: 401 });
 		}
 
-		// Create Supabase client and verify user
+		// Create Supabase client and set session
 		const supabase = createSupabaseServerClient(event);
 		const token = authHeader.replace('Bearer ', '');
 
+		// Set the session to ensure auth.uid() is available for RLS
 		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 		if (authError || !user) {
 			console.error('Auth error:', authError);
 			return json({ error: 'Invalid or expired token' }, { status: 401 });
 		}
+
+		// Set the session for RLS context
+		await supabase.auth.setSession({
+			access_token: token,
+			refresh_token: '' // Not needed for this operation
+		});
 
 		console.log('Authenticated user from JWT:', { id: user.id, email: user.email, phone: user.phone });
 
