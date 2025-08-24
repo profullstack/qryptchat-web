@@ -3,6 +3,7 @@
 	import { user, isAuthenticated } from '$lib/stores/auth.js';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 
 	/** @type {import('./$types').PageData} */
 	export let data;
@@ -25,11 +26,23 @@
 		success = '';
 
 		try {
+			/** @type {Record<string, string>} */
+			const headers = {
+				'Content-Type': 'application/json'
+			};
+
+			// Add Authorization header with JWT token
+			const storedSession = browser ? localStorage.getItem('qrypt_session') : null;
+			if (storedSession) {
+				const session = JSON.parse(storedSession);
+				if (session.access_token) {
+					headers['Authorization'] = `Bearer ${session.access_token}`;
+				}
+			}
+
 			const response = await fetch('/api/profile/update', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
+				headers,
 				body: JSON.stringify({
 					bio: bio.trim(),
 					website: website.trim()

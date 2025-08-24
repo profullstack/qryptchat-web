@@ -18,8 +18,35 @@ export async function POST(event) {
 
 		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 		if (authError || !user) {
+			console.error('Auth error:', authError);
 			return json({ error: 'Invalid or expired token' }, { status: 401 });
 		}
+
+		console.log('Authenticated user from JWT:', { id: user.id, email: user.email, phone: user.phone });
+
+		// Find user by auth_user_id
+		const { data: existingUsers, error: userCheckError } = await supabase
+			.from('users')
+			.select('id, username, display_name, auth_user_id')
+			.eq('auth_user_id', user.id);
+
+		if (userCheckError) {
+			console.error('Error checking user in users table:', { userId: user.id, error: userCheckError });
+			return json({ error: 'Database error while checking user' }, { status: 500 });
+		}
+
+		if (!existingUsers || existingUsers.length === 0) {
+			console.error('User not found in users table:', {
+				jwtUserId: user.id,
+				message: 'No user found with matching auth_user_id'
+			});
+			return json({
+				error: 'User profile not found. Please log out and log back in to refresh your session.'
+			}, { status: 404 });
+		}
+
+		const existingUser = existingUsers[0];
+		console.log('Found existing user:', existingUser);
 
 		// Validate input
 		if (bio && typeof bio !== 'string') {
@@ -52,18 +79,25 @@ export async function POST(event) {
 			...(website !== undefined && { website: website.trim() || null })
 		};
 
-		// Update user profile
-		const { data: updatedUser, error: updateError } = await supabase
+		// Update user profile using the found user's ID
+		const { data: updatedUsers, error: updateError } = await supabase
 			.from('users')
 			.update(updateData)
-			.eq('id', user.id)
-			.select('id, username, display_name, avatar_url, bio, website')
-			.single();
+			.eq('id', existingUser.id)
+			.select('id, username, display_name, avatar_url, bio, website');
 
 		if (updateError) {
 			console.error('Error updating profile:', updateError);
 			return json({ error: 'Failed to update profile' }, { status: 500 });
 		}
+
+		// Check if any rows were updated
+		if (!updatedUsers || updatedUsers.length === 0) {
+			console.error('No rows updated - user not found or RLS policy blocked update');
+			return json({ error: 'Profile update failed - user not found or permission denied' }, { status: 404 });
+		}
+
+		const updatedUser = updatedUsers[0];
 
 		// Transform response data
 		const responseData = {

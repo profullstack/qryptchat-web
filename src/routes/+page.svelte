@@ -25,37 +25,7 @@
 				</div>
 			</div>
 			<div class="hero-visual">
-				<div class="feature-grid">
-					<div class="feature-card">
-						<div class="feature-icon">
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-								<circle cx="12" cy="16" r="1"/>
-								<path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-							</svg>
-						</div>
-						<h3>Quantum-Resistant</h3>
-						<p>Protected against future quantum computing threats</p>
-					</div>
-					<div class="feature-card">
-						<div class="feature-icon">
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-							</svg>
-						</div>
-						<h3>End-to-End Encrypted</h3>
-						<p>Your messages are encrypted before leaving your device</p>
-					</div>
-					<div class="feature-card">
-						<div class="feature-icon">
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-							</svg>
-						</div>
-						<h3>Privacy First</h3>
-						<p>No data collection, no tracking, complete privacy</p>
-					</div>
-				</div>
+				<img src="/hero.svg" alt="QryptChat Hero" class="hero-image" />
 			</div>
 		</div>
 	</div>
@@ -168,49 +138,12 @@
 		border-color: white;
 	}
 	
-	.feature-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: var(--space-6);
-	}
-	
-	.feature-card {
-		background: rgba(255, 255, 255, 0.1);
-		backdrop-filter: blur(10px);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		border-radius: var(--radius-xl);
-		padding: var(--space-6);
-		text-align: center;
-		transition: transform 0.3s ease, box-shadow 0.3s ease;
-	}
-	
-	.feature-card:hover {
-		transform: translateY(-5px);
-		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-	}
-	
-	.feature-icon {
-		width: 48px;
-		height: 48px;
-		background: rgba(255, 255, 255, 0.2);
-		border-radius: var(--radius-xl);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		margin: 0 auto var(--space-4);
-		color: white;
-	}
-	
-	.feature-card h3 {
-		font-size: 1.125rem;
-		font-weight: 600;
-		margin-bottom: var(--space-2);
-	}
-	
-	.feature-card p {
-		font-size: 0.875rem;
-		opacity: 0.8;
-		line-height: 1.5;
+	.hero-image {
+		width: 100%;
+		height: auto;
+		max-width: 500px;
+		opacity: 0.9;
+		filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.3));
 	}
 	
 	.features {
@@ -305,8 +238,8 @@
 			justify-content: center;
 		}
 		
-		.feature-grid {
-			grid-template-columns: 1fr;
+		.hero-image {
+			max-width: 400px;
 		}
 		
 		.features-grid {

@@ -315,12 +315,12 @@ export async function POST(event) {
 			// Username provided - create the account using the verified session
 			logger.info('Creating new user account with verified session');
 
-			// Check if username is already taken
+			// Check if username is already taken (case-insensitive)
 			logger.info('Checking username availability', { username });
 			const { data: usernameCheck, error: usernameError } = await serviceSupabase
 				.from('users')
 				.select('id')
-				.eq('username', username)
+				.ilike('username', username) // Case-insensitive check
 				.single();
 
 			if (usernameError && usernameError.code !== 'PGRST116') {
@@ -349,6 +349,7 @@ export async function POST(event) {
 			const { data: newUser, error: createError } = await serviceSupabase
 				.from('users')
 				.insert({
+					auth_user_id: verifyData.user.id, // Link to Supabase Auth user
 					phone_number: phoneNumber,
 					username,
 					display_name: displayName || username,
