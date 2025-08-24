@@ -301,8 +301,13 @@
 			<div class="mobile-menu fade-in">
 				<div class="mobile-nav">
 					<a href="/" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.home')}</a>
-					<a href="/chat" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.chat')}</a>
-					<a href="/settings" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.settings')}</a>
+					{#if $isAuthenticated}
+						<a href="/chat" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.chat')}</a>
+						{#if $user?.username}
+							<a href="/u/{$user.username}" class="mobile-nav-link" on:click={closeMobileMenu}>Profile</a>
+						{/if}
+						<a href="/settings" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.settings')}</a>
+					{/if}
 				</div>
 				
 				<div class="mobile-actions">
@@ -353,8 +358,12 @@
 					
 					<!-- Mobile Auth Actions -->
 					<div class="mobile-auth-actions">
-						<a href="/login" class="btn btn-secondary" on:click={closeMobileMenu}>{$t('nav.login')}</a>
-						<a href="/register" class="btn btn-primary" on:click={closeMobileMenu}>{$t('nav.register')}</a>
+						{#if $isAuthenticated}
+							<button class="btn btn-error" on:click={handleLogout}>{$t('nav.logout')}</button>
+						{:else}
+							<button class="btn btn-secondary" on:click={goToAuth}>{$t('nav.login')}</button>
+							<button class="btn btn-primary" on:click={goToAuth}>{$t('nav.register')}</button>
+						{/if}
 					</div>
 				</div>
 			</div>

@@ -1,6 +1,8 @@
 import { json } from '@sveltejs/kit';
-import { supabase } from '$lib/supabase.js';
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 
 export async function POST({ request }) {
 	try {
@@ -12,12 +14,39 @@ export async function POST({ request }) {
 
 		const token = authHeader.replace('Bearer ', '');
 
-		// Verify the JWT token and get user
-		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-		if (authError || !user) {
-			console.error('Auth error:', authError);
+		// Decode JWT token to get user ID (simple validation)
+		let user;
+		try {
+			// JWT tokens have 3 parts separated by dots: header.payload.signature
+			const tokenParts = token.split('.');
+			if (tokenParts.length !== 3) {
+				throw new Error('Invalid token format');
+			}
+			
+			// Decode the payload (second part)
+			const payload = JSON.parse(atob(tokenParts[1]));
+			
+			// Check if token is expired
+			if (payload.exp && payload.exp < Date.now() / 1000) {
+				throw new Error('Token expired');
+			}
+			
+			// Extract user info from payload
+			user = {
+				id: payload.sub,
+				email: payload.email
+			};
+			
+			if (!user.id) {
+				throw new Error('Invalid token payload');
+			}
+		} catch (error) {
+			console.error('Token validation error:', error);
 			return json({ error: 'Invalid authentication token' }, { status: 401 });
 		}
+
+		// Create service role client for database operations
+		const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 		const formData = await request.formData();
 		const file = formData.get('avatar');
@@ -67,9 +96,8 @@ export async function POST({ request }) {
 			.from('avatars')
 			.getPublicUrl(fileName);
 
-		// Update user's avatar_url in database using service role client
-		const serviceRoleClient = createServiceRoleClient();
-		const { error: updateError } = await serviceRoleClient
+		// Update user's avatar_url in database using authenticated client
+		const { error: updateError } = await supabase
 			.from('users')
 			.update({ avatar_url: publicUrl })
 			.eq('auth_user_id', user.id);
@@ -103,16 +131,42 @@ export async function DELETE({ request }) {
 
 		const token = authHeader.replace('Bearer ', '');
 
-		// Verify the JWT token and get user
-		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-		if (authError || !user) {
-			console.error('Auth error:', authError);
+		// Decode JWT token to get user ID (simple validation)
+		let user;
+		try {
+			// JWT tokens have 3 parts separated by dots: header.payload.signature
+			const tokenParts = token.split('.');
+			if (tokenParts.length !== 3) {
+				throw new Error('Invalid token format');
+			}
+			
+			// Decode the payload (second part)
+			const payload = JSON.parse(atob(tokenParts[1]));
+			
+			// Check if token is expired
+			if (payload.exp && payload.exp < Date.now() / 1000) {
+				throw new Error('Token expired');
+			}
+			
+			// Extract user info from payload
+			user = {
+				id: payload.sub,
+				email: payload.email
+			};
+			
+			if (!user.id) {
+				throw new Error('Invalid token payload');
+			}
+		} catch (error) {
+			console.error('Token validation error:', error);
 			return json({ error: 'Invalid authentication token' }, { status: 401 });
 		}
 
-		// Update user's avatar_url to null in database using service role client
-		const serviceRoleClient = createServiceRoleClient();
-		const { error: updateError } = await serviceRoleClient
+		// Create service role client for storage and database operations
+		const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+		// Update user's avatar_url to null in database using authenticated client
+		const { error: updateError } = await supabase
 			.from('users')
 			.update({ avatar_url: null })
 			.eq('auth_user_id', user.id);

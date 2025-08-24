@@ -1,6 +1,6 @@
 <script>
 	import { page } from '$app/stores';
-	import { user, isAuthenticated } from '$lib/stores/auth.js';
+	import { user, isAuthenticated, auth } from '$lib/stores/auth.js';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -108,10 +108,7 @@
 		
 		// Update the user store if this is the current user's profile
 		if (isOwnProfile && $user) {
-			user.update(currentUser => ({
-				...currentUser,
-				avatarUrl
-			}));
+			auth.updateUser({ avatarUrl });
 		}
 		
 		success = 'Profile picture updated successfully!';
@@ -140,10 +137,7 @@
 		
 		// Update the user store if this is the current user's profile
 		if (isOwnProfile && $user) {
-			user.update(currentUser => ({
-				...currentUser,
-				avatarUrl: null
-			}));
+			auth.updateUser({ avatarUrl: null });
 		}
 		
 		success = 'Profile picture removed successfully!';

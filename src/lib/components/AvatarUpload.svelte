@@ -1,10 +1,10 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { supabase } from '$lib/supabase.js';
+	import { browser } from '$app/environment';
 	
 	const dispatch = createEventDispatcher();
 	
-	export let userId = null;
+	export let userId = null; // Used for external reference
 	export let currentAvatarUrl = null;
 	export let size = 'large'; // 'small', 'medium', 'large'
 	export let disabled = false;
@@ -53,13 +53,8 @@
 		}
 	}
 	
-	// Upload avatar to Supabase Storage
+	// Upload avatar via server-side API
 	async function uploadAvatar(file) {
-		if (!userId) {
-			dispatch('error', { message: 'User ID is required for avatar upload' });
-			return;
-		}
-		
 		// Validate file type
 		const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 		if (!allowedTypes.includes(file.type)) {
@@ -80,35 +75,32 @@
 			// Create preview URL
 			previewUrl = URL.createObjectURL(file);
 			
-			// Generate unique filename
-			const fileExt = file.name.split('.').pop();
-			const fileName = `${userId}/${Date.now()}.${fileExt}`;
-			
-			// Upload to Supabase Storage
-			const { data, error } = await supabase.storage
-				.from('avatars')
-				.upload(fileName, file, {
-					cacheControl: '3600',
-					upsert: false
-				});
-			
-			if (error) {
-				throw error;
+			// Get JWT token for authentication
+			const token = browser ? localStorage.getItem('supabase.auth.token') : null;
+			if (!token) {
+				throw new Error('Authentication token not found. Please log in again.');
 			}
+
+			const parsedToken = JSON.parse(token);
+			const accessToken = parsedToken.access_token;
+
+			// Create FormData for file upload
+			const formData = new FormData();
+			formData.append('avatar', file);
 			
-			// Get public URL
-			const { data: { publicUrl } } = supabase.storage
-				.from('avatars')
-				.getPublicUrl(fileName);
+			// Upload via server-side API
+			const response = await fetch('/api/auth/upload-avatar', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${accessToken}`
+				},
+				body: formData
+			});
 			
-			// Update user's avatar_url in database
-			const { error: updateError } = await supabase
-				.from('users')
-				.update({ avatar_url: publicUrl })
-				.eq('id', userId);
+			const result = await response.json();
 			
-			if (updateError) {
-				throw updateError;
+			if (!response.ok) {
+				throw new Error(result.error || 'Failed to upload avatar');
 			}
 			
 			// Clean up old preview URL
@@ -116,8 +108,8 @@
 				URL.revokeObjectURL(previewUrl);
 			}
 			
-			previewUrl = publicUrl;
-			dispatch('uploaded', { avatarUrl: publicUrl });
+			previewUrl = result.avatarUrl;
+			dispatch('uploaded', { avatarUrl: result.avatarUrl });
 			
 		} catch (error) {
 			console.error('Avatar upload error:', error);
@@ -138,21 +130,34 @@
 		}
 	}
 	
-	// Remove avatar
+	// Remove avatar via server-side API
 	async function removeAvatar() {
-		if (!userId || uploading) return;
+		if (uploading) return;
 		
 		try {
 			uploading = true;
 			
-			// Update user's avatar_url to null
-			const { error } = await supabase
-				.from('users')
-				.update({ avatar_url: null })
-				.eq('id', userId);
+			// Get JWT token for authentication
+			const token = browser ? localStorage.getItem('supabase.auth.token') : null;
+			if (!token) {
+				throw new Error('Authentication token not found. Please log in again.');
+			}
+
+			const parsedToken = JSON.parse(token);
+			const accessToken = parsedToken.access_token;
 			
-			if (error) {
-				throw error;
+			// Remove via server-side API
+			const response = await fetch('/api/auth/upload-avatar', {
+				method: 'DELETE',
+				headers: {
+					'Authorization': `Bearer ${accessToken}`
+				}
+			});
+			
+			const result = await response.json();
+			
+			if (!response.ok) {
+				throw new Error(result.error || 'Failed to remove avatar');
 			}
 			
 			previewUrl = null;
