@@ -108,10 +108,17 @@ export async function POST(event) {
 			}
 		}
 
-		// Create new conversation
+		// Check if creator exists in users table first
+		const { data: creatorExists } = await supabase
+			.from('users')
+			.select('id')
+			.eq('id', user.id)
+			.maybeSingle();
+
+		// Create new conversation - only set created_by if user exists in users table
 		const conversationData = {
 			type,
-			created_by: user.id,
+			...(creatorExists && { created_by: user.id }),
 			...(name && { name }),
 			...(group_id && { group_id })
 		};
@@ -140,13 +147,6 @@ export async function POST(event) {
 				role: 'member'
 			});
 		}
-
-		// Only add creator as participant if they exist in our users table
-		const { data: creatorExists } = await supabase
-			.from('users')
-			.select('id')
-			.eq('id', user.id)
-			.maybeSingle();
 
 		if (creatorExists) {
 			// Add creator as admin if not already in participants
