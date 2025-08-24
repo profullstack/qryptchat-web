@@ -6,6 +6,7 @@
 	import { messages } from '$lib/stores/messages.js';
 	import { t } from '$lib/stores/i18n.js';
 	import { createSupabaseClient } from '$lib/supabase.js';
+	import { currentTheme, themeUtils } from '$lib/stores/theme.js';
 	import Message from '$lib/components/Message.svelte';
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 
@@ -21,13 +22,20 @@
 	let expiresAt = null;
 	/** @type {any} */
 	let verifiedSession = null; // Store the verified session for account creation
+	/** @type {string | null | undefined} */
 	let avatarUrl = null; // Store uploaded avatar URL
+	/** @type {string | null | undefined} */
 	let createdUserId = null; // Store user ID after account creation for avatar upload
 
 	// Redirect if already authenticated
 	onMount(() => {
 		if ($isAuthenticated) {
 			goto('/chat');
+		}
+		
+		// Ensure theme is applied
+		if (browser) {
+			themeUtils.applyTheme($currentTheme);
 		}
 	});
 
@@ -380,8 +388,8 @@
 						<div class="avatar-label">Profile Picture (Optional)</div>
 						<div class="avatar-upload-container">
 							<AvatarUpload
-								userId={createdUserId}
-								currentAvatarUrl={avatarUrl}
+								userId={createdUserId ? undefined : null}
+								currentAvatarUrl={avatarUrl ? undefined : null}
 								size="medium"
 								disabled={$isLoading}
 								on:uploaded={handleAvatarUploaded}
@@ -452,17 +460,17 @@
 		align-items: center;
 		justify-content: center;
 		padding: 1rem;
-		background: linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-primary-100) 100%);
+		background: linear-gradient(135deg, var(--color-bg-secondary) 0%, var(--color-bg-tertiary) 100%);
 	}
 
 	.auth-card {
-		background: var(--color-surface);
+		background: var(--color-bg-primary);
 		border-radius: 1rem;
 		padding: 2rem;
 		width: 100%;
 		max-width: 400px;
 		box-shadow: var(--shadow-lg);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-primary);
 	}
 
 	.auth-header {
@@ -485,7 +493,7 @@
 	.logo h1 {
 		font-size: 1.5rem;
 		font-weight: 700;
-		color: var(--color-primary-600);
+		color: var(--color-brand-primary);
 		margin: 0;
 	}
 
@@ -521,18 +529,18 @@
 	.input-group input {
 		width: 100%;
 		padding: 0.75rem;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-primary);
 		border-radius: 0.5rem;
 		font-size: 1rem;
 		transition: border-color 0.2s ease;
-		background: var(--color-surface);
+		background: var(--color-bg-primary);
 		color: var(--color-text-primary);
 	}
 
 	.input-group input:focus {
 		outline: none;
-		border-color: var(--color-primary-500);
-		box-shadow: 0 0 0 3px var(--color-primary-100);
+		border-color: var(--color-brand-primary);
+		box-shadow: 0 0 0 3px rgb(99 102 241 / 0.1);
 	}
 
 	.input-group input:disabled {
@@ -555,7 +563,7 @@
 	.primary-button {
 		width: 100%;
 		padding: 0.75rem;
-		background: var(--color-primary-600);
+		background: var(--color-brand-primary);
 		color: white;
 		border: none;
 		border-radius: 0.5rem;
@@ -570,7 +578,7 @@
 	}
 
 	.primary-button:hover:not(:disabled) {
-		background: var(--color-primary-700);
+		background: var(--color-brand-secondary);
 	}
 
 	.primary-button:disabled {
@@ -581,7 +589,7 @@
 	.back-button {
 		background: none;
 		border: none;
-		color: var(--color-primary-600);
+		color: var(--color-brand-primary);
 		cursor: pointer;
 		font-size: 0.875rem;
 		margin-bottom: 1rem;
@@ -589,20 +597,20 @@
 	}
 
 	.back-button:hover {
-		color: var(--color-primary-700);
+		color: var(--color-brand-secondary);
 	}
 
 	.link-button {
 		background: none;
 		border: none;
-		color: var(--color-primary-600);
+		color: var(--color-brand-primary);
 		cursor: pointer;
 		text-decoration: underline;
 		font-size: 0.875rem;
 	}
 
 	.link-button:hover {
-		color: var(--color-primary-700);
+		color: var(--color-brand-secondary);
 	}
 
 	.resend-section {

@@ -40,6 +40,7 @@ export async function handleSendMessage(ws, message, context) {
 		}
 
 		// Verify user can access this conversation
+		// Use the internal user ID (not auth_user_id) for conversation_participants lookup
 		const { data: participant, error: participantError } = await supabase
 			.from('conversation_participants')
 			.select('id, role')
@@ -58,7 +59,7 @@ export async function handleSendMessage(ws, message, context) {
 		}
 
 		// TODO: Integrate encryption here
-		// For now, we'll store the content as-is (this is the security issue you identified)
+		// For now, we'll store the content as plain text (no encoding needed for bytea - Supabase handles it)
 		// In production, this should be: encryptedContent = await encryptMessage(content, conversationKey)
 		const encryptedContent = content;
 
@@ -103,6 +104,22 @@ export async function handleSendMessage(ws, message, context) {
 		);
 		ws.send(JSON.stringify(successResponse));
 
+		// Decode the encrypted_content for broadcasting (same as in load messages)
+		if (newMessage.encrypted_content) {
+			try {
+				if (newMessage.encrypted_content instanceof Uint8Array) {
+					newMessage.encrypted_content = new TextDecoder().decode(newMessage.encrypted_content);
+				} else if (typeof newMessage.encrypted_content === 'string' && newMessage.encrypted_content.startsWith('\\x')) {
+					const hexString = newMessage.encrypted_content.slice(2);
+					const bytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+					newMessage.encrypted_content = new TextDecoder().decode(bytes);
+				}
+			} catch (error) {
+				console.error('📨 [SEND] Error decoding message content for broadcast:', error);
+				newMessage.encrypted_content = '[Message content unavailable]';
+			}
+		}
+
 		// Broadcast message to all participants in the conversation
 		const broadcastMessage = {
 			type: MESSAGE_TYPES.MESSAGE_RECEIVED,
@@ -113,7 +130,19 @@ export async function handleSendMessage(ws, message, context) {
 			timestamp: new Date().toISOString()
 		};
 
+		console.log('📨 [SEND] Broadcasting message to room:', {
+			conversationId,
+			messageId: newMessage.id,
+			broadcastMessage: JSON.stringify(broadcastMessage, null, 2)
+		});
+
 		roomManager.broadcastToRoom(conversationId, broadcastMessage, ws);
+		
+		console.log('📨 [SEND] Room stats after broadcast:', {
+			roomUsers: roomManager.getRoomUsers(conversationId),
+			totalConnections: roomManager.getTotalConnections(),
+			onlineUsers: roomManager.getOnlineUsers()
+		});
 
 	} catch (error) {
 		console.error('Error sending message:', error);
@@ -133,7 +162,16 @@ export async function handleSendMessage(ws, message, context) {
  * @param {Object} context - WebSocket context
  */
 export async function handleLoadMessages(ws, message, context) {
+	console.log('📨 [MESSAGES] ==================== LOAD MESSAGES START ====================');
+	console.log('📨 [MESSAGES] Message received:', JSON.stringify(message, null, 2));
+	console.log('📨 [MESSAGES] Authentication check:', {
+		isAuthenticated: isAuthenticated(context),
+		hasContext: !!context,
+		contextKeys: Object.keys(context || {})
+	});
+	
 	if (!isAuthenticated(context)) {
+		console.error('📨 [MESSAGES] ERROR: Authentication required');
 		const errorResponse = createErrorResponse(
 			message.requestId,
 			'Authentication required',
@@ -148,7 +186,17 @@ export async function handleLoadMessages(ws, message, context) {
 		const user = getAuthenticatedUser(context);
 		const supabase = getSupabaseClient(context);
 
+		console.log('📨 [MESSAGES] Request details:', {
+			conversationId,
+			limit,
+			hasUser: !!user,
+			userId: user?.id || 'N/A',
+			username: user?.username || 'N/A',
+			hasSupabase: !!supabase
+		});
+
 		if (!conversationId) {
+			console.error('📨 [MESSAGES] ERROR: No conversation ID provided');
 			const errorResponse = createErrorResponse(
 				message.requestId,
 				'Conversation ID is required',
@@ -159,6 +207,12 @@ export async function handleLoadMessages(ws, message, context) {
 		}
 
 		// Verify user can access this conversation
+		console.log('📨 [MESSAGES] Checking participant access:', {
+			conversationId,
+			userId: user.id,
+			authUserId: user.id  // This should be the same as userId (internal user ID)
+		});
+
 		const { data: participant, error: participantError } = await supabase
 			.from('conversation_participants')
 			.select('id')
@@ -166,7 +220,35 @@ export async function handleLoadMessages(ws, message, context) {
 			.eq('user_id', user.id)
 			.single();
 
+		console.log('📨 [MESSAGES] Participant query result:', {
+			hasParticipant: !!participant,
+			participant,
+			participantError: participantError ? {
+				message: participantError.message,
+				code: participantError.code,
+				details: participantError.details,
+				hint: participantError.hint
+			} : null
+		});
+
 		if (participantError || !participant) {
+			// Let's check what participants exist for this conversation
+			console.log('📨 [MESSAGES] Access denied - checking all participants for conversation:', conversationId);
+			const { data: allParticipants } = await supabase
+				.from('conversation_participants')
+				.select('*')
+				.eq('conversation_id', conversationId);
+			
+			console.log('📨 [MESSAGES] All participants for conversation:', {
+				conversationId,
+				participantCount: allParticipants?.length || 0,
+				participants: allParticipants?.map(p => ({
+					user_id: p.user_id,
+					joined_at: p.joined_at
+				})) || []
+			});
+
+			console.error('📨 [MESSAGES] ERROR: Access denied to conversation');
 			const errorResponse = createErrorResponse(
 				message.requestId,
 				'Access denied to conversation',
@@ -176,7 +258,10 @@ export async function handleLoadMessages(ws, message, context) {
 			return;
 		}
 
+		console.log('📨 [MESSAGES] SUCCESS: Access granted for participant:', participant);
+
 		// Load messages for the conversation
+		console.log('📨 [MESSAGES] Loading messages from database...');
 		const { data: messages, error: messagesError } = await supabase
 			.from('messages')
 			.select(`
@@ -188,8 +273,27 @@ export async function handleLoadMessages(ws, message, context) {
 			.order('created_at', { ascending: true })
 			.limit(limit);
 
+		console.log('📨 [MESSAGES] Messages query result:', {
+			hasMessages: !!messages,
+			messageCount: messages?.length || 0,
+			messages: messages?.map(m => ({
+				id: m.id,
+				sender_id: m.sender_id,
+				message_type: m.message_type,
+				created_at: m.created_at,
+				sender_username: m.sender?.username
+			})) || [],
+			messagesError: messagesError ? {
+				message: messagesError.message,
+				code: messagesError.code,
+				details: messagesError.details,
+				hint: messagesError.hint
+			} : null
+		});
+
 		if (messagesError) {
-			console.error('Error loading messages:', messagesError);
+			console.error('📨 [MESSAGES] ERROR: Failed to load messages');
+			console.error('📨 [MESSAGES] Messages error details:', messagesError);
 			const errorResponse = createErrorResponse(
 				message.requestId,
 				'Failed to load messages',
@@ -201,10 +305,35 @@ export async function handleLoadMessages(ws, message, context) {
 
 		// Load reply data separately to avoid PostgREST issues
 		let messagesWithReplies = messages || [];
+		console.log('📨 [MESSAGES] Processing reply data for', messagesWithReplies.length, 'messages');
+		
+		// Decode encrypted_content from bytea to text for all messages
 		if (messagesWithReplies.length > 0) {
+			messagesWithReplies.forEach(msg => {
+				if (msg.encrypted_content) {
+					try {
+						// If encrypted_content is bytea, decode it to text
+						if (msg.encrypted_content instanceof Uint8Array) {
+							msg.encrypted_content = new TextDecoder().decode(msg.encrypted_content);
+						} else if (typeof msg.encrypted_content === 'string' && msg.encrypted_content.startsWith('\\x')) {
+							// Handle PostgreSQL bytea hex format
+							const hexString = msg.encrypted_content.slice(2); // Remove \x prefix
+							const bytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+							msg.encrypted_content = new TextDecoder().decode(bytes);
+						}
+						// If it's already a string, leave it as is
+					} catch (error) {
+						console.error('📨 [MESSAGES] Error decoding message content:', error);
+						msg.encrypted_content = '[Message content unavailable]';
+					}
+				}
+			});
+			
 			const replyIds = messagesWithReplies
 				.filter(msg => msg.reply_to_id)
 				.map(msg => msg.reply_to_id);
+
+			console.log('📨 [MESSAGES] Reply IDs found:', replyIds);
 
 			if (replyIds.length > 0) {
 				const { data: replyData } = await supabase
@@ -212,8 +341,27 @@ export async function handleLoadMessages(ws, message, context) {
 					.select('id, encrypted_content, sender_id')
 					.in('id', replyIds);
 
-				// Map reply data to messages
+				console.log('📨 [MESSAGES] Reply data loaded:', replyData?.length || 0, 'replies');
+
+				// Map reply data to messages and decode reply content
 				if (replyData) {
+					replyData.forEach(reply => {
+						if (reply.encrypted_content) {
+							try {
+								if (reply.encrypted_content instanceof Uint8Array) {
+									reply.encrypted_content = new TextDecoder().decode(reply.encrypted_content);
+								} else if (typeof reply.encrypted_content === 'string' && reply.encrypted_content.startsWith('\\x')) {
+									const hexString = reply.encrypted_content.slice(2);
+									const bytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+									reply.encrypted_content = new TextDecoder().decode(bytes);
+								}
+							} catch (error) {
+								console.error('📨 [MESSAGES] Error decoding reply content:', error);
+								reply.encrypted_content = '[Reply content unavailable]';
+							}
+						}
+					});
+					
 					messagesWithReplies.forEach(msg => {
 						if (msg.reply_to_id) {
 							msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
@@ -232,6 +380,8 @@ export async function handleLoadMessages(ws, message, context) {
 			}
 		);
 
+		console.log('📨 [MESSAGES] Sending success response with', messagesWithReplies.length, 'messages');
+		console.log('📨 [MESSAGES] Response:', JSON.stringify(successResponse, null, 2));
 		ws.send(JSON.stringify(successResponse));
 
 		// Mark messages as read
@@ -240,13 +390,18 @@ export async function handleLoadMessages(ws, message, context) {
 				.filter(msg => msg.sender_id !== user.id)
 				.map(msg => msg.id);
 			
+			console.log('📨 [MESSAGES] Marking', messageIds.length, 'messages as read');
 			if (messageIds.length > 0) {
 				await markMessagesAsRead(messageIds, user.id, supabase);
 			}
 		}
 
+		console.log('📨 [MESSAGES] ==================== LOAD MESSAGES SUCCESS ====================');
+
 	} catch (error) {
-		console.error('Error loading messages:', error);
+		console.error('📨 [MESSAGES] ==================== LOAD MESSAGES EXCEPTION ====================');
+		console.error('📨 [MESSAGES] Exception details:', error);
+		console.error('📨 [MESSAGES] Stack trace:', error.stack);
 		const errorResponse = createErrorResponse(
 			message.requestId,
 			'Failed to load messages',

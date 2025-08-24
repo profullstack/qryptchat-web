@@ -40,6 +40,7 @@ export async function handleTypingStart(ws, message, context) {
 		}
 
 		// Verify user can access this conversation
+		// Use the internal user ID (not auth_user_id) for conversation_participants lookup
 		const { data: participant, error: participantError } = await supabase
 			.from('conversation_participants')
 			.select('id')
@@ -76,7 +77,7 @@ export async function handleTypingStart(ws, message, context) {
 			payload: {
 				conversationId,
 				userId: user.id,
-				username: user.user_metadata?.username || user.email,
+				username: user.username || user.display_name || user.email,
 				isTyping: true
 			},
 			requestId: null,
@@ -177,7 +178,7 @@ export async function handleTypingStop(ws, message, context) {
 			payload: {
 				conversationId,
 				userId: user.id,
-				username: user.user_metadata?.username || user.email,
+				username: user.username || user.display_name || user.email,
 				isTyping: false
 			},
 			requestId: null,

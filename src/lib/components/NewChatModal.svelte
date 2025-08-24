@@ -10,11 +10,14 @@
 	// State using Svelte 5 runes
 	let activeTab = $state('direct'); // 'direct', 'group', 'channel'
 	let searchQuery = $state('');
+	/** @type {any[]} */
 	let searchResults = $state([]);
+	/** @type {any[]} */
 	let selectedUsers = $state([]);
 	let groupName = $state('');
 	let isSearching = $state(false);
 	let isCreating = $state(false);
+	/** @type {ReturnType<typeof setTimeout> | null} */
 	let searchTimeout = $state(null);
 	
 	// Functions
@@ -34,7 +37,7 @@
 		isCreating = false;
 	}
 	
-	function setActiveTab(tab) {
+	function setActiveTab(/** @type {string} */ tab) {
 		activeTab = tab;
 		selectedUsers = [];
 		searchQuery = '';
@@ -74,7 +77,7 @@
 		searchTimeout = setTimeout(searchUsers, 300);
 	}
 	
-	function toggleUserSelection(user) {
+	function toggleUserSelection(/** @type {any} */ user) {
 		const index = selectedUsers.findIndex(u => u.id === user.id);
 		if (index >= 0) {
 			selectedUsers = selectedUsers.filter(u => u.id !== user.id);
@@ -83,11 +86,11 @@
 		}
 	}
 	
-	function isUserSelected(user) {
+	function isUserSelected(/** @type {any} */ user) {
 		return selectedUsers.some(u => u.id === user.id);
 	}
 	
-	async function startDirectConversation(otherUser) {
+	async function startDirectConversation(/** @type {any} */ otherUser) {
 		isCreating = true;
 		try {
 			const response = await fetch('/api/chat/conversations', {
@@ -169,7 +172,7 @@
 		}
 	}
 	
-	function handleSubmit(event) {
+	function handleSubmit(/** @type {Event} */ event) {
 		event.preventDefault();
 		
 		if (activeTab === 'direct' && selectedUsers.length === 1) {

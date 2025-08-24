@@ -65,12 +65,28 @@ export class RoomManager {
 	 * Join a user to a conversation room
 	 * @param {WebSocket} ws - WebSocket connection
 	 * @param {string} conversationId - Conversation ID
+	 * @param {string} userId - User ID (for debugging)
 	 */
-	joinRoom(ws, conversationId) {
+	joinRoom(ws, conversationId, userId = 'unknown') {
+		console.log('🏠 [ROOM] User joining room:', {
+			conversationId,
+			userId,
+			existingRoom: this.rooms.has(conversationId),
+			currentRoomSize: this.rooms.get(conversationId)?.size || 0
+		});
+		
 		if (!this.rooms.has(conversationId)) {
 			this.rooms.set(conversationId, new Set());
 		}
 		this.rooms.get(conversationId).add(ws);
+		
+		console.log('🏠 [ROOM] After join:', {
+			conversationId,
+			userId,
+			newRoomSize: this.rooms.get(conversationId).size,
+			totalRooms: this.rooms.size,
+			roomUsers: this.getRoomUsers(conversationId)
+		});
 	}
 
 	/**
@@ -95,21 +111,80 @@ export class RoomManager {
 	 * @param {WebSocket} [excludeWs] - WebSocket to exclude from broadcast
 	 */
 	broadcastToRoom(conversationId, message, excludeWs = null) {
+		console.log('🏠 [BROADCAST] ==================== BROADCAST START ====================');
+		console.log('🏠 [BROADCAST] Broadcasting to room:', {
+			conversationId,
+			messageType: message.type,
+			hasExcludeWs: !!excludeWs,
+			roomExists: this.rooms.has(conversationId)
+		});
+
 		const room = this.rooms.get(conversationId);
-		if (!room) return;
+		if (!room) {
+			console.log('🏠 [BROADCAST] ERROR: Room not found for conversation:', conversationId);
+			console.log('🏠 [BROADCAST] Available rooms:', Array.from(this.rooms.keys()));
+			return;
+		}
+
+		console.log('🏠 [BROADCAST] Room details:', {
+			conversationId,
+			roomSize: room.size,
+			roomUsers: this.getRoomUsers(conversationId),
+			totalRooms: this.rooms.size,
+			totalConnections: this.getTotalConnections()
+		});
 
 		const messageStr = JSON.stringify(message);
+		let broadcastCount = 0;
+		let excludedCount = 0;
+		let deadConnections = 0;
+		let errors = 0;
+
 		for (const ws of room) {
-			if (ws !== excludeWs && ws.readyState === ws.OPEN) {
-				try {
-					ws.send(messageStr);
-				} catch (error) {
-					console.error('Failed to send message to WebSocket:', error);
-					// Remove dead connection
-					this.removeUserConnection(ws);
-				}
+			const userId = this.connectionUsers.get(ws);
+			console.log('🏠 [BROADCAST] Processing connection:', {
+				userId: userId || 'unknown',
+				isExcluded: ws === excludeWs,
+				readyState: ws.readyState,
+				isOpen: ws.readyState === ws.OPEN
+			});
+
+			if (ws === excludeWs) {
+				excludedCount++;
+				console.log('🏠 [BROADCAST] Excluding sender connection for user:', userId);
+				continue;
+			}
+
+			if (ws.readyState !== ws.OPEN) {
+				deadConnections++;
+				console.log('🏠 [BROADCAST] Dead connection found for user:', userId, 'readyState:', ws.readyState);
+				// Remove dead connection
+				this.removeUserConnection(ws);
+				continue;
+			}
+
+			try {
+				ws.send(messageStr);
+				broadcastCount++;
+				console.log('🏠 [BROADCAST] ✅ Message sent successfully to user:', userId);
+			} catch (error) {
+				errors++;
+				console.error('🏠 [BROADCAST] ❌ Failed to send message to user:', userId, error);
+				// Remove dead connection
+				this.removeUserConnection(ws);
 			}
 		}
+
+		console.log('🏠 [BROADCAST] Broadcast summary:', {
+			conversationId,
+			totalConnections: room.size,
+			broadcastCount,
+			excludedCount,
+			deadConnections,
+			errors,
+			messageType: message.type
+		});
+		console.log('🏠 [BROADCAST] ==================== BROADCAST END ====================');
 	}
 
 	/**

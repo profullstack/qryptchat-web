@@ -98,7 +98,16 @@ export class ChatWebSocketServer {
 	 * @param {Object} request - HTTP upgrade request
 	 */
 	async handleConnection(ws, request) {
-		console.log('New WebSocket connection');
+		console.log('🔌 [SERVER] ==================== NEW CONNECTION ====================');
+		console.log('🔌 [SERVER] Connection details:', {
+			url: request.url,
+			headers: {
+				origin: request.headers.origin,
+				userAgent: request.headers['user-agent']?.substring(0, 50) + '...',
+				authorization: request.headers.authorization ? 'Present' : 'Missing'
+			},
+			remoteAddress: request.socket.remoteAddress
+		});
 
 		// Create connection context
 		const context = {
@@ -109,6 +118,7 @@ export class ChatWebSocketServer {
 		};
 
 		this.connections.set(ws, context);
+		console.log('🔌 [SERVER] Connection context created, total connections:', this.connections.size);
 
 		// Set up message handler
 		ws.on('message', (data) => {
@@ -122,7 +132,7 @@ export class ChatWebSocketServer {
 
 		// Set up error handler
 		ws.on('error', (error) => {
-			console.error('WebSocket connection error:', error);
+			console.error('🔌 [SERVER] WebSocket connection error:', error);
 			this.handleClose(ws, context);
 		});
 
@@ -132,18 +142,29 @@ export class ChatWebSocketServer {
 		});
 
 		// Try to authenticate from request headers/query params
+		console.log('🔌 [SERVER] Attempting initial authentication...');
 		try {
 			const authResult = await authenticateWebSocket(request);
+			console.log('🔌 [SERVER] Initial auth result:', {
+				success: authResult.success,
+				hasUser: !!authResult.user,
+				userId: authResult.user?.id || 'N/A'
+			});
+			
 			if (authResult.success) {
 				context.authenticated = true;
 				context.user = authResult.user;
 				// Note: We'll set up supabase client when needed in handlers
 				roomManager.addUserConnection(ws, authResult.user.id);
-				console.log(`WebSocket authenticated for user: ${authResult.user.id}`);
+				console.log('🔌 [SERVER] SUCCESS: WebSocket pre-authenticated for user:', authResult.user.id);
+			} else {
+				console.log('🔌 [SERVER] No initial authentication - will require AUTH message');
 			}
 		} catch (error) {
-			console.error('WebSocket authentication error:', error);
+			console.error('🔌 [SERVER] Initial authentication error:', error);
 		}
+		
+		console.log('🔌 [SERVER] ==================== CONNECTION SETUP COMPLETE ====================');
 	}
 
 	/**
@@ -153,9 +174,30 @@ export class ChatWebSocketServer {
 	 * @param {Object} context - Connection context
 	 */
 	async handleMessage(ws, data, context) {
+		console.log('📥 [SERVER] ==================== MESSAGE RECEIVED ====================');
+		console.log('📥 [SERVER] Raw data length:', data.length);
+		console.log('📥 [SERVER] Context state:', {
+			authenticated: context.authenticated,
+			hasUser: !!context.user,
+			userId: context.user?.id || 'N/A',
+			hasSupabase: !!context.supabase
+		});
+		
 		try {
-			const message = parseMessage(data.toString());
+			const rawMessage = data.toString();
+			console.log('📥 [SERVER] Raw message:', rawMessage);
+			
+			const message = parseMessage(rawMessage);
+			console.log('📥 [SERVER] Parsed message:', {
+				hasMessage: !!message,
+				type: message?.type || 'N/A',
+				requestId: message?.requestId || 'N/A',
+				hasPayload: !!message?.payload,
+				payloadKeys: message?.payload ? Object.keys(message.payload) : []
+			});
+			
 			if (!message) {
+				console.error('📥 [SERVER] ERROR: Invalid message format');
 				const errorResponse = createErrorResponse(
 					null,
 					'Invalid message format',
@@ -165,57 +207,69 @@ export class ChatWebSocketServer {
 				return;
 			}
 
-			console.log(`Received message: ${message.type}`);
+			console.log(`📥 [SERVER] Processing message type: ${message.type}`);
 
 			// Handle different message types
 			switch (message.type) {
 				case MESSAGE_TYPES.AUTH:
+					console.log('📥 [SERVER] Routing to AUTH handler');
 					await handleAuth(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.LOAD_CONVERSATIONS:
+					console.log('📥 [SERVER] Routing to LOAD_CONVERSATIONS handler');
 					await handleLoadConversations(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.JOIN_CONVERSATION:
+					console.log('📥 [SERVER] Routing to JOIN_CONVERSATION handler');
 					await handleJoinConversation(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.LEAVE_CONVERSATION:
+					console.log('📥 [SERVER] Routing to LEAVE_CONVERSATION handler');
 					await handleLeaveConversation(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.CREATE_CONVERSATION:
+					console.log('📥 [SERVER] Routing to CREATE_CONVERSATION handler');
 					await handleCreateConversation(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.SEND_MESSAGE:
+					console.log('📥 [SERVER] Routing to SEND_MESSAGE handler');
 					await handleSendMessage(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.LOAD_MESSAGES:
+					console.log('📥 [SERVER] Routing to LOAD_MESSAGES handler');
 					await handleLoadMessages(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.LOAD_MORE_MESSAGES:
+					console.log('📥 [SERVER] Routing to LOAD_MORE_MESSAGES handler');
 					await handleLoadMoreMessages(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.TYPING_START:
+					console.log('📥 [SERVER] Routing to TYPING_START handler');
 					await handleTypingStart(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.TYPING_STOP:
+					console.log('📥 [SERVER] Routing to TYPING_STOP handler');
 					await handleTypingStop(ws, message, context);
 					break;
 
 				case MESSAGE_TYPES.PING:
+					console.log('📥 [SERVER] Handling PING message');
 					const pongResponse = createPongMessage(message.requestId);
 					ws.send(serializeMessage(pongResponse));
 					context.lastPing = Date.now();
 					break;
 
 				default:
+					console.error('📥 [SERVER] ERROR: Unknown message type:', message.type);
 					const errorResponse = createErrorResponse(
 						message.requestId,
 						`Unknown message type: ${message.type}`,
@@ -225,8 +279,12 @@ export class ChatWebSocketServer {
 					break;
 			}
 
+			console.log('📥 [SERVER] ==================== MESSAGE PROCESSING COMPLETE ====================');
+
 		} catch (error) {
-			console.error('Error handling WebSocket message:', error);
+			console.error('📥 [SERVER] ==================== MESSAGE PROCESSING EXCEPTION ====================');
+			console.error('📥 [SERVER] Exception details:', error);
+			console.error('📥 [SERVER] Stack trace:', error.stack);
 			const errorResponse = createErrorResponse(
 				null,
 				'Internal server error',

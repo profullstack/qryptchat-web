@@ -26,12 +26,24 @@
 		}
 	});
 
-	// Load messages when conversation changes
+	// Join conversation and load messages when conversation changes
 	$effect(() => {
 		if (conversationId) {
-			loadMessages();
+			joinConversation();
 		}
 	});
+
+	async function joinConversation() {
+		try {
+			if (currentUser?.id) {
+				// Join the conversation room (this also loads messages)
+				await wsChat.joinConversation(conversationId);
+				shouldScrollToBottom = true;
+			}
+		} catch (error) {
+			console.error('Failed to join conversation:', error);
+		}
+	}
 
 	async function loadMessages() {
 		try {
