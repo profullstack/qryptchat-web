@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { auth, user, isAuthenticated } from '$lib/stores/auth.js';
-	import { activeConversation } from '$lib/stores/chat.js';
+	import { wsChat, activeConversation, isConnected, isAuthenticated as wsAuthenticated } from '$lib/stores/websocket-chat.js';
 	import { t } from '$lib/stores/i18n.js';
 	import ChatSidebar from '$lib/components/ChatSidebar.svelte';
 	import MessageList from '$lib/components/chat/MessageList.svelte';

@@ -1,6 +1,6 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
-	import { chat, conversations, groups, totalUnreadCount } from '$lib/stores/chat.js';
+	import { wsChat, conversations, groups, isConnected, isAuthenticated } from '$lib/stores/websocket-chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import ConversationItem from './ConversationItem.svelte';
 	import GroupItem from './GroupItem.svelte';
@@ -42,8 +42,8 @@
 		if ($user?.id) {
 			loading = true;
 			await Promise.all([
-				chat.loadConversations($user.id),
-				chat.loadGroups($user.id)
+				wsChat.loadConversations(),
+				wsChat.loadGroups?.() || Promise.resolve()
 			]);
 			loading = false;
 		}
@@ -53,7 +53,7 @@
 	function handleConversationSelect(/** @type {string} */ conversationId) {
 		onConversationSelect(conversationId);
 		if ($user?.id) {
-			chat.setActiveConversation(conversationId, $user.id);
+			wsChat.joinConversation(conversationId);
 		}
 	}
 
@@ -81,8 +81,8 @@
 	async function handleGroupJoined() {
 		if ($user?.id) {
 			await Promise.all([
-				chat.loadConversations($user.id),
-				chat.loadGroups($user.id)
+				wsChat.loadConversations(),
+				wsChat.loadGroups?.() || Promise.resolve()
 			]);
 		}
 	}
@@ -94,8 +94,8 @@
 		// Reload conversations to get the new one
 		if ($user?.id) {
 			await Promise.all([
-				chat.loadConversations($user.id),
-				chat.loadGroups($user.id)
+				wsChat.loadConversations(),
+				wsChat.loadGroups?.() || Promise.resolve()
 			]);
 		}
 		
