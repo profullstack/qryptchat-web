@@ -65,7 +65,8 @@ fi
 # SMS authentication settings
 ENABLE_PHONE_CONFIRMATIONS="${ENABLE_PHONE_CONFIRMATIONS:-true}"
 ENABLE_PHONE_CHANGE_CONFIRMATIONS="${ENABLE_PHONE_CHANGE_CONFIRMATIONS:-true}"
-SMS_TEMPLATE="${SMS_TEMPLATE:-Your code is {{ .Code }}}"
+# Force correct SMS template (override any .env setting that might have extra })
+SMS_TEMPLATE="Your code is {{ .Code }}"
 SITE_URL="${SITE_URL:-https://qrypto.chat}"
 # OTP expiration time in seconds (default: 300 = 5 minutes, max: 3600 = 1 hour)
 SMS_OTP_EXP="${SMS_OTP_EXP:-300}"
@@ -73,7 +74,12 @@ SMS_OTP_EXP="${SMS_OTP_EXP:-300}"
 # Build JSON payload for Supabase SMS auth configuration
 # Use Message Service SID if provided, otherwise use phone number
 MESSAGE_SERVICE_SID_VALUE="${TWILIO_MESSAGE_SERVICE_SID:-}"
-read -r -d '' JSON_PAYLOAD <<EOF || true
+PHONE_NUMBER_VALUE="${TWILIO_PHONE_NUMBER:-}"
+
+# Build the JSON payload conditionally based on what's provided
+if [ -n "${MESSAGE_SERVICE_SID_VALUE}" ]; then
+  # Use Message Service SID
+  read -r -d '' JSON_PAYLOAD <<EOF || true
 {
   "external_phone_enabled": true,
   "sms_provider": "twilio",
@@ -87,6 +93,23 @@ read -r -d '' JSON_PAYLOAD <<EOF || true
   "site_url": "${SITE_URL}"
 }
 EOF
+else
+  # Use phone number
+  read -r -d '' JSON_PAYLOAD <<EOF || true
+{
+  "external_phone_enabled": true,
+  "sms_provider": "twilio",
+  "sms_twilio_account_sid": "${TWILIO_ACCOUNT_SID}",
+  "sms_twilio_auth_token": "${TWILIO_AUTH_TOKEN}",
+  "sms_twilio_phone_number": "${PHONE_NUMBER_VALUE}",
+  "enable_phone_confirmations": ${ENABLE_PHONE_CONFIRMATIONS},
+  "enable_phone_change_confirmations": ${ENABLE_PHONE_CHANGE_CONFIRMATIONS},
+  "sms_template": "${SMS_TEMPLATE}",
+  "sms_otp_exp": ${SMS_OTP_EXP},
+  "site_url": "${SITE_URL}"
+}
+EOF
+fi
 
 echo "Configuring Twilio SMS for Supabase project: ${PROJECT_REF}"
 echo "Twilio Account SID: ${TWILIO_ACCOUNT_SID}"

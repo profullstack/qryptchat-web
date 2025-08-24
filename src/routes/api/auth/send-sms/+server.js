@@ -68,13 +68,14 @@ export async function POST(event) {
 		const supabase = createSupabaseServerClient(event);
 		
 		logger.info('Attempting to send SMS via Supabase Auth');
+		logger.info('Supabase project URL:', process.env.PUBLIC_SUPABASE_URL);
 
 		// Send SMS using Supabase Auth (this handles everything internally)
 		const { error: smsError } = await supabase.auth.signInWithOtp({
 			phone: phoneNumber,
 			options: {
 				channel: 'sms',
-				shouldCreateUser: false // We handle user creation manually
+				shouldCreateUser: true // Allow Supabase to create auth user for SMS sending
 			}
 		});
 

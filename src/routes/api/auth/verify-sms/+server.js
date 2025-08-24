@@ -277,7 +277,7 @@ export async function POST(event) {
 		const { data: existingUser, error: userLookupError } = await serviceSupabase
 			.from('users')
 			.select('*')
-			.eq('phone_number', phoneNumber)
+			.eq('auth_user_id', verifyData.user.id)
 			.single();
 
 		if (userLookupError && userLookupError.code !== 'PGRST116') { // PGRST116 = no rows returned
