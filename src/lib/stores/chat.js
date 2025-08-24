@@ -102,18 +102,20 @@ function createChatStore() {
 			update(state => ({ ...state, loading: true, error: null }));
 
 			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				const { data, error } = await supabase.rpc('get_user_conversations_enhanced', {
-					user_uuid: userId
+				const response = await fetch('/api/chat/conversations', {
+					method: 'GET',
+					credentials: 'include'
 				});
 
-				if (error) throw error;
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				const { conversations } = await response.json();
 
 				update(state => ({
 					...state,
-					conversations: data || [],
+					conversations: conversations || [],
 					loading: false,
 					error: null
 				}));
@@ -138,18 +140,20 @@ function createChatStore() {
 			update(state => ({ ...state, loading: true, error: null }));
 
 			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				const { data, error } = await supabase.rpc('get_user_groups', {
-					user_uuid: userId
+				const response = await fetch('/api/chat/groups', {
+					method: 'GET',
+					credentials: 'include'
 				});
 
-				if (error) throw error;
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				const { groups } = await response.json();
 
 				update(state => ({
 					...state,
-					groups: data || [],
+					groups: groups || [],
 					loading: false,
 					error: null
 				}));

@@ -76,8 +76,8 @@ $$ LANGUAGE plpgsql;
 -- Function to create a group with default general room
 CREATE OR REPLACE FUNCTION create_group_with_default_room(
     group_name TEXT,
-    group_description TEXT DEFAULT NULL,
     creator_id UUID,
+    group_description TEXT DEFAULT NULL,
     is_public_group BOOLEAN DEFAULT FALSE
 )
 RETURNS TABLE (
@@ -215,7 +215,7 @@ RETURNS TABLE (
     room_name TEXT,
     room_description TEXT,
     is_private BOOLEAN,
-    position INTEGER,
+    "position" INTEGER,
     unread_count BIGINT,
     latest_message_content TEXT,
     latest_message_created_at TIMESTAMPTZ

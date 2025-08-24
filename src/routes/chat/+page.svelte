@@ -6,12 +6,14 @@
 	import { activeConversation } from '$lib/stores/chat.js';
 	import { t } from '$lib/stores/i18n.js';
 	import ChatSidebar from '$lib/components/ChatSidebar.svelte';
+	import MessageList from '$lib/components/chat/MessageList.svelte';
+	import MessageInput from '$lib/components/chat/MessageInput.svelte';
 
-	let showWelcome = false;
-	let activeConversationId = null;
+	let showWelcome = $state(false);
+	let activeConversationId = $state(/** @type {string | null} */ (null));
 
 	// Handle conversation selection
-	function handleConversationSelect(conversationId) {
+	function handleConversationSelect(/** @type {string} */ conversationId) {
 		activeConversationId = conversationId;
 	}
 
@@ -72,10 +74,9 @@
 			<!-- Main Chat Area -->
 			<div class="chat-main">
 				{#if activeConversationId}
-					<!-- TODO: Add ChatInterface component here -->
-					<div class="chat-placeholder">
-						<h3>Chat Interface Coming Soon</h3>
-						<p>Selected conversation: {activeConversationId}</p>
+					<div class="chat-interface">
+						<MessageList conversationId={activeConversationId} />
+						<MessageInput conversationId={activeConversationId} />
 					</div>
 				{:else}
 					<div class="chat-welcome">
@@ -187,21 +188,12 @@
 		overflow: hidden;
 	}
 
-	.chat-placeholder {
-		text-align: center;
-		padding: 2rem;
-		color: var(--color-text-secondary);
-	}
-
-	.chat-placeholder h3 {
-		margin: 0 0 0.5rem 0;
-		color: var(--color-text-primary);
-		font-size: 1.25rem;
-	}
-
-	.chat-placeholder p {
-		margin: 0;
-		font-size: 0.875rem;
+	.chat-interface {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		background: var(--color-background);
 	}
 
 	.chat-welcome {

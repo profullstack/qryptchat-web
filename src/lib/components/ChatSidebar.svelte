@@ -17,24 +17,25 @@
 	let expandedGroups = new Set();
 	let loading = false;
 
-	// Reactive statements
-	$: filteredConversations = searchQuery 
-		? $conversations.filter(conv => 
+	// Derived state using Svelte 5 runes
+	const filteredConversations = $derived(searchQuery
+		? $conversations.filter(conv =>
 			conv.conversation_name?.toLowerCase().includes(searchQuery.toLowerCase())
 		)
-		: $conversations;
+		: $conversations);
 
-	$: directMessages = filteredConversations.filter(conv => conv.conversation_type === 'direct');
-	$: groupConversations = filteredConversations.filter(conv => conv.conversation_type === 'group');
-	$: roomConversations = filteredConversations.filter(conv => conv.conversation_type === 'room');
+	const directMessages = $derived(filteredConversations.filter(conv => conv.conversation_type === 'direct'));
+	const groupConversations = $derived(filteredConversations.filter(conv => conv.conversation_type === 'group'));
+	const roomConversations = $derived(filteredConversations.filter(conv => conv.conversation_type === 'room'));
 
 	// Group rooms by group_id
-	$: groupedRooms = roomConversations.reduce((acc, room) => {
+	const groupedRooms = $derived(roomConversations.reduce((acc, room) => {
 		if (!room.group_id) return acc;
-		if (!acc[room.group_id]) acc[room.group_id] = [];
-		acc[room.group_id].push(room);
+		const groupId = room.group_id;
+		if (!acc[groupId]) acc[groupId] = [];
+		acc[groupId].push(room);
 		return acc;
-	}, {});
+	}, /** @type {Record<string, any[]>} */ ({})));
 
 	// Load data on mount
 	onMount(async () => {
@@ -49,7 +50,7 @@
 	});
 
 	// Handle conversation selection
-	function handleConversationSelect(conversationId) {
+	function handleConversationSelect(/** @type {string} */ conversationId) {
 		onConversationSelect(conversationId);
 		if ($user?.id) {
 			chat.setActiveConversation(conversationId, $user.id);
@@ -57,7 +58,7 @@
 	}
 
 	// Toggle group expansion
-	function toggleGroup(groupId) {
+	function toggleGroup(/** @type {string} */ groupId) {
 		if (expandedGroups.has(groupId)) {
 			expandedGroups.delete(groupId);
 		} else {
@@ -87,12 +88,12 @@
 	}
 
 	// Format last message time
-	function formatMessageTime(timestamp) {
+	function formatMessageTime(/** @type {string | null | undefined} */ timestamp) {
 		if (!timestamp) return '';
 		
 		const date = new Date(timestamp);
 		const now = new Date();
-		const diffMs = now - date;
+		const diffMs = now.getTime() - date.getTime();
 		const diffMins = Math.floor(diffMs / 60000);
 		const diffHours = Math.floor(diffMs / 3600000);
 		const diffDays = Math.floor(diffMs / 86400000);
@@ -179,7 +180,7 @@
 							
 							{#if expandedGroups.has(group.group_id) && groupedRooms[group.group_id]}
 								<div class="group-rooms">
-									{#each groupedRooms[group.group_id] as room (room.conversation_id)}
+									{#each (groupedRooms[group.group_id] || []) as room (room.conversation_id)}
 										<ConversationItem
 											conversation={room}
 											active={activeConversationId === room.conversation_id}
