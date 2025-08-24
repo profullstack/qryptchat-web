@@ -76,13 +76,13 @@
 			previewUrl = URL.createObjectURL(file);
 			
 			// Get JWT token for authentication
-			const token = browser ? localStorage.getItem('supabase.auth.token') : null;
-			if (!token) {
+			const sessionData = browser ? localStorage.getItem('qrypt_session') : null;
+			if (!sessionData) {
 				throw new Error('Authentication token not found. Please log in again.');
 			}
 
-			const parsedToken = JSON.parse(token);
-			const accessToken = parsedToken.access_token;
+			const session = JSON.parse(sessionData);
+			const accessToken = session.access_token;
 
 			// Create FormData for file upload
 			const formData = new FormData();
@@ -138,13 +138,13 @@
 			uploading = true;
 			
 			// Get JWT token for authentication
-			const token = browser ? localStorage.getItem('supabase.auth.token') : null;
-			if (!token) {
+			const sessionData = browser ? localStorage.getItem('qrypt_session') : null;
+			if (!sessionData) {
 				throw new Error('Authentication token not found. Please log in again.');
 			}
 
-			const parsedToken = JSON.parse(token);
-			const accessToken = parsedToken.access_token;
+			const session = JSON.parse(sessionData);
+			const accessToken = session.access_token;
 			
 			// Remove via server-side API
 			const response = await fetch('/api/auth/upload-avatar', {
