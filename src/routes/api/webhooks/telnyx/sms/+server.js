@@ -1,0 +1,154 @@
+import { json } from '@sveltejs/kit';
+import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+
+/**
+ * POST /api/webhooks/telnyx/sms
+ * Webhook endpoint for receiving inbound SMS messages from Telnyx
+ * This handles SMS replies for OTP verification during registration
+ */
+export async function POST({ request }) {
+	try {
+		const body = await request.json();
+		
+		// Log the incoming webhook for debugging
+		console.log('[TELNYX-WEBHOOK] Received webhook:', {
+			timestamp: new Date().toISOString(),
+			eventType: body.data?.event_type,
+			messageId: body.data?.payload?.id,
+			from: body.data?.payload?.from?.phone_number,
+			to: body.data?.payload?.to?.[0]?.phone_number,
+			text: body.data?.payload?.text
+		});
+
+		// Verify this is a message received event
+		if (body.data?.event_type !== 'message.received') {
+			console.log('[TELNYX-WEBHOOK] Ignoring non-message event:', body.data?.event_type);
+			return json({ status: 'ignored', reason: 'not_message_received_event' });
+		}
+
+		const payload = body.data.payload;
+		const fromPhone = payload.from?.phone_number;
+		const toPhone = payload.to?.[0]?.phone_number;
+		const messageText = payload.text;
+		const messageId = payload.id;
+
+		if (!fromPhone || !messageText) {
+			console.log('[TELNYX-WEBHOOK] Missing required fields:', { fromPhone, messageText });
+			return json({ error: 'Missing required fields' }, { status: 400 });
+		}
+
+		// Extract OTP code from message text (assuming it's just the code)
+		const otpCode = messageText.trim();
+		
+		// Validate OTP format (6 digits)
+		if (!/^\d{6}$/.test(otpCode)) {
+			console.log('[TELNYX-WEBHOOK] Invalid OTP format:', otpCode);
+			return json({ status: 'ignored', reason: 'invalid_otp_format' });
+		}
+
+		// Use Supabase service role client to verify the OTP
+		const supabase = createServiceRoleClient();
+
+		try {
+			// Attempt to verify the OTP with Supabase Auth
+			const { data, error } = await supabase.auth.verifyOtp({
+				phone: fromPhone,
+				token: otpCode,
+				type: 'sms'
+			});
+
+			if (error) {
+				console.log('[TELNYX-WEBHOOK] OTP verification failed:', {
+					phone: fromPhone,
+					code: otpCode,
+					error: error.message
+				});
+				
+				// Send response back to user via Telnyx (optional)
+				await sendTelnyxResponse(toPhone, fromPhone, 'Invalid or expired code. Please try again.');
+				
+				return json({ 
+					status: 'otp_verification_failed', 
+					error: error.message 
+				});
+			}
+
+			console.log('[TELNYX-WEBHOOK] OTP verification successful:', {
+				phone: fromPhone,
+				userId: data.user?.id
+			});
+
+			// Send success response back to user via Telnyx (optional)
+			await sendTelnyxResponse(toPhone, fromPhone, 'Verification successful! You can now use QryptChat.');
+
+			return json({ 
+				status: 'success', 
+				message: 'OTP verified successfully',
+				userId: data.user?.id
+			});
+
+		} catch (verificationError) {
+			console.error('[TELNYX-WEBHOOK] Error during OTP verification:', verificationError);
+			
+			// Send error response back to user via Telnyx (optional)
+			await sendTelnyxResponse(toPhone, fromPhone, 'Verification failed. Please try again.');
+			
+			return json({ 
+				status: 'error', 
+				error: 'Verification failed' 
+			}, { status: 500 });
+		}
+
+	} catch (error) {
+		console.error('[TELNYX-WEBHOOK] Webhook processing error:', error);
+		return json({ error: 'Webhook processing failed' }, { status: 500 });
+	}
+}
+
+/**
+ * Send a response SMS back to the user via Telnyx API
+ * This is optional but provides better UX
+ */
+async function sendTelnyxResponse(fromPhone, toPhone, message) {
+	try {
+		const telnyxApiKey = process.env.TELNYX_API_KEY;
+		if (!telnyxApiKey) {
+			console.log('[TELNYX-WEBHOOK] No Telnyx API key configured, skipping response SMS');
+			return;
+		}
+
+		const response = await fetch('https://api.telnyx.com/v2/messages', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${telnyxApiKey}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				from: fromPhone, // Your Telnyx phone number
+				to: toPhone,     // User's phone number
+				text: message
+			})
+		});
+
+		if (!response.ok) {
+			const errorData = await response.json();
+			console.error('[TELNYX-WEBHOOK] Failed to send response SMS:', errorData);
+		} else {
+			console.log('[TELNYX-WEBHOOK] Response SMS sent successfully');
+		}
+	} catch (error) {
+		console.error('[TELNYX-WEBHOOK] Error sending response SMS:', error);
+	}
+}
+
+/**
+ * GET /api/webhooks/telnyx/sms
+ * Health check endpoint for the webhook
+ */
+export async function GET() {
+	return json({ 
+		status: 'healthy', 
+		service: 'telnyx-sms-webhook',
+		timestamp: new Date().toISOString()
+	});
+}
