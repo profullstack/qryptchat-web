@@ -187,13 +187,35 @@ function createChatStore() {
 					.from('messages')
 					.select(`
 						*,
-						sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
-						reply_to:messages!messages_reply_to_id_fkey(id, encrypted_content, sender_id)
+						sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
 					`)
 					.eq('conversation_id', conversationId)
 					.is('deleted_at', null)
 					.order('created_at', { ascending: true })
 					.limit(50);
+
+				// If we have messages, load reply data separately
+				if (data && data.length > 0) {
+					const replyIds = data
+						.filter(msg => msg.reply_to_id)
+						.map(msg => msg.reply_to_id);
+
+					if (replyIds.length > 0) {
+						const { data: replyData } = await supabase
+							.from('messages')
+							.select('id, encrypted_content, sender_id')
+							.in('id', replyIds);
+
+						// Map reply data to messages
+						if (replyData) {
+							data.forEach(msg => {
+								if (msg.reply_to_id) {
+									msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
+								}
+							});
+						}
+					}
+				}
 
 				if (error) throw error;
 
@@ -293,14 +315,36 @@ function createChatStore() {
 					.from('messages')
 					.select(`
 						*,
-						sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
-						reply_to:messages!messages_reply_to_id_fkey(id, encrypted_content, sender_id)
+						sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
 					`)
 					.eq('conversation_id', conversationId)
 					.is('deleted_at', null)
 					.lt('created_at', beforeMessage.created_at)
 					.order('created_at', { ascending: false })
 					.limit(50);
+
+				// If we have messages, load reply data separately
+				if (data && data.length > 0) {
+					const replyIds = data
+						.filter(msg => msg.reply_to_id)
+						.map(msg => msg.reply_to_id);
+
+					if (replyIds.length > 0) {
+						const { data: replyData } = await supabase
+							.from('messages')
+							.select('id, encrypted_content, sender_id')
+							.in('id', replyIds);
+
+						// Map reply data to messages
+						if (replyData) {
+							data.forEach(msg => {
+								if (msg.reply_to_id) {
+									msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
+								}
+							});
+						}
+					}
+				}
 
 				if (error) throw error;
 
