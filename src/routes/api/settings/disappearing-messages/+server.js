@@ -21,9 +21,9 @@ export async function GET({ request }) {
 
 		// Get user's current disappearing messages setting
 		const { data: profile, error: profileError } = await supabase
-			.from('user_profiles')
+			.from('users')
 			.select('default_message_retention_days')
-			.eq('user_id', user.id)
+			.eq('auth_user_id', user.id)
 			.single();
 
 		if (profileError) {
@@ -67,12 +67,12 @@ export async function PUT({ request }) {
 
 		// Update user's disappearing messages setting
 		const { error: updateError } = await supabase
-			.from('user_profiles')
-			.update({ 
+			.from('users')
+			.update({
 				default_message_retention_days,
 				updated_at: new Date().toISOString()
 			})
-			.eq('user_id', user.id);
+			.eq('auth_user_id', user.id);
 
 		if (updateError) {
 			console.error('Error updating user profile:', updateError);
