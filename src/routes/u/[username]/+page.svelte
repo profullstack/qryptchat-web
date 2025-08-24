@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
+	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 
 	/** @type {import('./$types').PageData} */
 	export let data;
@@ -14,6 +15,7 @@
 	let loading = false;
 	let error = '';
 	let success = '';
+	let showAvatarUpload = false;
 
 	$: isOwnProfile = $isAuthenticated && $user?.username === data.profile?.username;
 	$: profileUser = data.profile;
@@ -93,6 +95,65 @@
 		if (!url) return '';
 		return url.replace(/^https?:\/\//, '');
 	}
+
+	/**
+	 * Handle avatar upload success
+	 * @param {CustomEvent} event
+	 */
+	function handleAvatarUploaded(event) {
+		const { avatarUrl } = event.detail;
+		
+		// Update the profile data with new avatar
+		data.profile.avatarUrl = avatarUrl;
+		
+		// Update the user store if this is the current user's profile
+		if (isOwnProfile && $user) {
+			user.update(currentUser => ({
+				...currentUser,
+				avatarUrl
+			}));
+		}
+		
+		success = 'Profile picture updated successfully!';
+		showAvatarUpload = false;
+		
+		// Clear success message after 3 seconds
+		setTimeout(() => {
+			success = '';
+		}, 3000);
+	}
+
+	/**
+	 * Handle avatar upload error
+	 * @param {CustomEvent} event
+	 */
+	function handleAvatarError(event) {
+		error = event.detail.message || 'Failed to upload profile picture';
+	}
+
+	/**
+	 * Handle avatar removal
+	 */
+	function handleAvatarRemoved() {
+		// Update the profile data to remove avatar
+		data.profile.avatarUrl = null;
+		
+		// Update the user store if this is the current user's profile
+		if (isOwnProfile && $user) {
+			user.update(currentUser => ({
+				...currentUser,
+				avatarUrl: null
+			}));
+		}
+		
+		success = 'Profile picture removed successfully!';
+		showAvatarUpload = false;
+		
+		// Clear success message after 3 seconds
+		setTimeout(() => {
+			success = '';
+		}, 3000);
+	}
 </script>
 
 <svelte:head>
@@ -102,13 +163,28 @@
 
 <div class="profile-container">
 	<div class="profile-header">
-		<div class="profile-avatar">
-			{#if profileUser?.avatarUrl}
-				<img src={profileUser.avatarUrl} alt={profileUser.displayName || profileUser.username} />
-			{:else}
-				<div class="avatar-placeholder">
-					{(profileUser?.displayName || profileUser?.username || 'U').charAt(0).toUpperCase()}
-				</div>
+		<div class="profile-avatar-container">
+			<div class="profile-avatar">
+				{#if profileUser?.avatarUrl}
+					<img src={profileUser.avatarUrl} alt={profileUser.displayName || profileUser.username} />
+				{:else}
+					<div class="avatar-placeholder">
+						{(profileUser?.displayName || profileUser?.username || 'U').charAt(0).toUpperCase()}
+					</div>
+				{/if}
+			</div>
+			
+			{#if isOwnProfile}
+				<button
+					class="avatar-edit-btn"
+					on:click={() => showAvatarUpload = !showAvatarUpload}
+					aria-label="Change profile picture"
+				>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+						<circle cx="12" cy="13" r="4"/>
+					</svg>
+				</button>
 			{/if}
 		</div>
 		
@@ -171,6 +247,31 @@
 				<polyline points="20,6 9,17 4,12"/>
 			</svg>
 			{success}
+		</div>
+	{/if}
+
+	{#if showAvatarUpload && isOwnProfile}
+		<div class="avatar-upload-section">
+			<div class="avatar-upload-header">
+				<h3>Update Profile Picture</h3>
+				<button
+					class="btn btn-ghost btn-sm"
+					on:click={() => showAvatarUpload = false}
+					aria-label="Close avatar upload"
+				>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="18" y1="6" x2="6" y2="18"/>
+						<line x1="6" y1="6" x2="18" y2="18"/>
+					</svg>
+				</button>
+			</div>
+			<AvatarUpload
+				userId={$user?.id}
+				currentAvatarUrl={profileUser?.avatarUrl}
+				on:uploaded={handleAvatarUploaded}
+				on:error={handleAvatarError}
+				on:removed={handleAvatarRemoved}
+			/>
 		</div>
 	{/if}
 
@@ -255,13 +356,45 @@
 		align-items: flex-start;
 	}
 
+	.profile-avatar-container {
+		position: relative;
+		flex-shrink: 0;
+	}
+
 	.profile-avatar {
 		width: 120px;
 		height: 120px;
 		border-radius: 50%;
 		overflow: hidden;
-		flex-shrink: 0;
 		border: 4px solid var(--color-border-primary);
+	}
+
+	.avatar-edit-btn {
+		position: absolute;
+		bottom: 0;
+		right: 0;
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		background: var(--color-brand-primary);
+		color: white;
+		border: 2px solid var(--color-bg-primary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	}
+
+	.avatar-edit-btn:hover {
+		background: var(--color-brand-secondary);
+		transform: scale(1.05);
+	}
+
+	.avatar-edit-btn:focus {
+		outline: 2px solid var(--color-brand-primary);
+		outline-offset: 2px;
 	}
 
 	.profile-avatar img {
@@ -421,6 +554,33 @@
 		border: 1px solid var(--color-success-border);
 	}
 
+	.avatar-upload-section {
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border-primary);
+		border-radius: var(--radius-lg);
+		padding: var(--space-6);
+		margin-bottom: var(--space-6);
+	}
+
+	.avatar-upload-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--space-4);
+	}
+
+	.avatar-upload-header h3 {
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: var(--color-text-primary);
+		margin: 0;
+	}
+
+	.btn-sm {
+		padding: var(--space-2);
+		font-size: 0.875rem;
+	}
+
 	.spinner {
 		animation: spin 1s linear infinite;
 	}
@@ -446,6 +606,21 @@
 		.profile-avatar {
 			width: 100px;
 			height: 100px;
+		}
+
+		.avatar-edit-btn {
+			width: 32px;
+			height: 32px;
+		}
+
+		.avatar-upload-section {
+			padding: var(--space-4);
+		}
+
+		.avatar-upload-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-2);
 		}
 
 		.avatar-placeholder {

@@ -1,18 +1,22 @@
 import { json } from '@sveltejs/kit';
 import { supabase } from '$lib/supabase.js';
+import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 
-export async function POST({ request, cookies }) {
+export async function POST({ request }) {
 	try {
-		// Get the session token from cookies
-		const sessionToken = cookies.get('session');
-		if (!sessionToken) {
+		// Get the authorization header
+		const authHeader = request.headers.get('authorization');
+		if (!authHeader || !authHeader.startsWith('Bearer ')) {
 			return json({ error: 'Authentication required' }, { status: 401 });
 		}
 
-		// Verify the session and get user
-		const { data: { user }, error: authError } = await supabase.auth.getUser(sessionToken);
+		const token = authHeader.replace('Bearer ', '');
+
+		// Verify the JWT token and get user
+		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 		if (authError || !user) {
-			return json({ error: 'Invalid session' }, { status: 401 });
+			console.error('Auth error:', authError);
+			return json({ error: 'Invalid authentication token' }, { status: 401 });
 		}
 
 		const formData = await request.formData();
@@ -63,11 +67,12 @@ export async function POST({ request, cookies }) {
 			.from('avatars')
 			.getPublicUrl(fileName);
 
-		// Update user's avatar_url in database
-		const { error: updateError } = await supabase
+		// Update user's avatar_url in database using service role client
+		const serviceRoleClient = createServiceRoleClient();
+		const { error: updateError } = await serviceRoleClient
 			.from('users')
 			.update({ avatar_url: publicUrl })
-			.eq('id', user.id);
+			.eq('auth_user_id', user.id);
 
 		if (updateError) {
 			console.error('Database update error:', updateError);
@@ -88,25 +93,29 @@ export async function POST({ request, cookies }) {
 	}
 }
 
-export async function DELETE({ cookies }) {
+export async function DELETE({ request }) {
 	try {
-		// Get the session token from cookies
-		const sessionToken = cookies.get('session');
-		if (!sessionToken) {
+		// Get the authorization header
+		const authHeader = request.headers.get('authorization');
+		if (!authHeader || !authHeader.startsWith('Bearer ')) {
 			return json({ error: 'Authentication required' }, { status: 401 });
 		}
 
-		// Verify the session and get user
-		const { data: { user }, error: authError } = await supabase.auth.getUser(sessionToken);
+		const token = authHeader.replace('Bearer ', '');
+
+		// Verify the JWT token and get user
+		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 		if (authError || !user) {
-			return json({ error: 'Invalid session' }, { status: 401 });
+			console.error('Auth error:', authError);
+			return json({ error: 'Invalid authentication token' }, { status: 401 });
 		}
 
-		// Update user's avatar_url to null in database
-		const { error: updateError } = await supabase
+		// Update user's avatar_url to null in database using service role client
+		const serviceRoleClient = createServiceRoleClient();
+		const { error: updateError } = await serviceRoleClient
 			.from('users')
 			.update({ avatar_url: null })
-			.eq('id', user.id);
+			.eq('auth_user_id', user.id);
 
 		if (updateError) {
 			console.error('Database update error:', updateError);
