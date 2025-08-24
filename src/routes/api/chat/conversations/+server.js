@@ -41,6 +41,18 @@ export async function POST(event) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
+		// Get the actual user record from our users table
+		const { data: dbUser, error: dbUserError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('id', user.id)
+			.single();
+
+		if (dbUserError || !dbUser) {
+			console.error('User not found in users table:', dbUserError);
+			return json({ error: 'User not found' }, { status: 404 });
+		}
+
 		// Validate input
 		if (!type || !['direct', 'group', 'room'].includes(type)) {
 			return json({ error: 'Invalid conversation type' }, { status: 400 });
@@ -48,6 +60,27 @@ export async function POST(event) {
 
 		if (!participant_ids || !Array.isArray(participant_ids) || participant_ids.length === 0) {
 			return json({ error: 'participant_ids is required and must be a non-empty array' }, { status: 400 });
+		}
+
+		// Validate that all participant IDs exist in users table
+		const { data: validParticipants, error: participantCheckError } = await supabase
+			.from('users')
+			.select('id')
+			.in('id', participant_ids);
+
+		if (participantCheckError) {
+			console.error('Error checking participants:', participantCheckError);
+			return json({ error: 'Failed to validate participants' }, { status: 500 });
+		}
+
+		const validParticipantIds = validParticipants?.map(p => p.id) || [];
+		const invalidParticipants = participant_ids.filter(id => !validParticipantIds.includes(id));
+		
+		if (invalidParticipants.length > 0) {
+			return json({
+				error: 'Some participants do not exist',
+				invalid_participants: invalidParticipants
+			}, { status: 400 });
 		}
 
 		// For direct messages, check if conversation already exists
