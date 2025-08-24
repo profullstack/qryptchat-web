@@ -16,6 +16,7 @@
 	let showJoinGroupModal = $state(false);
 	let expandedGroups = $state(new Set());
 	let loading = $state(false);
+	let hasLoadedConversations = $state(false);
 
 	// Derived state using Svelte 5 runes
 	const filteredConversations = $derived(searchQuery
@@ -37,19 +38,25 @@
 		return acc;
 	}, /** @type {Record<string, any[]>} */ ({})));
 
-	// Load data when WebSocket is authenticated
+	// Load data when WebSocket is authenticated (only once)
 	$effect(() => {
-		if ($isAuthenticated && $user?.id) {
+		if ($isAuthenticated && $user?.id && !hasLoadedConversations) {
 			loadConversationsData();
 		}
 	});
 
+	// Reset the flag when component mounts to allow fresh loading
+	$effect(() => {
+		hasLoadedConversations = false;
+	});
+
 	async function loadConversationsData() {
-		if (loading) return; // Prevent multiple simultaneous loads
+		if (loading || hasLoadedConversations) return; // Prevent multiple simultaneous loads
 		
 		loading = true;
 		try {
 			await wsChat.loadConversations();
+			hasLoadedConversations = true; // Mark as loaded
 		} catch (error) {
 			console.error('Failed to load conversations:', error);
 		} finally {
@@ -88,9 +95,11 @@
 	// Handle successful group join
 	async function handleGroupJoined() {
 		if ($user?.id) {
+			hasLoadedConversations = false; // Reset flag to allow reload
 			await Promise.all([
 				wsChat.loadConversations()
 			]);
+			hasLoadedConversations = true; // Mark as loaded again
 		}
 	}
 
@@ -100,9 +109,11 @@
 		
 		// Reload conversations to get the new one
 		if ($user?.id) {
+			hasLoadedConversations = false; // Reset flag to allow reload
 			await Promise.all([
 				wsChat.loadConversations()
 			]);
+			hasLoadedConversations = true; // Mark as loaded again
 		}
 		
 		// Auto-select the new conversation
@@ -261,9 +272,18 @@
 					<div class="empty-icon">💬</div>
 					<h3>No conversations yet</h3>
 					<p>Start a new chat or join a group to begin messaging</p>
-					<button class="primary-button" onclick={handleNewChat}>
-						Start Chatting
-					</button>
+					<div class="empty-actions">
+						<button class="primary-button" onclick={handleNewChat}>
+							Start Chatting
+						</button>
+						<button class="secondary-button" onclick={() => {
+							console.log('🔄 Debug: Forcing conversation reload');
+							hasLoadedConversations = false;
+							loadConversationsData();
+						}}>
+							Reload Conversations
+						</button>
+					</div>
 				</div>
 			{/if}
 		{/if}
@@ -520,6 +540,13 @@
 		line-height: 1.4;
 	}
 
+	.empty-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
 	.primary-button {
 		background: var(--color-primary-600);
 		color: white;
@@ -533,6 +560,21 @@
 
 	.primary-button:hover {
 		background: var(--color-primary-700);
+	}
+
+	.secondary-button {
+		background: var(--color-surface-hover);
+		color: var(--color-text-primary);
+		border: 1px solid var(--color-border);
+		padding: 0.5rem 1rem;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.secondary-button:hover {
+		background: var(--color-border);
 	}
 
 	/* Responsive */

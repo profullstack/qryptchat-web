@@ -66,14 +66,25 @@ export async function handleLoadConversations(ws, message, context) {
 
 		if (error) {
 			console.error('Error loading conversations:', error);
+			console.error('Error details:', {
+				message: error.message,
+				code: error.code,
+				details: error.details,
+				hint: error.hint
+			});
 			const errorResponse = createErrorResponse(
 				message.requestId,
-				'Failed to load conversations',
+				`Failed to load conversations: ${error.message}`,
 				'DATABASE_ERROR'
 			);
 			ws.send(serializeMessage(errorResponse));
 			return;
 		}
+
+		console.log('Successfully loaded conversations:', {
+			count: conversations?.length || 0,
+			conversations: conversations
+		});
 
 		const response = createSuccessResponse(
 			message.requestId,
@@ -244,10 +255,12 @@ export async function handleCreateConversation(ws, message, context) {
 
 		const supabase = getSupabaseClient(context);
 
-		// Create conversation
+		// Determine conversation type and data
+		const isDirectMessage = !isGroup && participantIds.length === 1;
 		const conversationData = {
-			name: name || null,
-			is_group: isGroup || false,
+			type: isDirectMessage ? 'direct' : 'room',
+			name: isDirectMessage ? null : (name || null), // Direct messages don't have names
+			is_private: !isGroup, // Direct messages are private by default
 			created_by: context.user.id
 		};
 
