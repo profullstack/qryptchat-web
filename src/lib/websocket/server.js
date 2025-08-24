@@ -37,7 +37,8 @@ import {
 export class ChatWebSocketServer {
 	constructor(options = {}) {
 		this.port = options.port || 8080;
-		this.server = null;
+		this.server = options.wss || null; // Use external WebSocket server if provided
+		this.noListen = options.noListen || false; // Don't create own server if true
 		this.connections = new Map(); // WebSocket -> context mapping
 		this.heartbeatInterval = null;
 	}
@@ -46,7 +47,14 @@ export class ChatWebSocketServer {
 	 * Start the WebSocket server
 	 */
 	start() {
-		this.server = new WebSocketServer({ 
+		if (this.noListen) {
+			// Don't create own server, just start heartbeat
+			this.startHeartbeat();
+			console.log('Chat WebSocket server initialized (using external server)');
+			return;
+		}
+
+		this.server = new WebSocketServer({
 			port: this.port,
 			perMessageDeflate: false
 		});
@@ -76,7 +84,7 @@ export class ChatWebSocketServer {
 			this.heartbeatInterval = null;
 		}
 
-		if (this.server) {
+		if (this.server && !this.noListen) {
 			this.server.close();
 			this.server = null;
 		}

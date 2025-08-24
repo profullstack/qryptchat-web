@@ -1,6 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
-	import { chat } from '$lib/stores/chat.js';
+	import { wsChat, activeConversation } from '$lib/stores/websocket-chat.js';
 	import { user } from '$lib/stores/auth.js';
 
 	let { conversationId = null, disabled = false } = $props();
@@ -28,14 +28,13 @@
 		isSending = true;
 
 		try {
-			const result = await chat.sendMessage({
-				conversation_id: conversationId,
-				message_type: 'text',
-				encrypted_content: content, // TODO: Add encryption
-				metadata: {}
-			}, currentUser.id);
+			const result = await wsChat.sendMessage(
+				conversationId,
+				content,
+				'text'
+			);
 
-			if (!result.success) {
+			if (result && !result.success) {
 				console.error('Failed to send message:', result.error);
 				// Restore message text on failure
 				messageText = content;
@@ -69,12 +68,12 @@
 			}
 
 			// Set typing indicator
-			chat.setTypingIndicator(conversationId, currentUser.id, true);
+			wsChat.setTyping(conversationId);
 
 			// Clear typing indicator after 3 seconds of inactivity
 			typingTimeout = setTimeout(() => {
 				if (conversationId && currentUser?.id) {
-					chat.setTypingIndicator(conversationId, currentUser.id, false);
+					wsChat.stopTyping(conversationId);
 				}
 			}, 3000);
 		}
@@ -107,7 +106,7 @@
 				clearTimeout(typingTimeout);
 			}
 			if (conversationId && currentUser?.id) {
-				chat.setTypingIndicator(conversationId, currentUser.id, false);
+				wsChat.stopTyping(conversationId);
 			}
 		};
 	});

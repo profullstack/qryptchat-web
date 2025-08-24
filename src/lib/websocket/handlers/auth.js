@@ -3,8 +3,8 @@
  * Handles user authentication and connection setup
  */
 
-import { createSupabaseServerClient } from '$lib/supabase.js';
-import { MESSAGE_TYPES, createSuccessResponse, createErrorResponse } from '../utils/protocol.js';
+import { createClient } from '@supabase/supabase-js';
+import { MESSAGE_TYPES, createSuccessResponse, createErrorResponse, serializeMessage } from '../utils/protocol.js';
 import { roomManager } from '../utils/rooms.js';
 
 /**
@@ -23,31 +23,33 @@ export async function handleAuth(ws, message, context) {
 				'Authentication token is required',
 				'MISSING_TOKEN'
 			);
-			ws.send(JSON.stringify(errorResponse));
+			ws.send(serializeMessage(errorResponse));
 			return;
 		}
 
-		// Create a mock event for Supabase client
-		const mockEvent = {
-			request: {
-				headers: new Headers({
-					authorization: `Bearer ${token}`
-				})
-			},
-			cookies: {
-				get: () => undefined
-			},
-			url: new URL('http://localhost'),
-			params: {},
-			locals: {},
-			getClientAddress: () => '127.0.0.1',
-			fetch: globalThis.fetch,
-			isDataRequest: false,
-			isSubRequest: false,
-			route: { id: null }
-		};
+		// Get Supabase configuration from environment
+		const supabaseUrl = process.env.PUBLIC_SUPABASE_URL;
+		const supabaseKey = process.env.PUBLIC_SUPABASE_ANON_KEY;
+		
+		if (!supabaseUrl || !supabaseKey) {
+			console.error('Supabase configuration missing');
+			const errorResponse = createErrorResponse(
+				message.requestId,
+				'Server configuration error',
+				'CONFIG_ERROR'
+			);
+			ws.send(serializeMessage(errorResponse));
+			return;
+		}
 
-		const supabase = createSupabaseServerClient(mockEvent);
+		// Create Supabase client with the token
+		const supabase = createClient(supabaseUrl, supabaseKey, {
+			global: {
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			}
+		});
 		
 		// Verify the token and get user
 		const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -58,9 +60,12 @@ export async function handleAuth(ws, message, context) {
 				'Invalid or expired token',
 				'INVALID_TOKEN'
 			);
-			ws.send(JSON.stringify(errorResponse));
+			ws.send(serializeMessage(errorResponse));
 			return;
 		}
+
+		// Add the access token to the user object for later use
+		user.access_token = token;
 
 		// Store user info in WebSocket context
 		context.user = user;
@@ -83,7 +88,7 @@ export async function handleAuth(ws, message, context) {
 			}
 		);
 		
-		ws.send(JSON.stringify(successResponse));
+		ws.send(serializeMessage(successResponse));
 
 		// Broadcast user online status to relevant conversations
 		await broadcastUserOnlineStatus(user.id, true, supabase);
@@ -95,7 +100,7 @@ export async function handleAuth(ws, message, context) {
 			'Authentication failed',
 			'AUTH_ERROR'
 		);
-		ws.send(JSON.stringify(errorResponse));
+		ws.send(serializeMessage(errorResponse));
 	}
 }
 

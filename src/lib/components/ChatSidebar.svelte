@@ -37,17 +37,25 @@
 		return acc;
 	}, /** @type {Record<string, any[]>} */ ({})));
 
-	// Load data on mount
-	onMount(async () => {
-		if ($user?.id) {
-			loading = true;
-			await Promise.all([
-				wsChat.loadConversations(),
-				wsChat.loadGroups?.() || Promise.resolve()
-			]);
-			loading = false;
+	// Load data when WebSocket is authenticated
+	$effect(() => {
+		if ($isAuthenticated && $user?.id) {
+			loadConversationsData();
 		}
 	});
+
+	async function loadConversationsData() {
+		if (loading) return; // Prevent multiple simultaneous loads
+		
+		loading = true;
+		try {
+			await wsChat.loadConversations();
+		} catch (error) {
+			console.error('Failed to load conversations:', error);
+		} finally {
+			loading = false;
+		}
+	}
 
 	// Handle conversation selection
 	function handleConversationSelect(/** @type {string} */ conversationId) {
@@ -81,8 +89,7 @@
 	async function handleGroupJoined() {
 		if ($user?.id) {
 			await Promise.all([
-				wsChat.loadConversations(),
-				wsChat.loadGroups?.() || Promise.resolve()
+				wsChat.loadConversations()
 			]);
 		}
 	}
@@ -94,8 +101,7 @@
 		// Reload conversations to get the new one
 		if ($user?.id) {
 			await Promise.all([
-				wsChat.loadConversations(),
-				wsChat.loadGroups?.() || Promise.resolve()
+				wsChat.loadConversations()
 			]);
 		}
 		

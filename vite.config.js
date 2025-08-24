@@ -1,6 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
+import { websocketDev } from './vite-plugins/websocket-dev.js';
 
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), '');
@@ -12,6 +13,7 @@ export default defineConfig(({ mode }) => {
 		},
 	plugins: [
 		sveltekit(),
+		websocketDev(),
 		SvelteKitPWA({
 			srcDir: './src',
 			mode: mode === 'production' ? 'production' : 'development',

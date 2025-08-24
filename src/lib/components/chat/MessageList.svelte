@@ -1,6 +1,6 @@
 <script>
 	import { onMount, tick } from 'svelte';
-	import { chat, messages as messagesStore } from '$lib/stores/chat.js';
+	import { wsChat, messages as messagesStore } from '$lib/stores/websocket-chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import MessageItem from './MessageItem.svelte';
 	import TypingIndicator from './TypingIndicator.svelte';
@@ -36,7 +36,7 @@
 	async function loadMessages() {
 		try {
 			if (currentUser?.id) {
-				await chat.setActiveConversation(conversationId, currentUser.id);
+				await wsChat.loadMessages(conversationId);
 				shouldScrollToBottom = true;
 			}
 		} catch (error) {
@@ -51,7 +51,8 @@
 			isLoadingMore = true;
 			const oldScrollHeight = messagesContainer?.scrollHeight || 0;
 			
-			await chat.loadMoreMessages(conversationId, messages[0]?.id);
+			// TODO: Implement pagination in WebSocket store
+			console.log('Load more messages not yet implemented in WebSocket store');
 			
 			// Maintain scroll position after loading older messages
 			await tick();
@@ -97,7 +98,8 @@
 				.map(msg => msg.id);
 			
 			if (messageIds.length > 0) {
-				chat.markMessagesAsRead(messageIds, currentUser.id);
+				// TODO: Implement mark as read in WebSocket store
+				console.log('Mark messages as read not yet implemented in WebSocket store');
 			}
 		}
 	});

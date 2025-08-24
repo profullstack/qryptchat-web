@@ -17,10 +17,25 @@
 		activeConversationId = conversationId;
 	}
 
-	// Redirect if not authenticated
+	// Redirect if not authenticated and initialize WebSocket
 	onMount(() => {
 		if (!$isAuthenticated) {
 			goto('/auth');
+			return;
+		}
+
+		// Initialize WebSocket connection when authenticated
+		const storedSession = localStorage.getItem('qrypt_session');
+		if (storedSession && !$isConnected) {
+			try {
+				const session = JSON.parse(storedSession);
+				if (session.access_token) {
+					console.log('Initializing WebSocket connection...');
+					wsChat.connect(session.access_token);
+				}
+			} catch (error) {
+				console.error('Failed to parse session for WebSocket:', error);
+			}
 		}
 	});
 

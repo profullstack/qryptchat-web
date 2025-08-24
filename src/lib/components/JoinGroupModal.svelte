@@ -1,6 +1,6 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { chat } from '$lib/stores/chat.js';
+	import { wsChat } from '$lib/stores/websocket-chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import { messages } from '$lib/stores/messages.js';
 
@@ -21,11 +21,13 @@
 
 		loading = true;
 		try {
-			const result = await chat.joinGroupByInvite(inviteCode.trim().toUpperCase(), $user.id);
+			// TODO: Implement joinGroupByInvite in WebSocket store
+			console.log('Join group by invite not yet implemented in WebSocket store');
+			const result = { success: false, error: 'Not implemented in WebSocket store yet', data: null };
 
 			if (result.success) {
 				messages.success('Successfully joined the group!');
-				dispatch('joined', result.data);
+				dispatch('joined', result.data || {});
 				handleClose();
 			} else {
 				messages.error(result.error || 'Failed to join group');

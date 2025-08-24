@@ -61,10 +61,17 @@ function createWebSocketChatStore() {
 		if (!browser) return '';
 		
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const host = window.location.hostname;
-		const port = '8080'; // WebSocket server port
+		const host = window.location.host; // Use host instead of hostname to include port
 		
-		return `${protocol}//${host}:${port}`;
+		const wsUrl = `${protocol}//${host}/ws`;
+		console.log('🔗 WebSocket URL calculated:', wsUrl, {
+			protocol: window.location.protocol,
+			host: window.location.host,
+			hostname: window.location.hostname,
+			port: window.location.port
+		});
+		
+		return wsUrl;
 	}
 
 	/**

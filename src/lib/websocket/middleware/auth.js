@@ -3,7 +3,7 @@
  * Handles JWT token validation and user authentication for WebSocket connections
  */
 
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createClient } from '@supabase/supabase-js';
 
 /**
  * Extract JWT token from WebSocket request
@@ -51,25 +51,31 @@ export async function authenticateWebSocket(request) {
 			};
 		}
 
-		// Create a mock event object for Supabase client
-		const mockEvent = {
-			request: {
-				headers: new Headers({
-					authorization: `Bearer ${token}`,
-					...request.headers
-				})
-			},
-			cookies: {
-				get: (name) => {
-					const cookies = request.headers.cookie;
-					if (!cookies) return undefined;
-					const match = cookies.match(new RegExp(`${name}=([^;]+)`));
-					return match ? { value: decodeURIComponent(match[1]) } : undefined;
+		// Get Supabase configuration from environment
+		// Try both PUBLIC_ prefixed and non-prefixed versions
+		const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+		const supabaseKey = process.env.PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+		
+		if (!supabaseUrl || !supabaseKey) {
+			console.error('Supabase configuration missing:', {
+				url: !!supabaseUrl,
+				key: !!supabaseKey,
+				env: Object.keys(process.env).filter(k => k.includes('SUPABASE'))
+			});
+			return {
+				success: false,
+				error: 'Server configuration error'
+			};
+		}
+
+		// Create Supabase client with the token
+		const supabase = createClient(supabaseUrl, supabaseKey, {
+			global: {
+				headers: {
+					Authorization: `Bearer ${token}`
 				}
 			}
-		};
-
-		const supabase = createSupabaseServerClient(mockEvent);
+		});
 		
 		// Verify the token and get user
 		const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -80,6 +86,9 @@ export async function authenticateWebSocket(request) {
 				error: 'Invalid or expired token'
 			};
 		}
+
+		// Add the access token to the user object for later use
+		user.access_token = token;
 
 		return {
 			success: true,
