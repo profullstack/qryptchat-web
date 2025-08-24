@@ -24,11 +24,11 @@
 	// Get JWT token for API calls
 	function getAuthToken() {
 		if (!browser) return null;
-		const token = localStorage.getItem('supabase.auth.token');
-		if (!token) return null;
+		const sessionData = localStorage.getItem('qrypt_session');
+		if (!sessionData) return null;
 		try {
-			const parsedToken = JSON.parse(token);
-			return parsedToken.access_token;
+			const session = JSON.parse(sessionData);
+			return session.access_token;
 		} catch {
 			return null;
 		}
