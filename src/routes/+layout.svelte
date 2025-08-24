@@ -4,10 +4,14 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import PWAToastManager from '$lib/components/PWAToastManager.svelte';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { themeUtils } from '$lib/stores/theme.js';
 	import { i18nUtils } from '$lib/stores/i18n.js';
 
 	let { children } = $props();
+
+	// Hide footer on chat page for full-screen chat experience
+	const shouldShowFooter = $derived($page.route.id !== '/chat');
 	
 	onMount(() => {
 		// Initialize theme with system preference detection
@@ -34,7 +38,9 @@
 	<main class="main-content">
 		{@render children?.()}
 	</main>
-	<Footer />
+	{#if shouldShowFooter}
+		<Footer />
+	{/if}
 	<PWAToastManager />
 </div>
 

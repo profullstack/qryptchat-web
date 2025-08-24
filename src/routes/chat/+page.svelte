@@ -57,7 +57,7 @@
 					<h2>🎉 Welcome to QryptChat, {$user?.displayName || $user?.username}!</h2>
 					<p>Your account has been created successfully. Start chatting securely!</p>
 				</div>
-				<button class="close-welcome" on:click={() => showWelcome = false}>
+				<button class="close-welcome" onclick={() => showWelcome = false}>
 					×
 				</button>
 			</div>
@@ -275,14 +275,5 @@
 			display: none;
 		}
 
-		.chat-main.active {
-			display: flex;
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			z-index: 5;
-		}
 	}
 </style>

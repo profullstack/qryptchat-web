@@ -10,12 +10,12 @@
 	// Props
 	let { activeConversationId = null, onConversationSelect = () => {} } = $props();
 
-	// Local state
-	let searchQuery = '';
-	let showNewChatModal = false;
-	let showJoinGroupModal = false;
-	let expandedGroups = new Set();
-	let loading = false;
+	// Local state using Svelte 5 runes
+	let searchQuery = $state('');
+	let showNewChatModal = $state(false);
+	let showJoinGroupModal = $state(false);
+	let expandedGroups = $state(new Set());
+	let loading = $state(false);
 
 	// Derived state using Svelte 5 runes
 	const filteredConversations = $derived(searchQuery
@@ -87,6 +87,24 @@
 		}
 	}
 
+	// Handle new conversation created
+	async function handleConversationCreated(event) {
+		const { conversationId } = event.detail;
+		
+		// Reload conversations to get the new one
+		if ($user?.id) {
+			await Promise.all([
+				chat.loadConversations($user.id),
+				chat.loadGroups($user.id)
+			]);
+		}
+		
+		// Auto-select the new conversation
+		if (conversationId) {
+			handleConversationSelect(conversationId);
+		}
+	}
+
 	// Format last message time
 	function formatMessageTime(/** @type {string | null | undefined} */ timestamp) {
 		if (!timestamp) return '';
@@ -127,12 +145,12 @@
 		</div>
 		
 		<div class="header-actions">
-			<button class="action-button" on:click={handleNewChat} title="New Chat">
+			<button class="action-button" onclick={handleNewChat} title="New Chat" aria-label="Create new chat">
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
 				</svg>
 			</button>
-			<button class="action-button" on:click={handleJoinGroup} title="Join Group">
+			<button class="action-button" onclick={handleJoinGroup} title="Join Group" aria-label="Join existing group">
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A2.996 2.996 0 0 0 17.06 7c-.8 0-1.54.37-2.01.97L12 11.5v3c0 .55-.45 1-1 1s-1-.45-1-1v-4l-4.5-4.5C5.19 5.69 4.8 5.5 4.38 5.5c-.83 0-1.5.67-1.5 1.5 0 .42.19.81.5 1.11L7 11.5V22h2v-6h2v6h9z"/>
 				</svg>
@@ -237,7 +255,7 @@
 					<div class="empty-icon">💬</div>
 					<h3>No conversations yet</h3>
 					<p>Start a new chat or join a group to begin messaging</p>
-					<button class="primary-button" on:click={handleNewChat}>
+					<button class="primary-button" onclick={handleNewChat}>
 						Start Chatting
 					</button>
 				</div>
@@ -248,9 +266,10 @@
 
 <!-- Modals -->
 {#if showNewChatModal}
-	<NewChatModal 
+	<NewChatModal
+		isOpen={showNewChatModal}
 		on:close={() => showNewChatModal = false}
-		on:created={handleGroupJoined}
+		on:conversationCreated={handleConversationCreated}
 	/>
 {/if}
 

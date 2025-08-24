@@ -42,11 +42,11 @@
 	}
 </script>
 
-<button 
-	class="conversation-item" 
-	class:active 
+<button
+	class="conversation-item"
+	class:active
 	class:is-room={isRoom}
-	on:click={handleClick}
+	onclick={handleClick}
 >
 	<div class="conversation-avatar">
 		{#if conversation.conversation_avatar_url}

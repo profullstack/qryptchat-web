@@ -4,7 +4,7 @@
 	
 	const dispatch = createEventDispatcher();
 	
-	export let userId = null; // Used for external reference
+	export const userId = null; // Used for external reference
 	export let currentAvatarUrl = null;
 	export let size = 'large'; // 'small', 'medium', 'large'
 	export let disabled = false;
@@ -178,13 +178,13 @@
 		class:drag-over={dragOver}
 		class:uploading
 		style="width: {config.width}px; height: {config.height}px;"
-		on:click={triggerFileInput}
-		on:dragover={handleDragOver}
-		on:dragleave={handleDragLeave}
-		on:drop={handleDrop}
+		onclick={triggerFileInput}
+		ondragover={handleDragOver}
+		ondragleave={handleDragLeave}
+		ondrop={handleDrop}
 		role="button"
 		tabindex="0"
-		on:keydown={(e) => e.key === 'Enter' && triggerFileInput()}
+		onkeydown={(e) => e.key === 'Enter' && triggerFileInput()}
 	>
 		{#if previewUrl}
 			<img 
@@ -220,7 +220,7 @@
 	{#if previewUrl && !uploading}
 		<button
 			class="remove-button"
-			on:click|stopPropagation={removeAvatar}
+			onclick={(e) => { e.stopPropagation(); removeAvatar(); }}
 			title="Remove avatar"
 			aria-label="Remove avatar"
 		>
@@ -235,7 +235,7 @@
 		bind:this={fileInput}
 		type="file"
 		accept="image/jpeg,image/png,image/webp,image/gif"
-		on:change={handleFileSelect}
+		onchange={handleFileSelect}
 		style="display: none;"
 		{disabled}
 	/>

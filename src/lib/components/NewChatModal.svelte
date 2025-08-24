@@ -1,650 +1,392 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { chat } from '$lib/stores/chat.js';
-	import { user } from '$lib/stores/auth.js';
-	import { messages } from '$lib/stores/messages.js';
-
+	import { fade, fly } from 'svelte/transition';
+	
 	const dispatch = createEventDispatcher();
-
-	// Local state
-	let activeTab = 'direct'; // 'direct' or 'group'
-	let loading = false;
-	let searchQuery = '';
-	let searchResults = [];
-	let searchLoading = false;
-
-	// Group creation form
-	let groupName = '';
-	let groupDescription = '';
-	let isPublicGroup = false;
-
-	// Handle close
-	function handleClose() {
+	
+	// Props using Svelte 5 runes
+	let { isOpen = $bindable(false) } = $props();
+	
+	// State using Svelte 5 runes
+	let activeTab = $state('direct'); // 'direct', 'group', 'channel'
+	let searchQuery = $state('');
+	let searchResults = $state([]);
+	let selectedUsers = $state([]);
+	let groupName = $state('');
+	let isSearching = $state(false);
+	let isCreating = $state(false);
+	let searchTimeout = $state(null);
+	
+	// Functions
+	function closeModal() {
+		isOpen = false;
+		resetForm();
 		dispatch('close');
 	}
-
-	// Handle tab change
-	function setActiveTab(tab) {
-		activeTab = tab;
+	
+	function resetForm() {
 		searchQuery = '';
 		searchResults = [];
+		selectedUsers = [];
+		groupName = '';
+		activeTab = 'direct';
+		isSearching = false;
+		isCreating = false;
 	}
-
-	// Search for users
+	
+	function setActiveTab(tab) {
+		activeTab = tab;
+		selectedUsers = [];
+		searchQuery = '';
+		searchResults = [];
+		groupName = '';
+	}
+	
 	async function searchUsers() {
-		if (!searchQuery.trim() || searchQuery.length < 2) {
+		if (searchQuery.trim().length < 2) {
 			searchResults = [];
 			return;
 		}
-
-		searchLoading = true;
+		
+		isSearching = true;
 		try {
-			// This would typically search your users table
-			// For now, we'll simulate the search
-			await new Promise(resolve => setTimeout(resolve, 500));
+			const response = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`);
+			const data = await response.json();
 			
-			// Mock search results - in real implementation, this would query the database
-			searchResults = [
-				{
-					id: 'user-1',
-					username: 'john_doe',
-					display_name: 'John Doe',
-					avatar_url: null
-				},
-				{
-					id: 'user-2',
-					username: 'jane_smith',
-					display_name: 'Jane Smith',
-					avatar_url: null
-				}
-			].filter(user => 
-				user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				user.display_name.toLowerCase().includes(searchQuery.toLowerCase())
-			);
+			if (response.ok) {
+				searchResults = data.users || [];
+			} else {
+				console.error('Search error:', data.error);
+				searchResults = [];
+			}
 		} catch (error) {
-			console.error('Failed to search users:', error);
-			messages.error('Failed to search users');
+			console.error('Search error:', error);
+			searchResults = [];
 		} finally {
-			searchLoading = false;
+			isSearching = false;
 		}
 	}
-
-	// Handle user search input
+	
 	function handleSearchInput() {
-		searchUsers();
+		if (searchTimeout) {
+			clearTimeout(searchTimeout);
+		}
+		searchTimeout = setTimeout(searchUsers, 300);
 	}
-
-	// Start direct conversation
+	
+	function toggleUserSelection(user) {
+		const index = selectedUsers.findIndex(u => u.id === user.id);
+		if (index >= 0) {
+			selectedUsers = selectedUsers.filter(u => u.id !== user.id);
+		} else {
+			selectedUsers = [...selectedUsers, user];
+		}
+	}
+	
+	function isUserSelected(user) {
+		return selectedUsers.some(u => u.id === user.id);
+	}
+	
 	async function startDirectConversation(otherUser) {
-		if (!$user?.id) return;
-
-		loading = true;
+		isCreating = true;
 		try {
-			const result = await chat.createDirectConversation($user.id, otherUser.id);
+			const response = await fetch('/api/chat/conversations', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					type: 'direct',
+					participant_ids: [otherUser.id]
+				})
+			});
 			
-			if (result.success) {
-				messages.success(`Started conversation with ${otherUser.display_name}`);
-				dispatch('created', result.data);
-				handleClose();
+			const data = await response.json();
+			
+			if (response.ok) {
+				dispatch('conversationCreated', {
+					conversationId: data.conversation_id,
+					type: 'direct',
+					otherUser
+				});
+				closeModal();
 			} else {
-				messages.error(result.error || 'Failed to start conversation');
+				console.error('Create conversation error:', data.error);
+				alert('Failed to create conversation: ' + data.error);
 			}
 		} catch (error) {
-			console.error('Failed to start conversation:', error);
-			messages.error('Failed to start conversation');
+			console.error('Create conversation error:', error);
+			alert('Failed to create conversation');
 		} finally {
-			loading = false;
+			isCreating = false;
 		}
 	}
-
-	// Create group
-	async function createGroup() {
-		if (!groupName.trim() || !$user?.id) return;
-
-		loading = true;
+	
+	async function createGroupConversation() {
+		if (selectedUsers.length === 0) {
+			alert('Please select at least one user');
+			return;
+		}
+		
+		if (activeTab === 'group' && !groupName.trim()) {
+			alert('Please enter a group name');
+			return;
+		}
+		
+		isCreating = true;
 		try {
-			const result = await chat.createGroup({
-				name: groupName.trim(),
-				description: groupDescription.trim() || null,
-				isPublic: isPublicGroup
-			}, $user.id);
-
-			if (result.success) {
-				messages.success(`Created group "${groupName}"`);
-				dispatch('created', result.data);
-				handleClose();
+			const response = await fetch('/api/chat/conversations', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					type: activeTab === 'channel' ? 'room' : 'group',
+					name: groupName.trim() || undefined,
+					participant_ids: selectedUsers.map(u => u.id)
+				})
+			});
+			
+			const data = await response.json();
+			
+			if (response.ok) {
+				dispatch('conversationCreated', {
+					conversationId: data.conversation_id,
+					type: activeTab,
+					name: groupName.trim(),
+					participants: selectedUsers
+				});
+				closeModal();
 			} else {
-				messages.error(result.error || 'Failed to create group');
+				console.error('Create conversation error:', data.error);
+				alert('Failed to create conversation: ' + data.error);
 			}
 		} catch (error) {
-			console.error('Failed to create group:', error);
-			messages.error('Failed to create group');
+			console.error('Create conversation error:', error);
+			alert('Failed to create conversation');
 		} finally {
-			loading = false;
+			isCreating = false;
 		}
 	}
-
-	// Handle form submit
+	
 	function handleSubmit(event) {
 		event.preventDefault();
-		if (activeTab === 'group') {
-			createGroup();
+		
+		if (activeTab === 'direct' && selectedUsers.length === 1) {
+			startDirectConversation(selectedUsers[0]);
+		} else if ((activeTab === 'group' || activeTab === 'channel') && selectedUsers.length > 0) {
+			createGroupConversation();
 		}
 	}
+	
+	// Derived state using Svelte 5 runes
+	const canCreate = $derived(activeTab === 'direct'
+		? selectedUsers.length === 1
+		: selectedUsers.length > 0 && (activeTab === 'channel' || groupName.trim()));
 </script>
 
-<div class="modal-overlay" on:click={handleClose}>
-	<div class="modal-content" on:click|stopPropagation>
-		<div class="modal-header">
-			<h2>Start New Chat</h2>
-			<button class="close-button" on:click={handleClose}>
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-				</svg>
-			</button>
-		</div>
-
-		<div class="modal-tabs">
-			<button 
-				class="tab-button" 
-				class:active={activeTab === 'direct'}
-				on:click={() => setActiveTab('direct')}
-			>
-				Direct Message
-			</button>
-			<button 
-				class="tab-button" 
-				class:active={activeTab === 'group'}
-				on:click={() => setActiveTab('group')}
-			>
-				Create Group
-			</button>
-		</div>
-
-		<div class="modal-body">
-			{#if activeTab === 'direct'}
-				<div class="direct-chat-section">
-					<div class="search-section">
-						<div class="search-input">
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="search-icon">
-								<path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-							</svg>
-							<input 
-								type="text" 
-								placeholder="Search users by username or name..." 
-								bind:value={searchQuery}
-								on:input={handleSearchInput}
-							/>
-						</div>
+{#if isOpen}
+	<div
+		class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+		transition:fade={{ duration: 200 }}
+		onclick={closeModal}
+		onkeydown={(e) => e.key === 'Escape' && closeModal()}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="modal-title"
+		tabindex="0"
+	>
+		<div
+			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden"
+			transition:fly={{ y: 20, duration: 200 }}
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+			role="document"
+		>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+				<h2 id="modal-title" class="text-lg font-semibold text-gray-900 dark:text-white">
+					New Chat
+				</h2>
+				<button
+					onclick={closeModal}
+					class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+					aria-label="Close modal"
+				>
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+			
+			<!-- Tabs -->
+			<div class="flex border-b border-gray-200 dark:border-gray-700">
+				<button
+					class="flex-1 py-3 px-4 text-sm font-medium transition-colors {activeTab === 'direct'
+						? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400'
+						: 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
+					onclick={() => setActiveTab('direct')}
+				>
+					Direct Message
+				</button>
+				<button
+					class="flex-1 py-3 px-4 text-sm font-medium transition-colors {activeTab === 'group'
+						? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400'
+						: 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
+					onclick={() => setActiveTab('group')}
+				>
+					Group Chat
+				</button>
+				<button
+					class="flex-1 py-3 px-4 text-sm font-medium transition-colors {activeTab === 'channel'
+						? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400'
+						: 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
+					onclick={() => setActiveTab('channel')}
+				>
+					Channel
+				</button>
+			</div>
+			
+			<!-- Content -->
+			<form onsubmit={handleSubmit} class="p-4 space-y-4">
+				<!-- Group/Channel Name Input -->
+				{#if activeTab === 'group'}
+					<div>
+						<label for="groupName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+							Group Name
+						</label>
+						<input
+							id="groupName"
+							type="text"
+							bind:value={groupName}
+							placeholder="Enter group name..."
+							class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+							required
+						/>
 					</div>
-
-					<div class="search-results">
-						{#if searchLoading}
-							<div class="loading-state">
-								<div class="loading-spinner"></div>
-								<p>Searching users...</p>
-							</div>
-						{:else if searchQuery && searchResults.length === 0}
-							<div class="empty-state">
-								<p>No users found matching "{searchQuery}"</p>
-							</div>
-						{:else if searchResults.length > 0}
-							{#each searchResults as searchUser (searchUser.id)}
-								<button 
-									class="user-item"
-									on:click={() => startDirectConversation(searchUser)}
-									disabled={loading}
-								>
-									<div class="user-avatar">
-										{#if searchUser.avatar_url}
-											<img src={searchUser.avatar_url} alt={searchUser.display_name} />
-										{:else}
-											<div class="avatar-placeholder">
-												{searchUser.display_name.charAt(0).toUpperCase()}
-											</div>
-										{/if}
-									</div>
-									<div class="user-info">
-										<div class="user-name">{searchUser.display_name}</div>
-										<div class="username">@{searchUser.username}</div>
-									</div>
-								</button>
-							{/each}
-						{:else}
-							<div class="search-prompt">
-								<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" class="search-icon-large">
-									<path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-								</svg>
-								<h3>Find someone to chat with</h3>
-								<p>Search for users by their username or display name to start a conversation.</p>
+				{/if}
+				
+				<!-- User Search -->
+				<div>
+					<label for="userSearch" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+						{activeTab === 'direct' ? 'Find User' : 'Add Participants'}
+					</label>
+					<div class="relative">
+						<input
+							id="userSearch"
+							type="text"
+							bind:value={searchQuery}
+							oninput={handleSearchInput}
+							placeholder="Search by username, name, or phone..."
+							class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+						/>
+						{#if isSearching}
+							<div class="absolute right-3 top-2.5">
+								<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
 							</div>
 						{/if}
 					</div>
 				</div>
-			{:else}
-				<form class="group-form" on:submit={handleSubmit}>
-					<div class="form-group">
-						<label for="group-name">Group Name *</label>
-						<input 
-							id="group-name"
-							type="text" 
-							bind:value={groupName}
-							placeholder="Enter group name..."
-							required
-							maxlength="50"
-						/>
-					</div>
-
-					<div class="form-group">
-						<label for="group-description">Description</label>
-						<textarea 
-							id="group-description"
-							bind:value={groupDescription}
-							placeholder="What's this group about? (optional)"
-							maxlength="200"
-							rows="3"
-						></textarea>
-					</div>
-
-					<div class="form-group">
-						<label class="checkbox-label">
-							<input 
-								type="checkbox" 
-								bind:checked={isPublicGroup}
-							/>
-							<span class="checkbox-text">Make this group public</span>
-						</label>
-						<p class="help-text">
-							Public groups can be discovered and joined by anyone with an invite link.
+				
+				<!-- Selected Users (for group/channel) -->
+				{#if (activeTab === 'group' || activeTab === 'channel') && selectedUsers.length > 0}
+					<div>
+						<p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+							Selected ({selectedUsers.length})
 						</p>
+						<div class="flex flex-wrap gap-2">
+							{#each selectedUsers as user (user.id)}
+								<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+									{user.display_name || user.username}
+									<button
+										type="button"
+										onclick={() => toggleUserSelection(user)}
+										class="ml-1 text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+										aria-label="Remove user from selection"
+									>
+										<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</span>
+							{/each}
+						</div>
 					</div>
-
-					<div class="form-actions">
-						<button type="button" class="cancel-button" on:click={handleClose}>
-							Cancel
-						</button>
-						<button 
-							type="submit" 
-							class="create-button"
-							disabled={!groupName.trim() || loading}
-						>
-							{#if loading}
-								<div class="button-spinner"></div>
+				{/if}
+				
+				<!-- Search Results -->
+				{#if searchResults.length > 0}
+					<div class="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md">
+						{#each searchResults as searchUser (searchUser.id)}
+							<button
+								type="button"
+								class="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors {isUserSelected(searchUser) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}"
+								onclick={() => {
+									if (activeTab === 'direct') {
+										selectedUsers = [searchUser];
+									} else {
+										toggleUserSelection(searchUser);
+									}
+								}}
+							>
+								<div class="flex-shrink-0 w-10 h-10 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+									{#if searchUser.avatar_url}
+										<img src={searchUser.avatar_url} alt="" class="w-10 h-10 rounded-full object-cover" />
+									{:else}
+										<span class="text-sm font-medium text-gray-600 dark:text-gray-300">
+											{(searchUser.display_name || searchUser.username || '?').charAt(0).toUpperCase()}
+										</span>
+									{/if}
+								</div>
+								<div class="ml-3 flex-1 text-left">
+									<p class="text-sm font-medium text-gray-900 dark:text-white">
+										{searchUser.display_name || searchUser.username}
+									</p>
+									{#if searchUser.username && searchUser.display_name}
+										<p class="text-xs text-gray-500 dark:text-gray-400">@{searchUser.username}</p>
+									{/if}
+								</div>
+								{#if isUserSelected(searchUser)}
+									<div class="flex-shrink-0 text-blue-600 dark:text-blue-400">
+										<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+											<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+										</svg>
+									</div>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				{:else if searchQuery.length >= 2 && !isSearching}
+					<div class="text-center py-4 text-gray-500 dark:text-gray-400">
+						No users found
+					</div>
+				{/if}
+				
+				<!-- Actions -->
+				<div class="flex justify-end space-x-3 pt-4">
+					<button
+						type="button"
+						onclick={closeModal}
+						class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						disabled={!canCreate || isCreating}
+						class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+					>
+						{#if isCreating}
+							<div class="flex items-center">
+								<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
 								Creating...
-							{:else}
-								Create Group
-							{/if}
-						</button>
-					</div>
-				</form>
-			{/if}
+							</div>
+						{:else}
+							{activeTab === 'direct' ? 'Start Chat' : `Create ${activeTab === 'group' ? 'Group' : 'Channel'}`}
+						{/if}
+					</button>
+				</div>
+			</form>
 		</div>
 	</div>
-</div>
-
-<style>
-	.modal-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-		padding: 1rem;
-	}
-
-	.modal-content {
-		background: var(--color-surface);
-		border-radius: 0.75rem;
-		width: 100%;
-		max-width: 500px;
-		max-height: 80vh;
-		display: flex;
-		flex-direction: column;
-		box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 1.5rem 1.5rem 0 1.5rem;
-	}
-
-	.modal-header h2 {
-		margin: 0;
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: var(--color-text-primary);
-	}
-
-	.close-button {
-		background: none;
-		border: none;
-		color: var(--color-text-secondary);
-		cursor: pointer;
-		padding: 0.5rem;
-		border-radius: 0.375rem;
-		transition: all 0.2s ease;
-	}
-
-	.close-button:hover {
-		background: var(--color-surface-hover);
-		color: var(--color-text-primary);
-	}
-
-	.modal-tabs {
-		display: flex;
-		padding: 1rem 1.5rem 0 1.5rem;
-		border-bottom: 1px solid var(--color-border);
-	}
-
-	.tab-button {
-		background: none;
-		border: none;
-		padding: 0.75rem 1rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		border-bottom: 2px solid transparent;
-		transition: all 0.2s ease;
-	}
-
-	.tab-button.active {
-		color: var(--color-primary-600);
-		border-bottom-color: var(--color-primary-600);
-	}
-
-	.tab-button:hover:not(.active) {
-		color: var(--color-text-primary);
-	}
-
-	.modal-body {
-		flex: 1;
-		overflow-y: auto;
-		padding: 1.5rem;
-	}
-
-	.search-section {
-		margin-bottom: 1rem;
-	}
-
-	.search-input {
-		position: relative;
-		display: flex;
-		align-items: center;
-	}
-
-	.search-icon {
-		position: absolute;
-		left: 0.75rem;
-		color: var(--color-text-secondary);
-		z-index: 1;
-	}
-
-	.search-input input {
-		width: 100%;
-		padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-		border: 1px solid var(--color-border);
-		border-radius: 0.5rem;
-		background: var(--color-background);
-		color: var(--color-text-primary);
-		font-size: 0.875rem;
-		transition: border-color 0.2s ease;
-	}
-
-	.search-input input:focus {
-		outline: none;
-		border-color: var(--color-primary-500);
-	}
-
-	.search-results {
-		max-height: 300px;
-		overflow-y: auto;
-	}
-
-	.loading-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		padding: 2rem;
-		color: var(--color-text-secondary);
-	}
-
-	.loading-spinner {
-		width: 24px;
-		height: 24px;
-		border: 2px solid var(--color-border);
-		border-top: 2px solid var(--color-primary-500);
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-		margin-bottom: 0.5rem;
-	}
-
-	@keyframes spin {
-		0% { transform: rotate(0deg); }
-		100% { transform: rotate(360deg); }
-	}
-
-	.empty-state {
-		text-align: center;
-		padding: 2rem;
-		color: var(--color-text-secondary);
-	}
-
-	.search-prompt {
-		text-align: center;
-		padding: 3rem 2rem;
-		color: var(--color-text-secondary);
-	}
-
-	.search-icon-large {
-		margin-bottom: 1rem;
-		opacity: 0.5;
-	}
-
-	.search-prompt h3 {
-		margin: 0 0 0.5rem 0;
-		color: var(--color-text-primary);
-		font-size: 1.125rem;
-	}
-
-	.search-prompt p {
-		margin: 0;
-		font-size: 0.875rem;
-		line-height: 1.4;
-	}
-
-	.user-item {
-		width: 100%;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem;
-		background: none;
-		border: none;
-		cursor: pointer;
-		text-align: left;
-		border-radius: 0.5rem;
-		transition: background-color 0.2s ease;
-	}
-
-	.user-item:hover {
-		background: var(--color-surface-hover);
-	}
-
-	.user-item:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.user-avatar {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		overflow: hidden;
-		flex-shrink: 0;
-	}
-
-	.user-avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.avatar-placeholder {
-		width: 100%;
-		height: 100%;
-		background: var(--color-primary-500);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 600;
-		font-size: 1rem;
-	}
-
-	.user-info {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.user-name {
-		font-weight: 500;
-		color: var(--color-text-primary);
-		font-size: 0.875rem;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.username {
-		font-size: 0.75rem;
-		color: var(--color-text-secondary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.group-form {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.form-group label {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--color-text-primary);
-	}
-
-	.form-group input,
-	.form-group textarea {
-		padding: 0.75rem;
-		border: 1px solid var(--color-border);
-		border-radius: 0.5rem;
-		background: var(--color-background);
-		color: var(--color-text-primary);
-		font-size: 0.875rem;
-		transition: border-color 0.2s ease;
-	}
-
-	.form-group input:focus,
-	.form-group textarea:focus {
-		outline: none;
-		border-color: var(--color-primary-500);
-	}
-
-	.form-group textarea {
-		resize: vertical;
-		min-height: 80px;
-	}
-
-	.checkbox-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		cursor: pointer;
-	}
-
-	.checkbox-text {
-		font-size: 0.875rem;
-		color: var(--color-text-primary);
-	}
-
-	.help-text {
-		margin: 0;
-		font-size: 0.75rem;
-		color: var(--color-text-secondary);
-		line-height: 1.4;
-	}
-
-	.form-actions {
-		display: flex;
-		gap: 0.75rem;
-		justify-content: flex-end;
-		padding-top: 1rem;
-		border-top: 1px solid var(--color-border);
-	}
-
-	.cancel-button {
-		background: none;
-		border: 1px solid var(--color-border);
-		color: var(--color-text-secondary);
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
-		transition: all 0.2s ease;
-	}
-
-	.cancel-button:hover {
-		background: var(--color-surface-hover);
-		color: var(--color-text-primary);
-	}
-
-	.create-button {
-		background: var(--color-primary-600);
-		color: white;
-		border: none;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
-		transition: background-color 0.2s ease;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.create-button:hover:not(:disabled) {
-		background: var(--color-primary-700);
-	}
-
-	.create-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.button-spinner {
-		width: 16px;
-		height: 16px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top: 2px solid white;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-</style>
+{/if}

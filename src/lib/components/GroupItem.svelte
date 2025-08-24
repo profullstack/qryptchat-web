@@ -27,10 +27,10 @@
 	}
 </script>
 
-<button 
-	class="group-item" 
+<button
+	class="group-item"
 	class:expanded
-	on:click={handleToggle}
+	onclick={handleToggle}
 >
 	<div class="group-avatar">
 		{#if group.group_avatar_url}

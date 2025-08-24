@@ -56,11 +56,11 @@
 	}
 </script>
 
-<div class="modal-overlay" on:click={handleClose}>
-	<div class="modal-content" on:click|stopPropagation>
+<div class="modal-overlay" onclick={handleClose} onkeydown={(e) => e.key === 'Escape' && handleClose()} role="dialog" aria-modal="true" tabindex="0">
+	<div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="document">
 		<div class="modal-header">
 			<h2>Join a Group</h2>
-			<button class="close-button" on:click={handleClose}>
+			<button class="close-button" onclick={handleClose} aria-label="Close modal">
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
 				</svg>
@@ -78,14 +78,14 @@
 				<p>Enter an invite code below to join an existing group. You can get invite codes from group members or administrators.</p>
 			</div>
 
-			<form class="join-form" on:submit={handleSubmit}>
+			<form class="join-form" onsubmit={handleSubmit}>
 				<div class="form-group">
 					<label for="invite-code">Invite Code</label>
 					<input 
 						id="invite-code"
 						type="text" 
 						bind:value={inviteCode}
-						on:input={handleInputChange}
+						oninput={handleInputChange}
 						placeholder="Enter invite code (e.g., ABC12345)"
 						required
 						maxlength="8"
@@ -98,7 +98,7 @@
 				</div>
 
 				<div class="form-actions">
-					<button type="button" class="cancel-button" on:click={handleClose}>
+					<button type="button" class="cancel-button" onclick={handleClose}>
 						Cancel
 					</button>
 					<button 
