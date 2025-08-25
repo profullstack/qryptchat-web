@@ -1,11 +1,11 @@
 <script>
 	import { user } from '$lib/stores/auth.js';
 
-	let { 
-		message, 
-		isOwn = false, 
-		showAvatar = true, 
-		showTimestamp = true 
+	let {
+		message,
+		isOwn = false,
+		showAvatar = true,
+		showTimestamp = true
 	} = $props();
 
 	const currentUser = $derived($user);
@@ -29,22 +29,26 @@
 </script>
 
 <div class="message-item" class:own={isOwn}>
-	{#if showAvatar && !isOwn}
-		<div class="message-avatar">
-			{#if getAvatarUrl(message.sender)}
-				<img src={getAvatarUrl(message.sender)} alt={getDisplayName(message.sender)} />
-			{:else}
-				<div class="avatar-placeholder">
-					{getInitials(getDisplayName(message.sender))}
-				</div>
-			{/if}
-		</div>
+	{#if !isOwn}
+		<a href="/u/{message.sender?.username}" class="message-avatar-link">
+			<div class="message-avatar">
+				{#if getAvatarUrl(message.sender)}
+					<img src={getAvatarUrl(message.sender)} alt={getDisplayName(message.sender)} />
+				{:else}
+					<div class="avatar-placeholder">
+						{getInitials(getDisplayName(message.sender))}
+					</div>
+				{/if}
+			</div>
+		</a>
 	{/if}
 
 	<div class="message-content" class:own-content={isOwn}>
-		{#if !isOwn && showAvatar}
+		{#if !isOwn}
 			<div class="message-header">
-				<span class="sender-name">{getDisplayName(message.sender)}</span>
+				<a href="/u/{message.sender?.username}" class="sender-name-link">
+					<span class="sender-name">{getDisplayName(message.sender)}</span>
+				</a>
 				<span class="message-time">{formatTime(message.created_at)}</span>
 			</div>
 		{/if}
@@ -59,6 +63,20 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if isOwn}
+		<a href="/u/{currentUser?.username}" class="message-avatar-link">
+			<div class="message-avatar">
+				{#if currentUser?.avatarUrl}
+					<img src={currentUser.avatarUrl} alt={currentUser.displayName || currentUser.username} />
+				{:else}
+					<div class="avatar-placeholder">
+						{getInitials(currentUser?.displayName || currentUser?.username || 'You')}
+					</div>
+				{/if}
+			</div>
+		</a>
+	{/if}
 </div>
 
 <style>
@@ -67,11 +85,26 @@
 		gap: 0.75rem;
 		margin-bottom: 0.5rem;
 		padding: 0.25rem 0;
+		width: 100%;
+		align-items: flex-start;
 	}
 
 	.message-item.own {
-		flex-direction: row-reverse;
-		justify-content: flex-start;
+		justify-content: flex-end;
+		margin-left: auto;
+		margin-right: 0;
+		max-width: 80%;
+	}
+
+	.message-avatar-link {
+		text-decoration: none;
+		flex-shrink: 0;
+		align-self: center;
+		transition: opacity 0.2s ease;
+	}
+
+	.message-avatar-link:hover {
+		opacity: 0.8;
 	}
 
 	.message-avatar {
@@ -119,6 +152,15 @@
 		margin-bottom: 0.25rem;
 	}
 
+	.sender-name-link {
+		text-decoration: none;
+		transition: opacity 0.2s ease;
+	}
+
+	.sender-name-link:hover {
+		opacity: 0.8;
+	}
+
 	.sender-name {
 		font-weight: 600;
 		font-size: 0.875rem;
@@ -146,6 +188,10 @@
 		border-color: var(--color-primary-600);
 	}
 
+	.message-bubble.own-bubble .message-text {
+		text-align: right;
+	}
+	
 	.message-text {
 		line-height: 1.4;
 		font-size: 0.875rem;
@@ -162,52 +208,7 @@
 		color: rgba(255, 255, 255, 0.8);
 	}
 
-	/* Message bubble tails */
-	.message-bubble::before {
-		content: '';
-		position: absolute;
-		width: 0;
-		height: 0;
-		border-style: solid;
-	}
-
-	.message-bubble:not(.own-bubble)::before {
-		left: -8px;
-		top: 12px;
-		border-width: 8px 8px 8px 0;
-		border-color: transparent var(--color-border) transparent transparent;
-	}
-
-	.message-bubble:not(.own-bubble)::after {
-		content: '';
-		position: absolute;
-		left: -7px;
-		top: 12px;
-		width: 0;
-		height: 0;
-		border-style: solid;
-		border-width: 8px 8px 8px 0;
-		border-color: transparent var(--color-surface) transparent transparent;
-	}
-
-	.message-bubble.own-bubble::before {
-		right: -8px;
-		top: 12px;
-		border-width: 8px 0 8px 8px;
-		border-color: transparent transparent transparent var(--color-primary-600);
-	}
-
-	.message-bubble.own-bubble::after {
-		content: '';
-		position: absolute;
-		right: -7px;
-		top: 12px;
-		width: 0;
-		height: 0;
-		border-style: solid;
-		border-width: 8px 0 8px 8px;
-		border-color: transparent transparent transparent var(--color-primary-500);
-	}
+	/* Removed message bubble tails to fix visual artifacts */
 
 	/* Responsive adjustments */
 	@media (max-width: 768px) {

@@ -117,13 +117,36 @@ export async function handleLoadConversations(ws, message, context) {
 		console.log('💬 [CONVERSATIONS] SUCCESS: Conversations loaded successfully');
 		console.log('💬 [CONVERSATIONS] Conversation count:', conversations?.length || 0);
 
+		// Decode encrypted_content from bytea to text for all conversations
+		if (conversations && conversations.length > 0) {
+			conversations.forEach(conv => {
+				if (conv.latest_message_content) {
+					try {
+						// If latest_message_content is bytea, decode it to text
+						if (conv.latest_message_content instanceof Uint8Array) {
+							conv.latest_message_content = new TextDecoder().decode(conv.latest_message_content);
+						} else if (typeof conv.latest_message_content === 'string' && conv.latest_message_content.startsWith('\\x')) {
+							// Handle PostgreSQL bytea hex format
+							const hexString = conv.latest_message_content.slice(2); // Remove \x prefix
+							const bytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+							conv.latest_message_content = new TextDecoder().decode(bytes);
+						}
+						// If it's already a string, leave it as is
+					} catch (error) {
+						console.error('💬 [CONVERSATIONS] Error decoding latest message content:', error);
+						conv.latest_message_content = '[Message content unavailable]';
+					}
+				}
+			});
+		}
+
 		const response = createSuccessResponse(
 			message.requestId,
 			MESSAGE_TYPES.CONVERSATIONS_LOADED,
 			{ conversations: conversations || [] }
 		);
 		
-		console.log('💬 [CONVERSATIONS] Sending response:', JSON.stringify(response, null, 2));
+		console.log('💬 [CONVERSATIONS] Sending response with', conversations?.length || 0, 'conversations');
 		ws.send(serializeMessage(response));
 		
 		console.log('💬 [CONVERSATIONS] ==================== LOAD CONVERSATIONS SUCCESS ====================');

@@ -137,20 +137,20 @@
 		{#each messages as message, index (message.id)}
 			{#if shouldShowDateSeparator(message, index)}
 				<div class="date-separator">
-					<span>{new Date(message.created_at).toLocaleDateString([], { 
-						weekday: 'long', 
-						year: 'numeric', 
-						month: 'long', 
-						day: 'numeric' 
+					<span>{new Date(message.created_at).toLocaleDateString([], {
+						weekday: 'long',
+						year: 'numeric',
+						month: 'long',
+						day: 'numeric'
 					})}</span>
 				</div>
 			{/if}
 			
-			<MessageItem 
-				{message} 
+			<MessageItem
+				{message}
 				isOwn={message.sender_id === currentUser?.id}
 				showAvatar={index === 0 || messages[index - 1].sender_id !== message.sender_id}
-				showTimestamp={index === messages.length - 1 || 
+				showTimestamp={index === messages.length - 1 ||
 					messages[index + 1]?.sender_id !== message.sender_id ||
 					new Date(messages[index + 1]?.created_at).getTime() - new Date(message.created_at).getTime() > 300000}
 			/>
@@ -171,6 +171,7 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		background: var(--color-background);
+		align-items: stretch;
 	}
 
 	.loading-indicator {
