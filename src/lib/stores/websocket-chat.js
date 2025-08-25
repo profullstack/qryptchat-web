@@ -199,7 +199,8 @@ function createWebSocketChatStore() {
 		try {
 			const message = parseMessage(data);
 			if (!message) {
-				console.error('Invalid message received');
+				console.error('Invalid message received - parseMessage returned null/undefined');
+				console.error('Raw data:', data);
 				return;
 			}
 
@@ -309,13 +310,14 @@ function createWebSocketChatStore() {
 			});
 			
 			if (response.type === MESSAGE_TYPES.CONVERSATION_JOINED) {
-				// Load messages for this conversation
-				await loadMessages(conversationId);
+				// Don't automatically load messages here to avoid infinite loops
+				// Messages should be loaded separately by the UI
+				console.log('✅ Successfully joined conversation room:', conversationId);
 			}
 		} catch (error) {
 			console.error('Failed to join conversation:', error);
-			update(state => ({ 
-				...state, 
+			update(state => ({
+				...state,
 				error: 'Failed to join conversation'
 			}));
 		}
@@ -348,8 +350,8 @@ function createWebSocketChatStore() {
 			});
 			
 			if (response.type === MESSAGE_TYPES.MESSAGES_LOADED) {
-				update(state => ({ 
-					...state, 
+				update(state => ({
+					...state,
 					activeConversation: conversationId,
 					messages: response.payload.messages,
 					loading: false,
@@ -359,8 +361,8 @@ function createWebSocketChatStore() {
 			}
 		} catch (error) {
 			console.error('Failed to load messages:', error);
-			update(state => ({ 
-				...state, 
+			update(state => ({
+				...state,
 				loading: false,
 				error: 'Failed to load messages'
 			}));

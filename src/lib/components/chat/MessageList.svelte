@@ -1,6 +1,6 @@
 <script>
 	import { onMount, tick } from 'svelte';
-	import { wsChat, messages as messagesStore } from '$lib/stores/websocket-chat.js';
+	import { wsChat, messages as messagesStore, typingUsers as typingUsersStore } from '$lib/stores/websocket-chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import MessageItem from './MessageItem.svelte';
 	import TypingIndicator from './TypingIndicator.svelte';
@@ -13,7 +13,7 @@
 
 	const messages = $derived($messagesStore || []);
 	const currentUser = $derived($user);
-	const typingUsers = $derived(/** @type {any[]} */ ([])); // TODO: Implement typing users from store
+	const typingUsers = $derived($typingUsersStore || []);
 
 	// Auto-scroll to bottom when new messages arrive
 	$effect(() => {
@@ -36,8 +36,10 @@
 	async function joinConversation() {
 		try {
 			if (currentUser?.id) {
-				// Join the conversation room (this also loads messages)
+				// Join the conversation room
 				await wsChat.joinConversation(conversationId);
+				// Load messages for the conversation
+				await wsChat.loadMessages(conversationId);
 				shouldScrollToBottom = true;
 			}
 		} catch (error) {

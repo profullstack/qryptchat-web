@@ -118,7 +118,8 @@ export function validateMessage(message) {
 		return false;
 	}
 
-	if (!requestId || typeof requestId !== 'string') {
+	// requestId can be null for broadcast messages (presence, typing, etc.)
+	if (requestId !== null && typeof requestId !== 'string') {
 		return false;
 	}
 

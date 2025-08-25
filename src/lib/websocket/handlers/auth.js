@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { MESSAGE_TYPES, createSuccessResponse, createErrorResponse, serializeMessage } from '../utils/protocol.js';
+import { MESSAGE_TYPES, createMessage, createSuccessResponse, createErrorResponse, serializeMessage } from '../utils/protocol.js';
 import { roomManager } from '../utils/rooms.js';
 
 /**
@@ -248,16 +248,14 @@ async function broadcastUserOnlineStatus(userId, isOnline, supabase) {
 
 		// Broadcast presence update to each conversation
 		for (const conv of conversations) {
-			const presenceMessage = {
-				type: isOnline ? MESSAGE_TYPES.USER_ONLINE : MESSAGE_TYPES.USER_OFFLINE,
-				payload: {
+			const presenceMessage = createMessage(
+				isOnline ? MESSAGE_TYPES.USER_ONLINE : MESSAGE_TYPES.USER_OFFLINE,
+				{
 					userId,
 					conversationId: conv.conversation_id,
 					timestamp: new Date().toISOString()
-				},
-				requestId: null,
-				timestamp: new Date().toISOString()
-			};
+				}
+			);
 
 			roomManager.broadcastToRoom(conv.conversation_id, presenceMessage);
 		}

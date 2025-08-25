@@ -15,6 +15,8 @@
 	// Handle conversation selection
 	function handleConversationSelect(/** @type {string} */ conversationId) {
 		activeConversationId = conversationId;
+		// The ChatSidebar already handles joining the conversation via wsChat.joinConversation()
+		// so we don't need to duplicate that logic here
 	}
 
 	// Redirect if not authenticated and initialize WebSocket

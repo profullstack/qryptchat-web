@@ -133,10 +133,12 @@ export async function handleSendMessage(ws, message, context) {
 		console.log('📨 [SEND] Broadcasting message to room:', {
 			conversationId,
 			messageId: newMessage.id,
-			broadcastMessage: JSON.stringify(broadcastMessage, null, 2)
+			roomUsers: roomManager.getRoomUsers(conversationId),
+			totalConnections: roomManager.getTotalConnections()
 		});
 
-		roomManager.broadcastToRoom(conversationId, broadcastMessage, ws);
+		// Broadcast to ALL participants, including the sender (they'll filter it out on client side if needed)
+		roomManager.broadcastToRoom(conversationId, broadcastMessage);
 		
 		console.log('📨 [SEND] Room stats after broadcast:', {
 			roomUsers: roomManager.getRoomUsers(conversationId),
