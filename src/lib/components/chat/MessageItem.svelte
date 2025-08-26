@@ -1,5 +1,7 @@
-e<script>
+<script>
 	import { user } from '$lib/stores/auth.js';
+	import { clientEncryption } from '$lib/crypto/client-encryption.js';
+	import { onMount } from 'svelte';
 
 	let {
 		message,
@@ -9,6 +11,46 @@ e<script>
 	} = $props();
 
 	const currentUser = $derived($user);
+	let decryptedContent = $state('');
+	let isDecrypting = $state(false);
+	let decryptionFailed = $state(false);
+
+	// Decrypt message content on mount if needed
+	onMount(async () => {
+		if (message.content) {
+			// Message already has decrypted content
+			decryptedContent = message.content;
+		} else if (message.encrypted_content) {
+			// Need to decrypt the message
+			isDecrypting = true;
+			try {
+				console.log(`🔐 [UI] Decrypting message ${message.id} in MessageItem component`);
+				const decrypted = await clientEncryption.decryptMessage(
+					message.conversation_id,
+					message.encrypted_content
+				);
+				decryptedContent = decrypted;
+				console.log(`🔐 [UI] ✅ Successfully decrypted message ${message.id}: "${decrypted}"`);
+			} catch (error) {
+				console.error(`🔐 [UI] ❌ Failed to decrypt message ${message.id}:`, error);
+				decryptedContent = '[Encrypted message - decryption failed]';
+				decryptionFailed = true;
+			} finally {
+				isDecrypting = false;
+			}
+		} else {
+			decryptedContent = '[Message content unavailable]';
+		}
+	});
+
+	// Watch for changes to message content (in case it gets decrypted elsewhere)
+	$effect(() => {
+		if (message.content && message.content !== decryptedContent) {
+			decryptedContent = message.content;
+			isDecrypting = false;
+			decryptionFailed = false;
+		}
+	});
 
 	function formatTime(/** @type {string} */ timestamp) {
 		const date = new Date(timestamp);
@@ -55,12 +97,13 @@ e<script>
 
 		<div class="message-bubble" class:own-bubble={isOwn}>
 			<div class="message-text">
-				{#if message.content}
-					{message.content}
-				{:else if message.encrypted_content}
-					<span style="color: red; font-family: monospace; font-size: 0.7rem;">
-						🔐 ENCRYPTED: {message.encrypted_content.substring(0, 100)}...
+				{#if isDecrypting}
+					<span class="decrypting-indicator">
+						<span class="spinner"></span>
+						Decrypting...
 					</span>
+				{:else if decryptedContent}
+					{decryptedContent}
 				{:else}
 					[Message content unavailable]
 				{/if}
@@ -214,6 +257,30 @@ e<script>
 
 	.message-bubble.own-bubble .own-time {
 		color: rgba(255, 255, 255, 0.8);
+	}
+
+	.decrypting-indicator {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--color-text-secondary);
+		font-style: italic;
+		font-size: 0.8125rem;
+	}
+
+	.spinner {
+		width: 0.875rem;
+		height: 0.875rem;
+		border: 2px solid transparent;
+		border-top: 2px solid currentColor;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	/* Removed message bubble tails to fix visual artifacts */
