@@ -5,6 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
+	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 	/** @type {import('./$types').PageData} */
 	export let data;
@@ -16,9 +17,23 @@
 	let error = '';
 	let success = '';
 	let showAvatarUpload = false;
+	let userPublicKey = '';
+	let publicKeyCopied = false;
+	let loadingPublicKey = false;
 
 	$: isOwnProfile = $isAuthenticated && $user?.username === data.profile?.username;
 	$: profileUser = data.profile;
+
+	// Load user's public key when component mounts or profile changes
+	onMount(() => {
+		if (profileUser?.id) {
+			loadUserPublicKey();
+		}
+	});
+
+	$: if (profileUser?.id) {
+		loadUserPublicKey();
+	}
 
 	async function handleSave() {
 		if (!isOwnProfile) return;
@@ -147,6 +162,43 @@
 		setTimeout(() => {
 			success = '';
 		}, 3000);
+	}
+
+	/**
+		* Load user's public key from the database
+		*/
+	async function loadUserPublicKey() {
+		if (!profileUser?.id || loadingPublicKey) return;
+		
+		try {
+			loadingPublicKey = true;
+			await publicKeyService.initialize();
+			
+			const publicKey = await publicKeyService.getUserPublicKey(profileUser.id);
+			userPublicKey = publicKey || '';
+		} catch (err) {
+			console.error('Failed to load user public key:', err);
+			userPublicKey = '';
+		} finally {
+			loadingPublicKey = false;
+		}
+	}
+
+	/**
+		* Copy public key to clipboard
+		*/
+	async function copyPublicKey() {
+		if (!userPublicKey) return;
+		
+		try {
+			await navigator.clipboard.writeText(userPublicKey);
+			publicKeyCopied = true;
+			setTimeout(() => {
+				publicKeyCopied = false;
+			}, 2000);
+		} catch (err) {
+			console.error('Failed to copy public key:', err);
+		}
 	}
 </script>
 
@@ -331,6 +383,64 @@
 				<p class="profile-empty">Add your website or social media link.</p>
 			{:else}
 				<p class="profile-empty">No website available.</p>
+			{/if}
+		</div>
+
+		<!-- Public Key Section -->
+		<div class="profile-section">
+			<h2 class="section-title">🔐 Public Key</h2>
+			{#if loadingPublicKey}
+				<div class="loading-state">
+					<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M21 12a9 9 0 11-6.219-8.56"/>
+					</svg>
+					Loading public key...
+				</div>
+			{:else if userPublicKey}
+				<div class="public-key-display">
+					<p class="public-key-description">
+						This is {isOwnProfile ? 'your' : `${profileUser?.displayName || profileUser?.username || 'this user\'s'}`} quantum-resistant public key.
+						{#if !isOwnProfile}
+							You can use this to send encrypted messages that only they can read.
+						{:else}
+							Others can use this to send you encrypted messages that only you can read.
+						{/if}
+					</p>
+					
+					<div class="key-display">
+						<div class="key-content">
+							<code class="public-key">{userPublicKey}</code>
+						</div>
+						<button
+							class="btn copy-btn"
+							on:click={copyPublicKey}
+							title="Copy public key to clipboard"
+						>
+							{#if publicKeyCopied}
+								✅ Copied!
+							{:else}
+								📋 Copy
+							{/if}
+						</button>
+					</div>
+					
+					<div class="key-info">
+						<p><strong>🛡️ Security Details:</strong></p>
+						<ul>
+							<li><strong>Algorithm:</strong> ML-KEM-768 (Post-Quantum)</li>
+							<li><strong>Quantum-Resistant:</strong> Safe against quantum computer attacks</li>
+							<li><strong>FIPS 203 Compliant:</strong> Government-approved encryption standard</li>
+						</ul>
+					</div>
+				</div>
+			{:else}
+				<p class="profile-empty">
+					{#if isOwnProfile}
+						No public key available. Generate encryption keys in your settings to enable secure messaging.
+					{:else}
+						This user hasn't set up encryption keys yet.
+					{/if}
+				</p>
 			{/if}
 		</div>
 	</div>
@@ -633,6 +743,112 @@
 		.edit-actions .btn {
 			width: 100%;
 			justify-content: center;
+		}
+	}
+
+	/* Public Key Styles */
+	.loading-state {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+	}
+
+	.public-key-display {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.public-key-description {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.key-display {
+		display: flex;
+		gap: var(--space-3);
+		align-items: flex-start;
+	}
+
+	.key-content {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.public-key {
+		display: block;
+		width: 100%;
+		padding: var(--space-3);
+		background: var(--color-bg-primary);
+		border: 1px solid var(--color-border-primary);
+		border-radius: var(--radius-md);
+		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+		font-size: 0.75rem;
+		color: var(--color-text-primary);
+		word-break: break-all;
+		line-height: 1.4;
+		white-space: pre-wrap;
+	}
+
+	.copy-btn {
+		flex-shrink: 0;
+		padding: var(--space-3) var(--space-4);
+		font-size: 0.8125rem;
+		background: var(--color-brand-primary);
+		color: white;
+		border: none;
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.copy-btn:hover {
+		background: var(--color-brand-secondary);
+	}
+
+	.key-info {
+		padding: var(--space-4);
+		background: var(--color-bg-primary);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border-primary);
+	}
+
+	.key-info p {
+		margin: 0 0 var(--space-2) 0;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-text-primary);
+	}
+
+	.key-info ul {
+		margin: 0;
+		padding-left: var(--space-5);
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+
+	.key-info li {
+		margin-bottom: var(--space-2);
+	}
+
+	.key-info li:last-child {
+		margin-bottom: 0;
+	}
+
+	@media (max-width: 640px) {
+		.key-display {
+			flex-direction: column;
+			gap: var(--space-3);
+		}
+
+		.copy-btn {
+			align-self: flex-start;
 		}
 	}
 </style>

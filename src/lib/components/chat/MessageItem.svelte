@@ -141,11 +141,13 @@
 		flex: 1;
 		min-width: 0;
 		max-width: 70%;
+		overflow: hidden;
 	}
 
 	.message-content.own-content {
 		max-width: 70%;
 		align-self: flex-end;
+		overflow: hidden;
 	}
 
 	.message-header {
@@ -183,7 +185,12 @@
 		position: relative;
 		word-wrap: break-word;
 		overflow-wrap: break-word;
+		word-break: break-word;
+		text-wrap: wrap;
+		hyphens: auto;
 		color: var(--text-primary);
+		max-width: 100%;
+		box-sizing: border-box;
 	}
 
 	.message-bubble.own-bubble {

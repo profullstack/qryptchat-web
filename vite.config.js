@@ -36,52 +36,52 @@ export default defineConfig(({ mode }) => {
 				orientation: 'portrait-primary',
 				icons: [
 					{
-						src: '/icons/icon-72x72.png',
+						src: '/favicon.svg',
 						sizes: '72x72',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-96x96.png',
+						src: '/favicon.svg',
 						sizes: '96x96',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-128x128.png',
+						src: '/favicon.svg',
 						sizes: '128x128',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-144x144.png',
+						src: '/favicon.svg',
 						sizes: '144x144',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-152x152.png',
+						src: '/favicon.svg',
 						sizes: '152x152',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-192x192.png',
+						src: '/favicon.svg',
 						sizes: '192x192',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-384x384.png',
+						src: '/favicon.svg',
 						sizes: '384x384',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-512x512.png',
+						src: '/favicon.svg',
 						sizes: '512x512',
-						type: 'image/png',
-						purpose: 'maskable any'
+						type: 'image/svg+xml',
+						purpose: 'any'
 					}
 				],
 				shortcuts: [

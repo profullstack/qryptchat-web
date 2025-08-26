@@ -166,12 +166,16 @@
 	.message-list {
 		flex: 1;
 		overflow-y: auto;
+		overflow-x: hidden;
 		padding: 1rem;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
 		background: var(--color-background);
 		align-items: stretch;
+		width: 100%;
+		max-width: 100%;
+		box-sizing: border-box;
 	}
 
 	.loading-indicator {
