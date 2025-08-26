@@ -312,10 +312,12 @@
 		height: 100vh;
 		background: var(--color-surface);
 		border-right: 1px solid var(--color-border);
-		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+		box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+		position: relative;
+		z-index: 10;
 	}
 
 	.sidebar-header {
