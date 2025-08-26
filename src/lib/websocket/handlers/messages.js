@@ -59,9 +59,8 @@ export async function handleSendMessage(ws, message, context) {
 			return;
 		}
 
-		// TODO: Integrate encryption here
-		// For now, we'll store the content as plain text (no encoding needed for bytea - Supabase handles it)
-		// In production, this should be: encryptedContent = await encryptMessage(content, conversationKey)
+		// Content is already encrypted on the client side
+		// Server just passes it through without modification
 		const encryptedContent = content;
 
 		// Insert message into database
@@ -113,9 +112,11 @@ export async function handleSendMessage(ws, message, context) {
 		);
 		ws.send(JSON.stringify(successResponse));
 
-		// Decode the encrypted_content for broadcasting (same as in load messages)
-		if (newMessage.encrypted_content) {
+		// Server no longer decodes encrypted content - clients handle encryption/decryption
+		// Just pass through the encrypted content as-is for broadcasting
+		if (newMessage.encrypted_content && typeof newMessage.encrypted_content !== 'string') {
 			try {
+				// Only decode if it's bytea from database, but keep it as encrypted content
 				if (newMessage.encrypted_content instanceof Uint8Array) {
 					newMessage.encrypted_content = new TextDecoder().decode(newMessage.encrypted_content);
 				} else if (typeof newMessage.encrypted_content === 'string' && newMessage.encrypted_content.startsWith('\\x')) {
@@ -124,7 +125,7 @@ export async function handleSendMessage(ws, message, context) {
 					newMessage.encrypted_content = new TextDecoder().decode(bytes);
 				}
 			} catch (error) {
-				console.error('📨 [SEND] Error decoding message content for broadcast:', error);
+				console.error('📨 [SEND] Error processing message content for broadcast:', error);
 				newMessage.encrypted_content = '[Message content unavailable]';
 			}
 		}

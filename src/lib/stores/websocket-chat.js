@@ -5,12 +5,13 @@
 
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
-import { 
-	MESSAGE_TYPES, 
-	createMessage, 
-	parseMessage, 
-	serializeMessage 
+import {
+	MESSAGE_TYPES,
+	createMessage,
+	parseMessage,
+	serializeMessage
 } from '$lib/websocket/utils/protocol.js';
+import { clientEncryption } from '$lib/crypto/client-encryption.js';
 
 /**
  * @typedef {Object} WebSocketChatState
@@ -91,6 +92,9 @@ function createWebSocketChatStore() {
 				console.log('WebSocket connected');
 				reconnectAttempts = 0;
 				update(state => ({ ...state, connected: true, error: null }));
+
+				// Initialize client encryption
+				clientEncryption.initialize();
 
 				// Authenticate immediately after connection
 				if (token) {
@@ -350,10 +354,29 @@ function createWebSocketChatStore() {
 			});
 			
 			if (response.type === MESSAGE_TYPES.MESSAGES_LOADED) {
+				// Decrypt all loaded messages
+				const messages = response.payload.messages;
+				if (messages && messages.length > 0) {
+					for (const message of messages) {
+						if (message.encrypted_content) {
+							try {
+								const decryptedContent = await clientEncryption.decryptMessage(
+									conversationId,
+									message.encrypted_content
+								);
+								message.encrypted_content = decryptedContent;
+							} catch (error) {
+								console.error('Failed to decrypt loaded message:', error);
+								message.encrypted_content = '[Encrypted message - decryption failed]';
+							}
+						}
+					}
+				}
+
 				update(state => ({
 					...state,
 					activeConversation: conversationId,
-					messages: response.payload.messages,
+					messages: messages,
 					loading: false,
 					error: null,
 					typingUsers: []
@@ -378,9 +401,12 @@ function createWebSocketChatStore() {
 	 */
 	async function sendChatMessage(conversationId, content, messageType = 'text', replyToId = null) {
 		try {
+			// Encrypt the message content before sending
+			const encryptedContent = await clientEncryption.encryptMessage(conversationId, content);
+			
 			const payload = {
 				conversationId,
-				content,
+				content: encryptedContent,
 				messageType
 			};
 			
@@ -447,7 +473,21 @@ function createWebSocketChatStore() {
 	 * Handle new message from broadcast
 	 * @param {Object} message - New message
 	 */
-	function handleNewMessage(message) {
+	async function handleNewMessage(message) {
+		// Decrypt the message content if it's encrypted
+		if (message.encrypted_content) {
+			try {
+				const decryptedContent = await clientEncryption.decryptMessage(
+					message.conversation_id,
+					message.encrypted_content
+				);
+				message.encrypted_content = decryptedContent;
+			} catch (error) {
+				console.error('Failed to decrypt received message:', error);
+				message.encrypted_content = '[Encrypted message - decryption failed]';
+			}
+		}
+
 		update(state => {
 			// Only add if it's for the active conversation
 			if (state.activeConversation === message.conversation_id) {
