@@ -11,7 +11,8 @@ import {
 	parseMessage,
 	serializeMessage
 } from '$lib/websocket/utils/protocol.js';
-import { clientEncryption } from '$lib/crypto/client-encryption.js';
+import { asymmetricEncryption } from '$lib/crypto/asymmetric-encryption.js';
+import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 /**
  * @typedef {Object} WebSocketChatState
@@ -93,10 +94,14 @@ function createWebSocketChatStore() {
 				reconnectAttempts = 0;
 				update(state => ({ ...state, connected: true, error: null }));
 
-				// Initialize client encryption
-				console.log('🔐 Initializing client encryption...');
-				await clientEncryption.initialize();
-				console.log('🔐 Client-side encryption service initialized');
+				// Initialize asymmetric encryption and public key service
+				console.log('🔐 Initializing asymmetric encryption...');
+				await asymmetricEncryption.initialize();
+				await publicKeyService.initialize();
+				
+				// Initialize user encryption (generates keys and uploads public key)
+				await publicKeyService.initializeUserEncryption();
+				console.log('🔐 Asymmetric encryption and public key service initialized');
 
 				// Authenticate immediately after connection
 				if (token) {
@@ -323,14 +328,13 @@ function createWebSocketChatStore() {
 			if (response.type === MESSAGE_TYPES.CONVERSATION_JOINED) {
 				console.log('✅ Successfully joined conversation room:', conversationId);
 				
-				// Ensure we have an encryption key for this conversation
-				console.log(`🔑 Ensuring encryption key exists for conversation: ${conversationId}`);
+				// Ensure user encryption is initialized for this conversation
+				console.log(`🔑 Ensuring user encryption is ready for conversation: ${conversationId}`);
 				try {
-					// This will generate a key if none exists, or retrieve existing one
-					await clientEncryption.getConversationKey(conversationId);
-					console.log(`🔑 ✅ Encryption key ready for conversation: ${conversationId}`);
+					await publicKeyService.initializeUserEncryption();
+					console.log(`🔑 ✅ User encryption ready for conversation: ${conversationId}`);
 				} catch (keyError) {
-					console.error(`🔑 ❌ Failed to ensure encryption key for conversation ${conversationId}:`, keyError);
+					console.error(`🔑 ❌ Failed to ensure user encryption:`, keyError);
 				}
 			}
 		} catch (error) {
@@ -369,18 +373,34 @@ function createWebSocketChatStore() {
 			});
 			
 			if (response.type === MESSAGE_TYPES.MESSAGES_LOADED) {
-				// Decrypt all loaded messages
+				// Decrypt all loaded messages using asymmetric encryption
 				const messages = response.payload.messages || [];
-				console.log(`🔐 [LOAD] Processing ${messages.length} messages for decryption`);
+				console.log(`🔐 [LOAD] Processing ${messages.length} messages for asymmetric decryption`);
 				
 				for (const message of messages) {
 					if (message.encrypted_content) {
 						try {
-							console.log(`🔐 [LOAD] Decrypting message ${message.id}:`, message.encrypted_content.substring(0, 100) + '...');
-							const decryptedContent = await clientEncryption.decryptMessage(
-								conversationId,
-								message.encrypted_content
-							);
+							console.log(`🔐 [LOAD] Decrypting message ${message.id} from sender ${message.sender_id}`);
+							
+							// Get the sender's public key from the database
+							const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
+							
+							let decryptedContent;
+							if (!senderPublicKey) {
+								console.warn(`🔐 [LOAD] No public key found for sender ${message.sender_id}, trying self-decryption`);
+								// Fallback to our own key (for self-messages)
+								const myPublicKey = await asymmetricEncryption.getPublicKey();
+								decryptedContent = await asymmetricEncryption.decryptFromSender(
+									message.encrypted_content,
+									myPublicKey
+								);
+							} else {
+								decryptedContent = await asymmetricEncryption.decryptFromSender(
+									message.encrypted_content,
+									senderPublicKey
+								);
+							}
+							
 							message.content = decryptedContent;
 							console.log(`🔐 [LOAD] ✅ Decrypted message ${message.id}: "${decryptedContent}"`);
 						} catch (error) {
@@ -421,8 +441,23 @@ function createWebSocketChatStore() {
 	 */
 	async function sendChatMessage(conversationId, content, messageType = 'text', replyToId = null) {
 		try {
-			// Encrypt the message content before sending
-			const encryptedContent = await clientEncryption.encryptMessage(conversationId, content);
+			// Get all participant public keys for this conversation
+			console.log(`🔐 [SEND] Getting participant keys for conversation: ${conversationId}`);
+			const participantKeys = await publicKeyService.getConversationParticipantKeys(conversationId);
+			
+			let encryptedContent;
+			if (participantKeys.size === 0) {
+				console.warn(`🔐 [SEND] No participant keys found for conversation ${conversationId}, using self-encryption`);
+				// Fallback to self-encryption
+				const myPublicKey = await asymmetricEncryption.getPublicKey();
+				encryptedContent = await asymmetricEncryption.encryptForRecipient(content, myPublicKey);
+			} else {
+				console.log(`🔐 [SEND] Found ${participantKeys.size} participant keys`);
+				// For now, encrypt for the first participant (simplified approach)
+				// TODO: Implement proper multi-recipient encryption
+				const firstParticipantKey = participantKeys.values().next().value;
+				encryptedContent = await asymmetricEncryption.encryptForRecipient(content, firstParticipantKey);
+			}
 			
 			const payload = {
 				conversationId,
@@ -442,9 +477,11 @@ function createWebSocketChatStore() {
 				if (sentMessage.encrypted_content) {
 					try {
 						console.log(`🔐 [SENT] Decrypting sent message ${sentMessage.id} for immediate display`);
-						const decryptedContent = await clientEncryption.decryptMessage(
-							conversationId,
-							sentMessage.encrypted_content
+						// Use our own public key to decrypt our sent message
+						const myPublicKey = await asymmetricEncryption.getPublicKey();
+						const decryptedContent = await asymmetricEncryption.decryptFromSender(
+							sentMessage.encrypted_content,
+							myPublicKey
 						);
 						sentMessage.content = decryptedContent;
 						console.log(`🔐 [SENT] ✅ Decrypted sent message ${sentMessage.id}: "${decryptedContent}"`);
@@ -516,14 +553,30 @@ function createWebSocketChatStore() {
 	async function handleNewMessage(message) {
 		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
 		
-		// Decrypt the message content if it's encrypted
+		// Decrypt the message content using asymmetric encryption
 		if (message.encrypted_content) {
 			try {
-				console.log(`🔐 [NEW] Decrypting new message ${message.id}:`, message.encrypted_content.substring(0, 100) + '...');
-				const decryptedContent = await clientEncryption.decryptMessage(
-					message.conversation_id,
-					message.encrypted_content
-				);
+				console.log(`🔐 [NEW] Decrypting new message ${message.id} from sender ${message.sender_id}`);
+				
+				// Get the sender's public key from the database
+				const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
+				
+				let decryptedContent;
+				if (!senderPublicKey) {
+					console.warn(`🔐 [NEW] No public key found for sender ${message.sender_id}, trying self-decryption`);
+					// Fallback to our own key (for self-messages)
+					const myPublicKey = await asymmetricEncryption.getPublicKey();
+					decryptedContent = await asymmetricEncryption.decryptFromSender(
+						message.encrypted_content,
+						myPublicKey
+					);
+				} else {
+					decryptedContent = await asymmetricEncryption.decryptFromSender(
+						message.encrypted_content,
+						senderPublicKey
+					);
+				}
+				
 				message.content = decryptedContent;
 				console.log(`🔐 [NEW] ✅ Decrypted new message ${message.id}: "${decryptedContent}"`);
 			} catch (error) {
@@ -608,9 +661,9 @@ function createWebSocketChatStore() {
 				const newConversation = response.payload;
 				const conversationId = newConversation.id;
 
-				// Generate encryption key for the new conversation
-				console.log(`🔑 Generating encryption key for new conversation: ${conversationId}`);
-				await clientEncryption.getConversationKey(conversationId);
+				// Ensure user encryption is ready for the new conversation
+				console.log(`🔑 Ensuring user encryption is ready for new conversation: ${conversationId}`);
+				await publicKeyService.initializeUserEncryption();
 
 				// Reload conversations to include the new one
 				await loadConversations();
