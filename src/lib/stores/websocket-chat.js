@@ -520,6 +520,8 @@ function createWebSocketChatStore() {
 	 * @param {Object} message - New message
 	 */
 	async function handleNewMessage(message) {
+		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
+		
 		// Decrypt the message content if it's encrypted
 		if (message.encrypted_content) {
 			try {
@@ -534,22 +536,31 @@ function createWebSocketChatStore() {
 				console.error(`🔐 [NEW] ❌ Failed to decrypt received message ${message.id}:`, error);
 				message.content = '[Encrypted message - decryption failed]';
 			}
+		} else if (message.content) {
+			// Message already has content (shouldn't happen with encryption enabled)
+			console.log(`🔐 [NEW] ⚠️ New message ${message.id} has content but no encrypted_content:`, message.content);
 		} else {
-			console.log(`🔐 [NEW] ⚠️ New message ${message.id} has no encrypted_content`);
+			console.log(`🔐 [NEW] ⚠️ New message ${message.id} has no encrypted_content or content`);
 			message.content = '[No content]';
 		}
 
+		// Always update the state with the decrypted message
 		update(state => {
 			// Only add if it's for the active conversation
 			if (state.activeConversation === message.conversation_id) {
 				// Avoid duplicates
 				const exists = state.messages.some(msg => msg.id === message.id);
 				if (!exists) {
+					console.log(`🔐 [NEW] Adding decrypted message to state: "${message.content}"`);
 					return {
 						...state,
 						messages: [...state.messages, message]
 					};
+				} else {
+					console.log(`🔐 [NEW] Message ${message.id} already exists in state, skipping`);
 				}
+			} else {
+				console.log(`🔐 [NEW] Message ${message.id} is for conversation ${message.conversation_id}, but active is ${state.activeConversation}, skipping`);
 			}
 			return state;
 		});
