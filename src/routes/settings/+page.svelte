@@ -5,6 +5,7 @@
 	import { currentTheme, themeUtils, themes } from '$lib/stores/theme.js';
 	import SMSNotificationSettings from '$lib/components/settings/SMSNotificationSettings.svelte';
 	import EncryptionSettings from '$lib/components/settings/EncryptionSettings.svelte';
+	import PrivateKeyManager from '$lib/components/settings/PrivateKeyManager.svelte';
 	
 	const supabase = createSupabaseClient();
 	
@@ -61,6 +62,22 @@
 	 */
 	function handleEncryptionSettingsUpdated(event) {
 		console.log('Encryption settings updated:', event.detail);
+	}
+	
+	/**
+	 * @param {CustomEvent} event
+	 */
+	function handlePrivateKeyExported(event) {
+		console.log('Private keys exported:', event.detail);
+	}
+	
+	/**
+	 * @param {CustomEvent} event
+	 */
+	function handlePrivateKeyImported(event) {
+		console.log('Private keys imported:', event.detail);
+		// Refresh the page or update state as needed
+		window.location.reload();
 	}
 	
 	/**
@@ -130,6 +147,14 @@
 					<EncryptionSettings
 						{user}
 						on:updated={handleEncryptionSettingsUpdated}
+					/>
+				</section>
+				
+				<section class="settings-section">
+					<PrivateKeyManager
+						{user}
+						on:exported={handlePrivateKeyExported}
+						on:imported={handlePrivateKeyImported}
 					/>
 				</section>
 			</div>
