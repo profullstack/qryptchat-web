@@ -312,6 +312,7 @@
 		height: 100vh;
 		background: var(--color-surface);
 		border-right: 1px solid var(--color-border);
+		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;

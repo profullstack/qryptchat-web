@@ -216,16 +216,27 @@
 			
 			<div class="form-group">
 				<label for="confirm-export-password">Confirm Password</label>
-				<input
-					id="confirm-export-password"
-					type={showExportPassword ? 'text' : 'password'}
-					bind:value={confirmExportPassword}
-					placeholder="Confirm your password"
-					disabled={loading}
-				/>
+				<div class="password-input">
+					<input
+						id="confirm-export-password"
+						type={showExportPassword ? 'text' : 'password'}
+						bind:value={confirmExportPassword}
+						placeholder="Confirm your password"
+						disabled={loading}
+					/>
+					<button
+						type="button"
+						class="toggle-password"
+						onclick={() => showExportPassword = !showExportPassword}
+						disabled={loading}
+					>
+						{showExportPassword ? '👁️' : '👁️‍🗨️'}
+					</button>
+				</div>
 			</div>
 			
 			<button
+				type="button"
 				class="btn primary"
 				onclick={exportPrivateKeys}
 				disabled={loading || !exportPassword || !confirmExportPassword}
@@ -319,6 +330,7 @@
 		</div>
 		
 		<button
+			type="button"
 			class="btn secondary"
 			onclick={importPrivateKeys}
 			disabled={loading || !importFile || !importPassword}
