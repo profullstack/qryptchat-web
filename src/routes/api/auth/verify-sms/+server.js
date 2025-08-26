@@ -91,14 +91,11 @@ export async function POST(event) {
 			const token = authHeader.replace('Bearer ', '');
 			
 			try {
-				// Set the session in the Supabase client
-				const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-					access_token: token,
-					refresh_token: '' // We don't have refresh token, but access token should be enough for validation
-				});
+				// Validate the JWT token by getting user info
+				const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 				
-				if (sessionError || !sessionData.user) {
-					logger.error('Invalid or expired session token', { error: sessionError });
+				if (userError || !user) {
+					logger.error('Invalid or expired session token', { error: userError });
 					return json(
 						{ error: 'Session expired. Please verify your phone number again.' },
 						{ status: 401 }
@@ -106,14 +103,14 @@ export async function POST(event) {
 				}
 				
 				logger.info('Session validated successfully', {
-					userId: sessionData.user.id,
-					userPhone: sessionData.user.phone
+					userId: user.id,
+					userPhone: user.phone
 				});
 				
 				// Use the authenticated user data
 				verifyData = {
-					user: sessionData.user,
-					session: sessionData.session
+					user,
+					session: { access_token: token }
 				};
 				verifyError = null;
 				
