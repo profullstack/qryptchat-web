@@ -116,20 +116,29 @@ export class ClientEncryptionService {
 
 			console.log(`🔐 [DECRYPT] Raw encrypted content:`, encryptedContent.substring(0, 200) + '...');
 
-			// Check if the content is hex-encoded (starts with hex characters)
+			// Check if the content is hex-encoded (starts with \x or is pure hex)
 			let jsonContent = encryptedContent;
-			if (/^[0-9a-fA-F]+$/.test(encryptedContent)) {
+			if (encryptedContent.startsWith('\\x') || /^[0-9a-fA-F]+$/.test(encryptedContent)) {
 				console.log(`🔐 [DECRYPT] Content appears to be hex-encoded, decoding...`);
 				try {
+					let hexString = encryptedContent;
+					
+					// Handle \x prefixed hex strings
+					if (encryptedContent.startsWith('\\x')) {
+						// Remove \x prefix and convert to plain hex
+						hexString = encryptedContent.replace(/\\x/g, '');
+						console.log(`🔐 [DECRYPT] Cleaned hex string:`, hexString.substring(0, 100) + '...');
+					}
+					
 					// Convert hex to bytes, then to string
-					const hexMatches = encryptedContent.match(/.{1,2}/g);
+					const hexMatches = hexString.match(/.{1,2}/g);
 					if (!hexMatches) {
 						console.error(`🔐 [DECRYPT] Invalid hex format`);
 						return '[Encrypted message - invalid hex format]';
 					}
 					const bytes = new Uint8Array(hexMatches.map(byte => parseInt(byte, 16)));
 					jsonContent = new TextDecoder().decode(bytes);
-					console.log(`🔐 [DECRYPT] Hex-decoded content:`, jsonContent);
+					console.log(`🔐 [DECRYPT] Hex-decoded content:`, jsonContent.substring(0, 200) + '...');
 				} catch (hexError) {
 					console.error(`🔐 [DECRYPT] Failed to decode hex:`, hexError);
 					return '[Encrypted message - hex decode failed]';
