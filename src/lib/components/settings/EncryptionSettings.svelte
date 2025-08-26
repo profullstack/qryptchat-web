@@ -231,23 +231,23 @@
 	}
 	
 	.status-item.checking {
-		background: #f0f9ff;
-		border-color: #0ea5e9;
+		background: var(--color-bg-secondary);
+		border-color: var(--color-info);
 	}
 	
 	.status-item.enabled {
-		background: #f0fdf4;
-		border-color: #22c55e;
+		background: var(--color-bg-secondary);
+		border-color: var(--color-success);
 	}
 	
 	.status-item.disabled {
-		background: #fffbeb;
-		border-color: #f59e0b;
+		background: var(--color-bg-secondary);
+		border-color: var(--color-warning);
 	}
 	
 	.status-item.error {
-		background: #fef2f2;
-		border-color: #ef4444;
+		background: var(--color-bg-secondary);
+		border-color: var(--color-error);
 	}
 	
 	.status-icon {
@@ -271,8 +271,8 @@
 	.spinner {
 		width: 1.25rem;
 		height: 1.25rem;
-		border: 2px solid #e5e7eb;
-		border-top: 2px solid #0ea5e9;
+		border: 2px solid var(--color-border-primary);
+		border-top: 2px solid var(--color-info);
 		border-radius: 50%;
 		animation: spin 1s linear infinite;
 	}
@@ -289,15 +289,15 @@
 	}
 	
 	.alert.error {
-		background: #fef2f2;
-		color: #dc2626;
-		border: 1px solid #fecaca;
+		background: var(--color-bg-secondary);
+		color: var(--color-error);
+		border: 1px solid var(--color-border-primary);
 	}
 	
 	.alert.success {
-		background: #f0fdf4;
-		color: #16a34a;
-		border: 1px solid #bbf7d0;
+		background: var(--color-bg-secondary);
+		color: var(--color-success);
+		border: 1px solid var(--color-border-primary);
 	}
 	
 	.encryption-actions {

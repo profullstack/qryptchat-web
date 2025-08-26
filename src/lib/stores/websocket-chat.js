@@ -443,8 +443,28 @@ function createWebSocketChatStore() {
 			const response = await sendMessage(MESSAGE_TYPES.SEND_MESSAGE, payload);
 			
 			if (response.type === MESSAGE_TYPES.MESSAGE_SENT) {
-				// Message will be added via broadcast
-				return { success: true, data: response.payload.message };
+				// Decrypt the message before returning it for immediate display
+				const sentMessage = response.payload.message;
+				if (sentMessage.encrypted_content) {
+					try {
+						console.log(`🔐 [SENT] Decrypting sent message ${sentMessage.id} for immediate display`);
+						const decryptedContent = await clientEncryption.decryptMessage(
+							conversationId,
+							sentMessage.encrypted_content
+						);
+						sentMessage.content = decryptedContent;
+						console.log(`🔐 [SENT] ✅ Decrypted sent message ${sentMessage.id}: "${decryptedContent}"`);
+					} catch (error) {
+						console.error(`🔐 [SENT] ❌ Failed to decrypt sent message ${sentMessage.id}:`, error);
+						sentMessage.content = '[Encrypted message - decryption failed]';
+					}
+				} else {
+					console.log(`🔐 [SENT] ⚠️ Sent message ${sentMessage.id} has no encrypted_content`);
+					sentMessage.content = content; // Use original content as fallback
+				}
+				
+				// Message will be added via broadcast, but return decrypted version for immediate display
+				return { success: true, data: sentMessage };
 			}
 		} catch (error) {
 			console.error('Failed to send message:', error);

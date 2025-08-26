@@ -42,8 +42,18 @@
 		}
 	});
 	
+	/**
+	 * @param {CustomEvent} event
+	 */
 	function handleSMSSettingsUpdated(event) {
 		console.log('SMS settings updated:', event.detail);
+	}
+	
+	/**
+	 * @param {CustomEvent} event
+	 */
+	function handleEncryptionSettingsUpdated(event) {
+		console.log('Encryption settings updated:', event.detail);
 	}
 </script>
 
@@ -73,18 +83,17 @@
 		{:else if user}
 			<div class="settings-sections">
 				<section class="settings-section">
-					<SMSNotificationSettings 
+					<SMSNotificationSettings
 						bind:user={user}
 						on:updated={handleSMSSettingsUpdated}
 					/>
 				</section>
 				
-				<!-- Future settings sections can be added here -->
 				<section class="settings-section">
-					<div class="placeholder-section">
-						<h3>More Settings Coming Soon</h3>
-						<p>Additional notification and privacy settings will be available here.</p>
-					</div>
+					<EncryptionSettings
+						{user}
+						on:updated={handleEncryptionSettingsUpdated}
+					/>
 				</section>
 			</div>
 		{/if}
@@ -184,26 +193,6 @@
 		overflow: hidden;
 	}
 	
-	.placeholder-section {
-		padding: 2rem;
-		text-align: center;
-		border: 2px dashed var(--border-color, #e2e8f0);
-		border-radius: 0.5rem;
-		background: var(--bg-secondary, #f8f9fa);
-	}
-	
-	.placeholder-section h3 {
-		margin: 0 0 0.5rem 0;
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: var(--text-primary, #1a202c);
-	}
-	
-	.placeholder-section p {
-		margin: 0;
-		color: var(--text-secondary, #4a5568);
-		font-size: 0.875rem;
-	}
 	
 	@media (max-width: 640px) {
 		.settings-page {
