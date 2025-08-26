@@ -89,14 +89,17 @@ function createWebSocketChatStore() {
 		try {
 			ws = new WebSocket(wsUrl);
 
-			ws.onopen = () => {
+			ws.onopen = async () => {
 				console.log('WebSocket connected');
 				reconnectAttempts = 0;
 				update(state => ({ ...state, connected: true, error: null }));
 
 				// Initialize client encryption and key distribution
-				clientEncryption.initialize();
-				keyDistribution.initialize();
+				console.log('🔐 Initializing client encryption...');
+				await clientEncryption.initialize();
+				console.log('🔐 Initializing key distribution...');
+				await keyDistribution.initialize();
+				console.log('🔐 Client-side encryption services initialized');
 
 				// Authenticate immediately after connection
 				if (token) {
@@ -369,21 +372,26 @@ function createWebSocketChatStore() {
 			
 			if (response.type === MESSAGE_TYPES.MESSAGES_LOADED) {
 				// Decrypt all loaded messages
-				const messages = response.payload.messages;
-				if (messages && messages.length > 0) {
-					for (const message of messages) {
-						if (message.encrypted_content) {
-							try {
-								const decryptedContent = await clientEncryption.decryptMessage(
-									conversationId,
-									message.encrypted_content
-								);
-								message.content = decryptedContent;
-							} catch (error) {
-								console.error('Failed to decrypt loaded message:', error);
-								message.content = '[Encrypted message - decryption failed]';
-							}
+				const messages = response.payload.messages || [];
+				console.log(`🔐 [LOAD] Processing ${messages.length} messages for decryption`);
+				
+				for (const message of messages) {
+					if (message.encrypted_content) {
+						try {
+							console.log(`🔐 [LOAD] Decrypting message ${message.id}:`, message.encrypted_content.substring(0, 100) + '...');
+							const decryptedContent = await clientEncryption.decryptMessage(
+								conversationId,
+								message.encrypted_content
+							);
+							message.content = decryptedContent;
+							console.log(`🔐 [LOAD] ✅ Decrypted message ${message.id}: "${decryptedContent}"`);
+						} catch (error) {
+							console.error(`🔐 [LOAD] ❌ Failed to decrypt message ${message.id}:`, error);
+							message.content = '[Encrypted message - decryption failed]';
 						}
+					} else {
+						console.log(`🔐 [LOAD] ⚠️ Message ${message.id} has no encrypted_content`);
+						message.content = '[No content]';
 					}
 				}
 
@@ -491,15 +499,20 @@ function createWebSocketChatStore() {
 		// Decrypt the message content if it's encrypted
 		if (message.encrypted_content) {
 			try {
+				console.log(`🔐 [NEW] Decrypting new message ${message.id}:`, message.encrypted_content.substring(0, 100) + '...');
 				const decryptedContent = await clientEncryption.decryptMessage(
 					message.conversation_id,
 					message.encrypted_content
 				);
 				message.content = decryptedContent;
+				console.log(`🔐 [NEW] ✅ Decrypted new message ${message.id}: "${decryptedContent}"`);
 			} catch (error) {
-				console.error('Failed to decrypt received message:', error);
+				console.error(`🔐 [NEW] ❌ Failed to decrypt received message ${message.id}:`, error);
 				message.content = '[Encrypted message - decryption failed]';
 			}
+		} else {
+			console.log(`🔐 [NEW] ⚠️ New message ${message.id} has no encrypted_content`);
+			message.content = '[No content]';
 		}
 
 		update(state => {
