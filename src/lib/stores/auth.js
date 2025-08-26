@@ -64,10 +64,21 @@ function createAuthStore() {
 							// Session is still valid, restore user
 							update(state => ({ ...state, user, loading: false }));
 							return;
+						} else if (session.refresh_token) {
+							// Token is expired but we have a refresh token, try to refresh
+							console.log('Access token expired, attempting to refresh...');
+							const refreshResult = await this.refreshSession(session.refresh_token);
+							if (refreshResult.success) {
+								// Successfully refreshed, restore user with new session
+								update(state => ({ ...state, user, loading: false }));
+								return;
+							}
+							// Refresh failed, fall through to clear session
 						}
 					}
 					
 					// Session is expired or invalid, clear stored data
+					console.log('Session expired and cannot be refreshed, clearing stored data');
 					localStorage.removeItem('qrypt_user');
 					localStorage.removeItem('qrypt_session');
 				}
@@ -79,6 +90,76 @@ function createAuthStore() {
 				localStorage.removeItem('qrypt_user');
 				localStorage.removeItem('qrypt_session');
 				update(state => ({ ...state, loading: false }));
+			}
+		},
+
+		/**
+		 * Refresh the session using refresh token
+		 * @param {string} refreshToken
+		 * @returns {Promise<{success: boolean, session?: any, error?: string}>}
+		 */
+		async refreshSession(refreshToken) {
+			try {
+				const supabase = createSupabaseClient();
+				const { data, error } = await supabase.auth.refreshSession({
+					refresh_token: refreshToken
+				});
+
+				if (error || !data.session) {
+					console.error('Failed to refresh session:', error);
+					return { success: false, error: error?.message || 'Failed to refresh session' };
+				}
+
+				// Store the new session
+				if (browser) {
+					localStorage.setItem('qrypt_session', JSON.stringify(data.session));
+				}
+
+				console.log('Session refreshed successfully');
+				return { success: true, session: data.session };
+			} catch (error) {
+				console.error('Session refresh error:', error);
+				return { success: false, error: 'Failed to refresh session' };
+			}
+		},
+
+		/**
+		 * Get current valid session, refreshing if necessary
+		 * @returns {Promise<{session?: any, error?: string}>}
+		 */
+		async getCurrentSession() {
+			if (!browser) return { error: 'Not in browser environment' };
+
+			try {
+				const storedSession = localStorage.getItem('qrypt_session');
+				if (!storedSession) {
+					return { error: 'No session found' };
+				}
+
+				const session = JSON.parse(storedSession);
+				
+				// Check if session is still valid
+				if (session.access_token && session.expires_at) {
+					const expiresAt = new Date(session.expires_at * 1000);
+					const now = new Date();
+					
+					if (expiresAt > now) {
+						// Session is still valid
+						return { session };
+					} else if (session.refresh_token) {
+						// Token is expired, try to refresh
+						const refreshResult = await this.refreshSession(session.refresh_token);
+						if (refreshResult.success) {
+							return { session: refreshResult.session };
+						}
+						return { error: 'Session expired and refresh failed' };
+					}
+				}
+				
+				return { error: 'Session expired' };
+			} catch (error) {
+				console.error('Failed to get current session:', error);
+				return { error: 'Failed to get session' };
 			}
 		},
 
@@ -98,12 +179,9 @@ function createAuthStore() {
 				};
 
 				// Add Authorization header if we have a session
-				const storedSession = browser ? localStorage.getItem('qrypt_session') : null;
-				if (storedSession) {
-					const session = JSON.parse(storedSession);
-					if (session.access_token) {
-						headers['Authorization'] = `Bearer ${session.access_token}`;
-					}
+				const sessionResult = await this.getCurrentSession();
+				if (sessionResult.session && sessionResult.session.access_token) {
+					headers['Authorization'] = `Bearer ${sessionResult.session.access_token}`;
 				}
 
 				const response = await fetch('/api/auth/send-sms', {
@@ -152,13 +230,13 @@ function createAuthStore() {
 				};
 
 				// Add Authorization header if we have a session (for profile completion)
-				const storedSession = browser ? localStorage.getItem('qrypt_session') : null;
-				if (storedSession) {
-					const session = JSON.parse(storedSession);
-					if (session.access_token) {
-						headers['Authorization'] = `Bearer ${session.access_token}`;
-					}
+				const sessionResult = await this.getCurrentSession();
+				if (sessionResult.session && sessionResult.session.access_token) {
+					headers['Authorization'] = `Bearer ${sessionResult.session.access_token}`;
 				}
+				
+				// Check if we should use session-based request
+				const useSession = !!sessionResult.session;
 
 				const response = await fetch('/api/auth/verify-sms', {
 					method: 'POST',
@@ -168,7 +246,7 @@ function createAuthStore() {
 						verificationCode,
 						username,
 						displayName,
-						useSession: !!storedSession // Flag to indicate session-based request
+						useSession // Flag to indicate session-based request
 					})
 				});
 
