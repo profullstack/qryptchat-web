@@ -12,6 +12,7 @@ import {
 	serializeMessage
 } from '$lib/websocket/utils/protocol.js';
 import { clientEncryption } from '$lib/crypto/client-encryption.js';
+import { keyDistribution } from '$lib/crypto/key-distribution.js';
 
 /**
  * @typedef {Object} WebSocketChatState
@@ -93,8 +94,9 @@ function createWebSocketChatStore() {
 				reconnectAttempts = 0;
 				update(state => ({ ...state, connected: true, error: null }));
 
-				// Initialize client encryption
+				// Initialize client encryption and key distribution
 				clientEncryption.initialize();
+				keyDistribution.initialize();
 
 				// Authenticate immediately after connection
 				if (token) {
@@ -237,6 +239,18 @@ function createWebSocketChatStore() {
 				case MESSAGE_TYPES.USER_ONLINE:
 				case MESSAGE_TYPES.USER_OFFLINE:
 					handlePresenceUpdate(message.payload);
+					break;
+
+				case MESSAGE_TYPES.KEY_SHARE:
+					handleKeyShareMessage(message.payload);
+					break;
+
+				case MESSAGE_TYPES.KEY_REQUEST:
+					handleKeyRequestMessage(message.payload);
+					break;
+
+				case MESSAGE_TYPES.KEY_RESPONSE:
+					handleKeyResponseMessage(message.payload);
 					break;
 
 				default:
@@ -539,6 +553,42 @@ function createWebSocketChatStore() {
 	}
 
 	/**
+	 * Handle key share message
+	 * @param {Object} keyShareData - Key share data
+	 */
+	async function handleKeyShareMessage(keyShareData) {
+		try {
+			await keyDistribution.handleKeyShareMessage(keyShareData);
+		} catch (error) {
+			console.error('Failed to handle key share message:', error);
+		}
+	}
+
+	/**
+	 * Handle key request message
+	 * @param {Object} keyRequestData - Key request data
+	 */
+	async function handleKeyRequestMessage(keyRequestData) {
+		try {
+			await keyDistribution.handleKeyRequestMessage(keyRequestData, { sendMessage });
+		} catch (error) {
+			console.error('Failed to handle key request message:', error);
+		}
+	}
+
+	/**
+	 * Handle key response message
+	 * @param {Object} keyResponseData - Key response data
+	 */
+	async function handleKeyResponseMessage(keyResponseData) {
+		try {
+			await keyDistribution.handleKeyResponseMessage(keyResponseData);
+		} catch (error) {
+			console.error('Failed to handle key response message:', error);
+		}
+	}
+
+	/**
 	 * Create a new conversation
 	 * @param {Object} conversationData - Conversation data
 	 */
@@ -547,9 +597,22 @@ function createWebSocketChatStore() {
 			const response = await sendMessage(MESSAGE_TYPES.CREATE_CONVERSATION, conversationData);
 			
 			if (response.type === MESSAGE_TYPES.CONVERSATION_CREATED) {
+				const newConversation = response.payload;
+				const conversationId = newConversation.id;
+
+				// Initialize encryption key for the new conversation
+				if (conversationData.participantIds && conversationData.participantIds.length > 0) {
+					console.log(`🔑 Initializing encryption for new conversation: ${conversationId}`);
+					await keyDistribution.initializeConversationKey(
+						conversationId,
+						conversationData.participantIds,
+						{ sendMessage } // Pass WebSocket methods
+					);
+				}
+
 				// Reload conversations to include the new one
 				await loadConversations();
-				return { success: true, data: response.payload };
+				return { success: true, data: newConversation };
 			}
 		} catch (error) {
 			console.error('Failed to create conversation:', error);

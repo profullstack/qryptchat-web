@@ -45,54 +45,18 @@ export async function POST(event) {
 			ip: event.getClientAddress()
 		});
 
-		// Check if this is a session-based request (profile completion)
+		// Validate input based on request type
 		if (useSession && authHeader) {
-			logger.info('Processing session-based profile completion');
-			
-			// Validate input for session-based request
-			if (!phoneNumber || !username) {
-				logger.error('Missing required fields for session-based request', { phoneNumber: !!phoneNumber, username: !!username });
+			// Session-based request - only phone number required initially
+			if (!phoneNumber) {
+				logger.error('Missing phone number for session-based request', { phoneNumber: !!phoneNumber });
 				return json(
-					{ error: 'Phone number and username are required' },
+					{ error: 'Phone number is required' },
 					{ status: 400 }
-				);
-			}
-			
-			// Create Supabase client and set the session from JWT
-			const supabase = createSupabaseServerClient(event);
-			const token = authHeader.replace('Bearer ', '');
-			
-			try {
-				// Verify the JWT token and get user info
-				const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-				
-				if (userError || !user) {
-					logger.error('Invalid or expired session token', { error: userError });
-					return json(
-						{ error: 'Session expired. Please verify your phone number again.' },
-						{ status: 401 }
-					);
-				}
-				
-				logger.info('Session validated successfully', { userId: user.id, userPhone: user.phone });
-				
-				// Proceed with account creation using the authenticated user
-				const verifyData = { user, session: { access_token: token } };
-				const verifyError = null;
-				
-				// Continue with the existing account creation logic...
-				// (The rest of the function will handle this)
-				
-			} catch (sessionError) {
-				logger.error('Session validation failed', { error: sessionError });
-				return json(
-					{ error: 'Invalid session. Please verify your phone number again.' },
-					{ status: 401 }
 				);
 			}
 		} else {
 			// Original OTP verification flow
-			// Validate input
 			if (!phoneNumber || !verificationCode) {
 				logger.error('Missing required fields', { phoneNumber: !!phoneNumber, verificationCode: !!verificationCode });
 				return json(

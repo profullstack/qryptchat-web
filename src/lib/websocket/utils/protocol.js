@@ -52,7 +52,12 @@ export const MESSAGE_TYPES = {
 	// Error handling
 	ERROR: 'error',
 	PING: 'ping',
-	PONG: 'pong'
+	PONG: 'pong',
+
+	// Key distribution messages
+	KEY_SHARE: 'key_share',
+	KEY_REQUEST: 'key_request',
+	KEY_RESPONSE: 'key_response'
 };
 
 /**
