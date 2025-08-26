@@ -14,6 +14,8 @@
 	let hasEncryptionKeys = $state(false);
 	let userPublicKey = $state('');
 	let publicKeyCopied = $state(false);
+	let syncingPublicKey = $state(false);
+	let publicKeyInDatabase = $state(false);
 	
 	// Check if user has encryption keys on component mount
 	$effect(() => {

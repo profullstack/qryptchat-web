@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { wsChat, activeConversation } from '$lib/stores/websocket-chat.js';
 	import { user } from '$lib/stores/auth.js';
+	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 	let { conversationId = null, disabled = false } = $props();
 
@@ -9,6 +10,8 @@
 	let textareaElement = $state(/** @type {HTMLTextAreaElement | null} */ (null));
 	let isSending = $state(false);
 	let typingTimeout = $state(/** @type {NodeJS.Timeout | null} */ (null));
+	let encryptionError = $state('');
+	let showEncryptionError = $state(false);
 
 	const currentUser = $derived($user);
 
