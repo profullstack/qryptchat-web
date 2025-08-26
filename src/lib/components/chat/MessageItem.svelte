@@ -1,8 +1,5 @@
 <script>
 	import { user } from '$lib/stores/auth.js';
-	import { clientEncryption } from '$lib/crypto/client-encryption.js';
-	import { t } from '$lib/stores/i18n.js';
-	import { onMount } from 'svelte';
 
 	let {
 		message,
@@ -12,46 +9,9 @@
 	} = $props();
 
 	const currentUser = $derived($user);
-	let decryptedContent = $state('');
-	let isDecrypting = $state(false);
-	let decryptionFailed = $state(false);
-
-	// Decrypt message content on mount if needed
-	onMount(async () => {
-		if (message.content) {
-			// Message already has decrypted content
-			decryptedContent = message.content;
-		} else if (message.encrypted_content) {
-			// Need to decrypt the message
-			isDecrypting = true;
-			try {
-				console.log(`🔐 [UI] Decrypting message ${message.id} in MessageItem component`);
-				const decrypted = await clientEncryption.decryptMessage(
-					message.conversation_id,
-					message.encrypted_content
-				);
-				decryptedContent = decrypted;
-				console.log(`🔐 [UI] ✅ Successfully decrypted message ${message.id}: "${decrypted}"`);
-			} catch (error) {
-				console.error(`🔐 [UI] ❌ Failed to decrypt message ${message.id}:`, error);
-				decryptedContent = '[Encrypted message - decryption failed]';
-				decryptionFailed = true;
-			} finally {
-				isDecrypting = false;
-			}
-		} else {
-			decryptedContent = '[Message content unavailable]';
-		}
-	});
-
-	// Watch for changes to message content (in case it gets decrypted elsewhere)
-	$effect(() => {
-		if (message.content && message.content !== decryptedContent) {
-			decryptedContent = message.content;
-			isDecrypting = false;
-			decryptionFailed = false;
-		}
-	});
+	
+	// Use the already-decrypted content from WebSocket store
+	const decryptedContent = $derived(message.content || '');
 
 	function formatTime(/** @type {string} */ timestamp) {
 		const date = new Date(timestamp);
@@ -98,16 +58,7 @@
 
 		<div class="message-bubble" class:own-bubble={isOwn}>
 			<div class="message-text">
-				{#if isDecrypting}
-					<span class="decrypting-indicator">
-						<span class="spinner"></span>
-						Decrypting...
-					</span>
-				{:else if decryptedContent}
-					{decryptedContent}
-				{:else}
-					[Message content unavailable]
-				{/if}
+				{decryptedContent}
 			</div>
 			
 			{#if isOwn && showTimestamp}
