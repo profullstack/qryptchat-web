@@ -37,6 +37,7 @@
 		"mocha": "^11.7.1",
 		"msw": "^2.10.5",
 		"prettier": "^3.6.2",
+		"sinon": "^21.0.0",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
 		"typescript": "^5.0.0",
