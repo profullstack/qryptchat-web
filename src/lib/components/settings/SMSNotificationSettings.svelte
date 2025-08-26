@@ -1,6 +1,7 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
 	import { createSupabaseClient } from '$lib/supabase.js';
+	import { currentTheme } from '$lib/stores/theme.js';
 	
 	const dispatch = createEventDispatcher();
 	const supabase = createSupabaseClient();
@@ -49,7 +50,8 @@
 			
 		} catch (err) {
 			console.error('Failed to update SMS preference:', err);
-			error = err.message || 'Failed to update SMS notification preference';
+			const errorMessage = err instanceof Error ? err.message : 'Failed to update SMS notification preference';
+			error = errorMessage;
 		} finally {
 			loading = false;
 		}
@@ -108,21 +110,21 @@
 <style>
 	.sms-settings {
 		padding: 1.5rem;
-		border: 1px solid var(--border-color, #e2e8f0);
+		border: 1px solid var(--border-primary, #e2e8f0);
 		border-radius: 0.5rem;
-		background: var(--bg-color, #ffffff);
+		background: var(--bg-primary, #ffffff);
 	}
 	
 	h3 {
 		margin: 0 0 0.5rem 0;
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: var(--text-primary, #1a202c);
+		color: var(--text-primary, #0f172a);
 	}
 	
 	.description {
 		margin: 0 0 1.5rem 0;
-		color: var(--text-secondary, #4a5568);
+		color: var(--text-secondary, #475569);
 		font-size: 0.875rem;
 		line-height: 1.4;
 	}
@@ -146,7 +148,7 @@
 		position: relative;
 		width: 3rem;
 		height: 1.5rem;
-		background: var(--toggle-bg-off, #cbd5e0);
+		background: var(--bg-accent, #e2e8f0);
 		border-radius: 0.75rem;
 		transition: background-color 0.2s ease;
 		margin-right: 0.75rem;
@@ -159,14 +161,14 @@
 		left: 0.125rem;
 		width: 1.25rem;
 		height: 1.25rem;
-		background: white;
+		background: var(--bg-primary, #ffffff);
 		border-radius: 50%;
 		transition: transform 0.2s ease;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 	}
 	
 	.toggle-input:checked + .toggle-slider {
-		background: var(--toggle-bg-on, #48bb78);
+		background: var(--success, #10b981);
 	}
 	
 	.toggle-input:checked + .toggle-slider::before {
@@ -180,7 +182,7 @@
 	
 	.toggle-text {
 		font-size: 0.875rem;
-		color: var(--text-primary, #1a202c);
+		color: var(--text-primary, #0f172a);
 		font-weight: 500;
 	}
 	
@@ -195,21 +197,21 @@
 	}
 	
 	.status.loading {
-		background: var(--bg-info, #ebf8ff);
-		color: var(--text-info, #2b6cb0);
-		border: 1px solid var(--border-info, #bee3f8);
+		background: color-mix(in srgb, var(--info, #3b82f6) 10%, var(--bg-primary, #ffffff));
+		color: var(--info, #3b82f6);
+		border: 1px solid color-mix(in srgb, var(--info, #3b82f6) 30%, var(--bg-primary, #ffffff));
 	}
 	
 	.status.error {
-		background: var(--bg-error, #fed7d7);
-		color: var(--text-error, #c53030);
-		border: 1px solid var(--border-error, #feb2b2);
+		background: color-mix(in srgb, var(--error, #ef4444) 10%, var(--bg-primary, #ffffff));
+		color: var(--error, #ef4444);
+		border: 1px solid color-mix(in srgb, var(--error, #ef4444) 30%, var(--bg-primary, #ffffff));
 	}
 	
 	.status.success {
-		background: var(--bg-success, #f0fff4);
-		color: var(--text-success, #276749);
-		border: 1px solid var(--border-success, #9ae6b4);
+		background: color-mix(in srgb, var(--success, #10b981) 10%, var(--bg-primary, #ffffff));
+		color: var(--success, #10b981);
+		border: 1px solid color-mix(in srgb, var(--success, #10b981) 30%, var(--bg-primary, #ffffff));
 	}
 	
 	.spinner {
@@ -230,19 +232,19 @@
 	.info {
 		margin-top: 1rem;
 		padding: 1rem;
-		background: var(--bg-info-light, #f7fafc);
+		background: var(--bg-secondary, #f8fafc);
 		border-radius: 0.375rem;
-		border-left: 4px solid var(--border-info, #3182ce);
+		border-left: 4px solid var(--info, #3b82f6);
 	}
 	
 	.info-text {
 		margin: 0;
 		font-size: 0.8125rem;
-		color: var(--text-secondary, #4a5568);
+		color: var(--text-secondary, #475569);
 		line-height: 1.4;
 	}
 	
 	.info-text strong {
-		color: var(--text-primary, #1a202c);
+		color: var(--text-primary, #0f172a);
 	}
 </style>
