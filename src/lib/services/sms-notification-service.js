@@ -234,7 +234,11 @@ export class SupabaseAuthSMSProvider {
     // This could be enhanced to use Twilio directly or another SMS service
     
     // Use absolute URL to avoid SvelteKit fetch issues in server context
-    const baseUrl = process.env.PUBLIC_SUPABASE_URL?.replace('/rest/v1', '') || 'http://localhost:5173';
+    // For development, use localhost:5173, for production use the actual domain
+    const baseUrl = process.env.NODE_ENV === 'production'
+      ? (process.env.SITE_URL
+        || 'https://qrypt.chat')
+      : 'http://localhost:8080';
     const smsUrl = `${baseUrl}/api/sms/send-notification`;
     
     const response = await fetch(smsUrl, {
