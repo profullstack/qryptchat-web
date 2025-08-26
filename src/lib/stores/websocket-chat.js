@@ -11,7 +11,7 @@ import {
 	parseMessage,
 	serializeMessage
 } from '$lib/websocket/utils/protocol.js';
-import { asymmetricEncryption } from '$lib/crypto/asymmetric-encryption.js';
+import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 /**
@@ -94,14 +94,14 @@ function createWebSocketChatStore() {
 				reconnectAttempts = 0;
 				update(state => ({ ...state, connected: true, error: null }));
 
-				// Initialize asymmetric encryption and public key service
-				console.log('🔐 Initializing asymmetric encryption...');
-				await asymmetricEncryption.initialize();
+				// Initialize post-quantum encryption and public key service
+				console.log('🔐 Initializing post-quantum encryption...');
+				await postQuantumEncryption.initialize();
 				await publicKeyService.initialize();
 				
 				// Initialize user encryption (generates keys and uploads public key)
 				await publicKeyService.initializeUserEncryption();
-				console.log('🔐 Asymmetric encryption and public key service initialized');
+				console.log('🔐 Post-quantum encryption and public key service initialized');
 
 				// Authenticate immediately after connection
 				if (token) {
@@ -373,9 +373,9 @@ function createWebSocketChatStore() {
 			});
 			
 			if (response.type === MESSAGE_TYPES.MESSAGES_LOADED) {
-				// Decrypt all loaded messages using asymmetric encryption
+				// Decrypt all loaded messages using post-quantum encryption
 				const messages = response.payload.messages || [];
-				console.log(`🔐 [LOAD] Processing ${messages.length} messages for asymmetric decryption`);
+				console.log(`🔐 [LOAD] Processing ${messages.length} messages for post-quantum decryption`);
 				
 				for (const message of messages) {
 					if (message.encrypted_content) {
@@ -389,13 +389,13 @@ function createWebSocketChatStore() {
 							if (!senderPublicKey) {
 								console.warn(`🔐 [LOAD] No public key found for sender ${message.sender_id}, trying self-decryption`);
 								// Fallback to our own key (for self-messages)
-								const myPublicKey = await asymmetricEncryption.getPublicKey();
-								decryptedContent = await asymmetricEncryption.decryptFromSender(
+								const myPublicKey = await postQuantumEncryption.getPublicKey();
+								decryptedContent = await postQuantumEncryption.decryptFromSender(
 									message.encrypted_content,
 									myPublicKey
 								);
 							} else {
-								decryptedContent = await asymmetricEncryption.decryptFromSender(
+								decryptedContent = await postQuantumEncryption.decryptFromSender(
 									message.encrypted_content,
 									senderPublicKey
 								);
@@ -449,14 +449,14 @@ function createWebSocketChatStore() {
 			if (participantKeys.size === 0) {
 				console.warn(`🔐 [SEND] No participant keys found for conversation ${conversationId}, using self-encryption`);
 				// Fallback to self-encryption
-				const myPublicKey = await asymmetricEncryption.getPublicKey();
-				encryptedContent = await asymmetricEncryption.encryptForRecipient(content, myPublicKey);
+				const myPublicKey = await postQuantumEncryption.getPublicKey();
+				encryptedContent = await postQuantumEncryption.encryptForRecipient(content, myPublicKey);
 			} else {
 				console.log(`🔐 [SEND] Found ${participantKeys.size} participant keys`);
 				// For now, encrypt for the first participant (simplified approach)
 				// TODO: Implement proper multi-recipient encryption
 				const firstParticipantKey = participantKeys.values().next().value;
-				encryptedContent = await asymmetricEncryption.encryptForRecipient(content, firstParticipantKey);
+				encryptedContent = await postQuantumEncryption.encryptForRecipient(content, firstParticipantKey);
 			}
 			
 			const payload = {
@@ -478,8 +478,8 @@ function createWebSocketChatStore() {
 					try {
 						console.log(`🔐 [SENT] Decrypting sent message ${sentMessage.id} for immediate display`);
 						// Use our own public key to decrypt our sent message
-						const myPublicKey = await asymmetricEncryption.getPublicKey();
-						const decryptedContent = await asymmetricEncryption.decryptFromSender(
+						const myPublicKey = await postQuantumEncryption.getPublicKey();
+						const decryptedContent = await postQuantumEncryption.decryptFromSender(
 							sentMessage.encrypted_content,
 							myPublicKey
 						);
@@ -565,13 +565,13 @@ function createWebSocketChatStore() {
 				if (!senderPublicKey) {
 					console.warn(`🔐 [NEW] No public key found for sender ${message.sender_id}, trying self-decryption`);
 					// Fallback to our own key (for self-messages)
-					const myPublicKey = await asymmetricEncryption.getPublicKey();
-					decryptedContent = await asymmetricEncryption.decryptFromSender(
+					const myPublicKey = await postQuantumEncryption.getPublicKey();
+					decryptedContent = await postQuantumEncryption.decryptFromSender(
 						message.encrypted_content,
 						myPublicKey
 					);
 				} else {
-					decryptedContent = await asymmetricEncryption.decryptFromSender(
+					decryptedContent = await postQuantumEncryption.decryptFromSender(
 						message.encrypted_content,
 						senderPublicKey
 					);

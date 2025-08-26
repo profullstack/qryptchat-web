@@ -4,7 +4,7 @@
  */
 
 import { supabase } from '$lib/supabase.js';
-import { asymmetricEncryption } from './asymmetric-encryption.js';
+import { postQuantumEncryption } from './post-quantum-encryption.js';
 
 /**
  * Public key management service
@@ -36,7 +36,7 @@ export class PublicKeyService {
 			}
 
 			// Get our public key
-			const publicKey = await asymmetricEncryption.getPublicKey();
+			const publicKey = await postQuantumEncryption.getPublicKey();
 			if (!publicKey) {
 				throw new Error('No public key available');
 			}
@@ -45,7 +45,7 @@ export class PublicKeyService {
 			const { data, error } = await supabase.rpc('upsert_user_public_key', {
 				target_user_id: user.id,
 				public_key_param: publicKey,
-				key_type_param: 'ECDH-P256'
+				key_type_param: 'ML-KEM-768'
 			});
 
 			if (error) {
@@ -76,7 +76,7 @@ export class PublicKeyService {
 			// Fetch from database
 			const { data, error } = await supabase.rpc('get_user_public_key', {
 				target_user_id: userId,
-				key_type_param: 'ECDH-P256'
+				key_type_param: 'ML-KEM-768'
 			});
 
 			if (error) {
@@ -184,12 +184,12 @@ export class PublicKeyService {
 	}
 
 	/**
-	 * Get current user's public key from our local asymmetric encryption
+	 * Get current user's public key from our local post-quantum encryption
 	 * @returns {Promise<string|null>} Public key or null
 	 */
 	async getMyPublicKey() {
 		try {
-			return await asymmetricEncryption.getPublicKey();
+			return await postQuantumEncryption.getPublicKey();
 		} catch (error) {
 			console.error('🔑 ❌ Failed to get my public key:', error);
 			return null;
@@ -203,27 +203,27 @@ export class PublicKeyService {
 	 */
 	async initializeUserEncryption() {
 		try {
-			console.log('🔑 Initializing user encryption...');
+			console.log('🔑 Initializing user post-quantum encryption...');
 
-			// Initialize asymmetric encryption (generates keys if needed)
-			await asymmetricEncryption.initialize();
+			// Initialize post-quantum encryption (generates keys if needed)
+			await postQuantumEncryption.initialize();
 
 			// Ensure we have user keys
-			await asymmetricEncryption.getUserKeys();
+			await postQuantumEncryption.getUserKeys();
 
 			// Upload public key to database
 			const uploaded = await this.uploadMyPublicKey();
 
 			if (uploaded) {
-				console.log('🔑 ✅ User encryption initialized successfully');
+				console.log('🔑 ✅ User post-quantum encryption initialized successfully');
 				return true;
 			} else {
-				console.log('🔑 ⚠️ User encryption initialized but public key upload failed');
+				console.log('🔑 ⚠️ User post-quantum encryption initialized but public key upload failed');
 				return false;
 			}
 
 		} catch (error) {
-			console.error('🔑 ❌ Failed to initialize user encryption:', error);
+			console.error('🔑 ❌ Failed to initialize user post-quantum encryption:', error);
 			return false;
 		}
 	}
