@@ -382,24 +382,11 @@ function createWebSocketChatStore() {
 						try {
 							console.log(`🔐 [LOAD] Decrypting message ${message.id} from sender ${message.sender_id}`);
 							
-							// Get the sender's public key from the database
-							const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
-							
-							let decryptedContent;
-							if (!senderPublicKey) {
-								console.warn(`🔐 [LOAD] No public key found for sender ${message.sender_id}, trying self-decryption`);
-								// Fallback to our own key (for self-messages)
-								const myPublicKey = await postQuantumEncryption.getPublicKey();
-								decryptedContent = await postQuantumEncryption.decryptFromSender(
-									message.encrypted_content,
-									myPublicKey
-								);
-							} else {
-								decryptedContent = await postQuantumEncryption.decryptFromSender(
-									message.encrypted_content,
-									senderPublicKey
-								);
-							}
+							// Decrypt using our own private key (the senderPublicKey parameter is not actually used in KEM)
+							const decryptedContent = await postQuantumEncryption.decryptFromSender(
+								message.encrypted_content,
+								'' // senderPublicKey not needed for KEM-based decryption, but required by API
+							);
 							
 							message.content = decryptedContent;
 							console.log(`🔐 [LOAD] ✅ Decrypted message ${message.id}: "${decryptedContent}"`);
@@ -477,11 +464,10 @@ function createWebSocketChatStore() {
 				if (sentMessage.encrypted_content) {
 					try {
 						console.log(`🔐 [SENT] Decrypting sent message ${sentMessage.id} for immediate display`);
-						// Use our own public key to decrypt our sent message
-						const myPublicKey = await postQuantumEncryption.getPublicKey();
+						// Decrypt using our own private key (the senderPublicKey parameter is not actually used in KEM)
 						const decryptedContent = await postQuantumEncryption.decryptFromSender(
 							sentMessage.encrypted_content,
-							myPublicKey
+							'' // senderPublicKey not needed for KEM-based decryption, but required by API
 						);
 						sentMessage.content = decryptedContent;
 						console.log(`🔐 [SENT] ✅ Decrypted sent message ${sentMessage.id}: "${decryptedContent}"`);
@@ -553,29 +539,16 @@ function createWebSocketChatStore() {
 	async function handleNewMessage(message) {
 		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
 		
-		// Decrypt the message content using asymmetric encryption
+		// Decrypt the message content using post-quantum encryption
 		if (message.encrypted_content) {
 			try {
 				console.log(`🔐 [NEW] Decrypting new message ${message.id} from sender ${message.sender_id}`);
 				
-				// Get the sender's public key from the database
-				const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
-				
-				let decryptedContent;
-				if (!senderPublicKey) {
-					console.warn(`🔐 [NEW] No public key found for sender ${message.sender_id}, trying self-decryption`);
-					// Fallback to our own key (for self-messages)
-					const myPublicKey = await postQuantumEncryption.getPublicKey();
-					decryptedContent = await postQuantumEncryption.decryptFromSender(
-						message.encrypted_content,
-						myPublicKey
-					);
-				} else {
-					decryptedContent = await postQuantumEncryption.decryptFromSender(
-						message.encrypted_content,
-						senderPublicKey
-					);
-				}
+				// Decrypt using our own private key (the senderPublicKey parameter is not actually used in KEM)
+				const decryptedContent = await postQuantumEncryption.decryptFromSender(
+					message.encrypted_content,
+					'' // senderPublicKey not needed for KEM-based decryption, but required by API
+				);
 				
 				message.content = decryptedContent;
 				console.log(`🔐 [NEW] ✅ Decrypted new message ${message.id}: "${decryptedContent}"`);
