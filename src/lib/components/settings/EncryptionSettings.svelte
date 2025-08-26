@@ -38,6 +38,16 @@
 			// Store the public key for display
 			if (hasEncryptionKeys && userKeys.publicKey) {
 				userPublicKey = userKeys.publicKey;
+				
+				// Check if public key is in database
+				if (user?.id) {
+					const dbPublicKey = await publicKeyService.getUserPublicKey(user.id);
+					publicKeyInDatabase = !!dbPublicKey;
+					
+					if (!publicKeyInDatabase) {
+						console.log('🔑 ⚠️ Public key exists locally but not in database - sync needed');
+					}
+				}
 			}
 			
 		} catch (err) {
