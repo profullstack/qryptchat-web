@@ -16,6 +16,10 @@
 	let exportPassword = $state('');
 	let confirmExportPassword = $state('');
 	let showExportPassword = $state(false);
+	let useGPGEncryption = $state(false);
+	let gpgPassword = $state('');
+	let confirmGPGPassword = $state('');
+	let showGPGPassword = $state(false);
 	
 	// Import state
 	let importPassword = $state('');
@@ -56,24 +60,50 @@
 			error = 'Password must be at least 8 characters long';
 			return;
 		}
+
+		// Validate GPG password if GPG encryption is enabled
+		if (useGPGEncryption) {
+			if (!gpgPassword || gpgPassword.trim().length === 0) {
+				error = 'Please enter a GPG password for additional encryption';
+				return;
+			}
+			
+			if (gpgPassword !== confirmGPGPassword) {
+				error = 'GPG passwords do not match';
+				return;
+			}
+			
+			if (gpgPassword.length < 8) {
+				error = 'GPG password must be at least 8 characters long';
+				return;
+			}
+		}
 		
 		try {
 			loading = true;
 			error = '';
 			success = '';
 			
-			const exportedData = await privateKeyManager.exportPrivateKeys(exportPassword);
-			
-			// Trigger download
-			privateKeyManager.downloadExportedKeys(exportedData);
-			
-			success = 'Private keys exported successfully! Keep your password safe - you\'ll need it to import your keys.';
+			let exportedData;
+			if (useGPGEncryption) {
+				// Export with GPG encryption
+				exportedData = await privateKeyManager.exportPrivateKeysWithGPG(exportPassword, gpgPassword);
+				privateKeyManager.downloadGPGEncryptedKeys(exportedData);
+				success = 'Private keys exported with GPG encryption! Keep both passwords safe - you\'ll need them to import your keys.';
+			} else {
+				// Standard export
+				exportedData = await privateKeyManager.exportPrivateKeys(exportPassword);
+				privateKeyManager.downloadExportedKeys(exportedData);
+				success = 'Private keys exported successfully! Keep your password safe - you\'ll need it to import your keys.';
+			}
 			
 			// Clear passwords
 			exportPassword = '';
 			confirmExportPassword = '';
+			gpgPassword = '';
+			confirmGPGPassword = '';
 			
-			dispatch('exported', { timestamp: Date.now() });
+			dispatch('exported', { timestamp: Date.now(), gpgEncrypted: useGPGEncryption });
 			
 		} catch (err) {
 			console.error('Failed to export private keys:', err);
@@ -234,27 +264,91 @@
 					</button>
 				</div>
 			</div>
+
+			<!-- GPG Encryption Option -->
+			<div class="form-group">
+				<label class="checkbox-label">
+					<input
+						type="checkbox"
+						bind:checked={useGPGEncryption}
+						disabled={loading}
+					/>
+					<span class="checkbox-text">🔐 Enable GPG encryption (recommended)</span>
+				</label>
+				<p class="help-text-inline">
+					Adds an additional layer of GPG encryption to your exported keys for maximum security
+				</p>
+			</div>
+
+			{#if useGPGEncryption}
+				<div class="gpg-section">
+					<div class="form-group">
+						<label for="gpg-password">GPG Password</label>
+						<div class="password-input">
+							<input
+								id="gpg-password"
+								type={showGPGPassword ? 'text' : 'password'}
+								bind:value={gpgPassword}
+								placeholder="Enter a strong GPG password"
+								disabled={loading}
+							/>
+							<button
+								type="button"
+								class="toggle-password"
+								onclick={() => showGPGPassword = !showGPGPassword}
+								disabled={loading}
+							>
+								{showGPGPassword ? '👁️' : '👁️‍🗨️'}
+							</button>
+						</div>
+					</div>
+					
+					<div class="form-group">
+						<label for="confirm-gpg-password">Confirm GPG Password</label>
+						<div class="password-input">
+							<input
+								id="confirm-gpg-password"
+								type={showGPGPassword ? 'text' : 'password'}
+								bind:value={confirmGPGPassword}
+								placeholder="Confirm your GPG password"
+								disabled={loading}
+							/>
+							<button
+								type="button"
+								class="toggle-password"
+								onclick={() => showGPGPassword = !showGPGPassword}
+								disabled={loading}
+							>
+								{showGPGPassword ? '👁️' : '👁️‍🗨️'}
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
 			
 			<button
 				type="button"
 				class="btn primary"
 				onclick={exportPrivateKeys}
-				disabled={loading || !exportPassword || !confirmExportPassword}
+				disabled={loading || !exportPassword || !confirmExportPassword || (useGPGEncryption && (!gpgPassword || !confirmGPGPassword))}
 			>
 				{#if loading}
 					<div class="btn-spinner"></div>
 					Exporting...
 				{:else}
-					📤 Export Keys
+					{useGPGEncryption ? '🔐 Export with GPG' : '📤 Export Keys'}
 				{/if}
 			</button>
 			
 			<div class="help-text">
 				<p><strong>⚠️ Important:</strong></p>
 				<ul>
-					<li>Remember your password - it cannot be recovered</li>
+					<li>Remember your password{useGPGEncryption ? 's' : ''} - {useGPGEncryption ? 'they' : 'it'} cannot be recovered</li>
 					<li>Store the exported file in a secure location</li>
-					<li>Anyone with the file and password can access your keys</li>
+					<li>Anyone with the file and password{useGPGEncryption ? 's' : ''} can access your keys</li>
+					{#if useGPGEncryption}
+						<li>GPG encrypted files require both passwords and GPG software to decrypt</li>
+					{/if}
 				</ul>
 			</div>
 		</div>
@@ -648,6 +742,49 @@
 	}
 	
 	.help-text li:last-child {
+		margin-bottom: 0;
+	}
+
+	/* GPG-specific styles */
+	.checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text-primary);
+	}
+
+	.checkbox-label input[type="checkbox"] {
+		margin: 0;
+		cursor: pointer;
+	}
+
+	.checkbox-text {
+		user-select: none;
+	}
+
+	.help-text-inline {
+		margin: 0.5rem 0 0 0;
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+		line-height: 1.4;
+	}
+
+	.gpg-section {
+		margin-top: 1rem;
+		padding: 1rem;
+		background: var(--color-bg-secondary);
+		border-radius: 0.375rem;
+		border: 1px solid var(--color-border);
+	}
+
+	.gpg-section .form-group {
+		margin-bottom: 0.75rem;
+	}
+
+	.gpg-section .form-group:last-child {
 		margin-bottom: 0;
 	}
 </style>

@@ -6,6 +6,7 @@
 import { browser } from '$app/environment';
 import { Base64, ChaCha20Poly1305, HKDF, SecureRandom, CryptoUtils } from './index.js';
 import { keyManager } from './key-manager.js';
+import * as openpgp from 'openpgp';
 
 /**
  * Export format version for compatibility
@@ -284,7 +285,7 @@ export class PrivateKeyManager {
 	/**
 	 * Trigger download of exported keys
 	 * @param {string} exportedData - Encrypted JSON string
-	 * @param {string} filename - Optional filename
+	 * @param {string|null} filename - Optional filename
 	 */
 	downloadExportedKeys(exportedData, filename = null) {
 		if (!this.supportsFileDownload()) {
@@ -297,6 +298,153 @@ export class PrivateKeyManager {
 		const link = document.createElement('a');
 		link.href = url;
 		link.download = filename || this.generateExportFilename();
+		
+		// Trigger download
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		
+		// Clean up
+		URL.revokeObjectURL(url);
+	}
+
+	/**
+	 * Export user private keys with GPG encryption
+	 * @param {string} password - Password to encrypt the keys
+	 * @param {string} gpgPassword - Password for GPG encryption
+	 * @returns {Promise<string>} GPG encrypted data containing the keys
+	 * @throws {Error} If no user keys exist or password is invalid
+	 */
+	async exportPrivateKeysWithGPG(password, gpgPassword) {
+		if (!password || password.trim().length === 0) {
+			throw new Error('Password is required for key export');
+		}
+
+		if (!gpgPassword || gpgPassword.trim().length === 0) {
+			throw new Error('GPG password is required for GPG encryption');
+		}
+
+		try {
+			// First, export keys using the standard method
+			const exportedData = await this.exportPrivateKeys(password);
+
+			// Encrypt the exported data with GPG
+			const gpgEncryptedData = await this._encryptWithGPG(exportedData, gpgPassword);
+
+			return gpgEncryptedData;
+
+		} catch (error) {
+			throw new Error(`Failed to export private keys with GPG: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Import user private keys from GPG encrypted data
+	 * @param {string} gpgEncryptedData - GPG encrypted data containing the keys
+	 * @param {string} password - Password to decrypt the keys
+	 * @param {string} gpgPassword - Password for GPG decryption
+	 * @returns {Promise<void>}
+	 * @throws {Error} If import fails due to invalid data or wrong password
+	 */
+	async importPrivateKeysFromGPG(gpgEncryptedData, password, gpgPassword) {
+		if (!password || password.trim().length === 0) {
+			throw new Error('Password is required for key import');
+		}
+
+		if (!gpgPassword || gpgPassword.trim().length === 0) {
+			throw new Error('GPG password is required for GPG decryption');
+		}
+
+		try {
+			// First, decrypt the GPG encrypted data
+			const exportedData = await this._decryptWithGPG(gpgEncryptedData, gpgPassword);
+
+			// Then import using the standard method
+			await this.importPrivateKeys(exportedData, password);
+
+		} catch (error) {
+			throw new Error(`Failed to import private keys from GPG: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Encrypt data using GPG with password
+	 * @param {string} data - Data to encrypt
+	 * @param {string} password - Password for encryption
+	 * @returns {Promise<string>} GPG encrypted data
+	 * @private
+	 */
+	async _encryptWithGPG(data, password) {
+		try {
+			// Create a message from the data
+			const message = await openpgp.createMessage({ text: data });
+
+			// Encrypt with password (symmetric encryption)
+			const encrypted = await openpgp.encrypt({
+				message,
+				passwords: [password],
+				config: { preferredCompressionAlgorithm: openpgp.enums.compression.zlib }
+			});
+
+			return encrypted;
+
+		} catch (error) {
+			throw new Error(`GPG encryption failed: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Decrypt GPG encrypted data using password
+	 * @param {string} encryptedData - GPG encrypted data
+	 * @param {string} password - Password for decryption
+	 * @returns {Promise<string>} Decrypted data
+	 * @private
+	 */
+	async _decryptWithGPG(encryptedData, password) {
+		try {
+			// Read the encrypted message
+			const message = await openpgp.readMessage({
+				armoredMessage: encryptedData
+			});
+
+			// Decrypt with password
+			const { data: decrypted } = await openpgp.decrypt({
+				message,
+				passwords: [password]
+			});
+
+			return decrypted;
+
+		} catch (error) {
+			throw new Error(`GPG decryption failed: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Generate a secure filename for GPG encrypted key export
+	 * @returns {string} Filename with timestamp and .gpg extension
+	 */
+	generateGPGExportFilename() {
+		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+		return `qryptchat-keys-${timestamp}.json.gpg`;
+	}
+
+	/**
+	 * Trigger download of GPG encrypted keys
+	 * @param {string} gpgEncryptedData - GPG encrypted data
+	 * @param {string|null} filename - Optional filename
+	 */
+	downloadGPGEncryptedKeys(gpgEncryptedData, filename = null) {
+		if (!this.supportsFileDownload()) {
+			throw new Error('File download not supported in this environment');
+		}
+
+		const blob = new Blob([gpgEncryptedData], { type: 'application/pgp-encrypted' });
+		const url = URL.createObjectURL(blob);
+		
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = filename || this.generateGPGExportFilename();
 		
 		// Trigger download
 		document.body.appendChild(link);
