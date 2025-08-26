@@ -33,19 +33,28 @@ export class ClientEncryptionService {
 	async getConversationKey(conversationId) {
 		// First check in-memory cache
 		if (this.conversationKeys.has(conversationId)) {
-			return this.conversationKeys.get(conversationId);
+			const cachedKey = this.conversationKeys.get(conversationId);
+			console.log(`🔐 [KEY] Using cached key for conversation: ${conversationId}`);
+			return cachedKey;
 		}
 
-		// Then check key manager
+		// Then check key manager persistent storage
 		let key = await keyManager.getConversationKey(conversationId);
 		
-		if (!key) {
-			// Generate a new key if none exists
-			key = await keyManager.generateConversationKey(conversationId);
+		if (key) {
+			console.log(`🔐 [KEY] Retrieved existing key from storage for conversation: ${conversationId}`);
+			// Cache in memory for faster access
+			this.conversationKeys.set(conversationId, key);
+			return key;
 		}
 
+		// Only generate a new key if none exists anywhere
+		console.log(`🔐 [KEY] No existing key found, generating new key for conversation: ${conversationId}`);
+		key = await keyManager.generateConversationKey(conversationId);
+		
 		// Cache in memory for faster access
 		this.conversationKeys.set(conversationId, key);
+		console.log(`🔐 [KEY] Generated and cached new key for conversation: ${conversationId}`);
 		return key;
 	}
 
@@ -113,7 +122,12 @@ export class ClientEncryptionService {
 				console.log(`🔐 [DECRYPT] Content appears to be hex-encoded, decoding...`);
 				try {
 					// Convert hex to bytes, then to string
-					const bytes = new Uint8Array(encryptedContent.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+					const hexMatches = encryptedContent.match(/.{1,2}/g);
+					if (!hexMatches) {
+						console.error(`🔐 [DECRYPT] Invalid hex format`);
+						return '[Encrypted message - invalid hex format]';
+					}
+					const bytes = new Uint8Array(hexMatches.map(byte => parseInt(byte, 16)));
 					jsonContent = new TextDecoder().decode(bytes);
 					console.log(`🔐 [DECRYPT] Hex-decoded content:`, jsonContent);
 				} catch (hexError) {
@@ -127,7 +141,8 @@ export class ClientEncryptionService {
 			try {
 				messageData = JSON.parse(jsonContent);
 			} catch (parseError) {
-				console.log(`🔐 [DECRYPT] Not JSON, assuming plain text:`, parseError.message);
+				const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+				console.log(`🔐 [DECRYPT] Not JSON, assuming plain text:`, errorMessage);
 				return jsonContent;
 			}
 

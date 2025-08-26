@@ -245,55 +245,61 @@ export class KeyDistributionService {
 	/**
 	 * Send a key share message via WebSocket
 	 * @param {Object} keyMessage - Key share message
-	 * @param {Object} wsChat - WebSocket chat store
+	 * @param {Object} wsChat - WebSocket chat store with sendMessage method
 	 * @private
 	 */
 	async sendKeyShareMessage(keyMessage, wsChat) {
-		// For now, send as a special system message
-		// In production, this would use a dedicated key exchange protocol
-		const systemMessage = {
-			type: 'system',
-			subtype: 'key_share',
-			data: keyMessage
-		};
-
-		// Send via WebSocket (this would need to be implemented in the WebSocket protocol)
-		console.log('🔑 Sending key share message:', systemMessage);
-		// wsChat.sendSystemMessage(systemMessage); // This would need to be implemented
+		try {
+			// Use the WebSocket sendMessage method to send key share
+			if (wsChat && typeof wsChat.sendMessage === 'function') {
+				await wsChat.sendMessage('KEY_SHARE', keyMessage);
+				console.log('🔑 Successfully sent key share message via WebSocket');
+			} else {
+				console.error('🔑 WebSocket sendMessage method not available');
+			}
+		} catch (error) {
+			console.error('🔑 Failed to send key share message:', error);
+		}
 	}
 
 	/**
 	 * Send a key request message via WebSocket
 	 * @param {Object} keyRequestMessage - Key request message
-	 * @param {Object} wsChat - WebSocket chat store
+	 * @param {Object} wsChat - WebSocket chat store with sendMessage method
 	 * @private
 	 */
 	async sendKeyRequestMessage(keyRequestMessage, wsChat) {
-		const systemMessage = {
-			type: 'system',
-			subtype: 'key_request',
-			data: keyRequestMessage
-		};
-
-		console.log('🔑 Sending key request message:', systemMessage);
-		// wsChat.sendSystemMessage(systemMessage); // This would need to be implemented
+		try {
+			// Use the WebSocket sendMessage method to send key request
+			if (wsChat && typeof wsChat.sendMessage === 'function') {
+				await wsChat.sendMessage('KEY_REQUEST', keyRequestMessage);
+				console.log('🔑 Successfully sent key request message via WebSocket');
+			} else {
+				console.error('🔑 WebSocket sendMessage method not available');
+			}
+		} catch (error) {
+			console.error('🔑 Failed to send key request message:', error);
+		}
 	}
 
 	/**
 	 * Send a key response message via WebSocket
 	 * @param {Object} keyResponseMessage - Key response message
-	 * @param {Object} wsChat - WebSocket chat store
+	 * @param {Object} wsChat - WebSocket chat store with sendMessage method
 	 * @private
 	 */
 	async sendKeyResponseMessage(keyResponseMessage, wsChat) {
-		const systemMessage = {
-			type: 'system',
-			subtype: 'key_response',
-			data: keyResponseMessage
-		};
-
-		console.log('🔑 Sending key response message:', systemMessage);
-		// wsChat.sendSystemMessage(systemMessage); // This would need to be implemented
+		try {
+			// Use the WebSocket sendMessage method to send key response
+			if (wsChat && typeof wsChat.sendMessage === 'function') {
+				await wsChat.sendMessage('KEY_RESPONSE', keyResponseMessage);
+				console.log('🔑 Successfully sent key response message via WebSocket');
+			} else {
+				console.error('🔑 WebSocket sendMessage method not available');
+			}
+		} catch (error) {
+			console.error('🔑 Failed to send key response message:', error);
+		}
 	}
 
 	/**

@@ -338,9 +338,17 @@ function createWebSocketChatStore() {
 			});
 			
 			if (response.type === MESSAGE_TYPES.CONVERSATION_JOINED) {
-				// Don't automatically load messages here to avoid infinite loops
-				// Messages should be loaded separately by the UI
 				console.log('✅ Successfully joined conversation room:', conversationId);
+				
+				// Ensure we have an encryption key for this conversation
+				console.log(`🔑 Ensuring encryption key exists for conversation: ${conversationId}`);
+				try {
+					// This will generate a key if none exists, or retrieve existing one
+					await clientEncryption.getConversationKey(conversationId);
+					console.log(`🔑 ✅ Encryption key ready for conversation: ${conversationId}`);
+				} catch (keyError) {
+					console.error(`🔑 ❌ Failed to ensure encryption key for conversation ${conversationId}:`, keyError);
+				}
 			}
 		} catch (error) {
 			console.error('Failed to join conversation:', error);
