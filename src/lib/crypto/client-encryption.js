@@ -105,19 +105,38 @@ export class ClientEncryptionService {
 				return encryptedContent;
 			}
 
-			// Check if the content is encrypted
+			console.log(`🔐 [DECRYPT] Raw encrypted content:`, encryptedContent.substring(0, 200) + '...');
+
+			// Check if the content is hex-encoded (starts with hex characters)
+			let jsonContent = encryptedContent;
+			if (/^[0-9a-fA-F]+$/.test(encryptedContent)) {
+				console.log(`🔐 [DECRYPT] Content appears to be hex-encoded, decoding...`);
+				try {
+					// Convert hex to bytes, then to string
+					const bytes = new Uint8Array(encryptedContent.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+					jsonContent = new TextDecoder().decode(bytes);
+					console.log(`🔐 [DECRYPT] Hex-decoded content:`, jsonContent);
+				} catch (hexError) {
+					console.error(`🔐 [DECRYPT] Failed to decode hex:`, hexError);
+					return '[Encrypted message - hex decode failed]';
+				}
+			}
+
+			// Check if the content is encrypted JSON
 			let messageData;
 			try {
-				messageData = JSON.parse(encryptedContent);
-			} catch {
-				// Not JSON, assume it's plain text
-				return encryptedContent;
+				messageData = JSON.parse(jsonContent);
+			} catch (parseError) {
+				console.log(`🔐 [DECRYPT] Not JSON, assuming plain text:`, parseError.message);
+				return jsonContent;
 			}
 
 			if (messageData.type !== 'encrypted') {
-				// Not encrypted, return as is
-				return encryptedContent;
+				console.log(`🔐 [DECRYPT] Not encrypted type, returning as is`);
+				return jsonContent;
 			}
+
+			console.log(`🔐 [DECRYPT] Decrypting encrypted message with nonce:`, messageData.nonce);
 
 			const key = await this.getConversationKey(conversationId);
 			const nonce = Base64.decode(messageData.nonce);
@@ -132,11 +151,11 @@ export class ClientEncryptionService {
 			);
 
 			const messageText = new TextDecoder().decode(plaintext);
-			console.log(`🔐 Decrypted message for conversation: ${conversationId}`);
+			console.log(`🔐 [DECRYPT] ✅ Successfully decrypted message: "${messageText}"`);
 			return messageText;
 
 		} catch (error) {
-			console.error('🔐 Failed to decrypt message:', error);
+			console.error('🔐 [DECRYPT] ❌ Failed to decrypt message:', error);
 			return '[Encrypted message - decryption failed]';
 		}
 	}
