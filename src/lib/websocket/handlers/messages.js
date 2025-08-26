@@ -346,7 +346,8 @@ export async function handleLoadMessages(ws, message, context) {
 		
 		// Server passes through encrypted content exactly as stored in database
 		// No server-side decoding - clients handle all encryption/decryption
-			
+		
+		if (messagesWithReplies.length > 0) {
 			const replyIds = messagesWithReplies
 				.filter(msg => msg.reply_to_id)
 				.map(msg => msg.reply_to_id);
