@@ -478,10 +478,54 @@ export async function handleCreateConversation(ws, message, context) {
 			created_by: conversation.created_by
 		});
 
-		// Add additional participants (creator is automatically added by database trigger)
+		// Always add the creator as a participant first, then add others
+		console.log('💬 [CREATE] Adding creator as participant first:', {
+			creatorId: context.user.id,
+			conversationId: conversation.id
+		});
+		
+		// Add creator as admin participant
+		const { data: creatorParticipant, error: creatorError } = await supabase
+			.from('conversation_participants')
+			.insert({
+				conversation_id: conversation.id,
+				user_id: context.user.id,
+				role: 'admin',
+				joined_at: new Date().toISOString()
+			})
+			.select()
+			.single();
+
+		if (creatorError) {
+			console.error('💬 [CREATE] ERROR: Failed to add creator as participant');
+			console.error('💬 [CREATE] Creator error:', creatorError);
+			// Try to clean up the conversation
+			await supabase.from('conversations').delete().eq('id', conversation.id);
+			
+			const errorResponse = createErrorResponse(
+				message.requestId,
+				'Failed to add creator as participant',
+				'DATABASE_ERROR'
+			);
+			ws.send(serializeMessage(errorResponse));
+			return;
+		}
+
+		console.log('💬 [CREATE] Creator added as participant successfully:', creatorParticipant);
+
+		// Add additional participants
 		if (participantIds && participantIds.length > 0) {
-			// Filter out the creator since they're already added by the trigger
+			// Filter out the creator since they're already added above
 			const additionalParticipantIds = participantIds.filter(id => id !== context.user.id);
+			
+			console.log('💬 [CREATE] Participant analysis:', {
+				creatorId: context.user.id,
+				originalParticipantIds: participantIds,
+				additionalParticipantIds: additionalParticipantIds,
+				additionalParticipantCount: additionalParticipantIds.length,
+				isDirectMessage: isDirectMessage,
+				shouldAddOtherUser: isDirectMessage && additionalParticipantIds.length > 0
+			});
 			
 			if (additionalParticipantIds.length > 0) {
 				console.log('💬 [CREATE] Adding additional participants:', {
@@ -499,9 +543,10 @@ export async function handleCreateConversation(ws, message, context) {
 				}));
 
 				console.log('💬 [CREATE] Inserting additional participant data:', participantData);
-				const { error: participantError } = await supabase
+				const { data: insertedParticipants, error: participantError } = await supabase
 					.from('conversation_participants')
-					.insert(participantData);
+					.insert(participantData)
+					.select();
 
 				if (participantError) {
 					console.error('💬 [CREATE] ERROR: Failed to add additional participants');
@@ -518,12 +563,37 @@ export async function handleCreateConversation(ws, message, context) {
 					return;
 				}
 
-				console.log('💬 [CREATE] Additional participants added successfully');
+				console.log('💬 [CREATE] Additional participants added successfully:', insertedParticipants);
 			} else {
 				console.log('💬 [CREATE] No additional participants to add (creator already added by trigger)');
 			}
 		} else {
 			console.log('💬 [CREATE] No additional participants specified');
+		}
+
+		// Verify all participants were added correctly
+		console.log('💬 [CREATE] Verifying participants were added...');
+		const { data: allParticipants, error: verifyError } = await supabase
+			.from('conversation_participants')
+			.select('user_id, role, joined_at')
+			.eq('conversation_id', conversation.id)
+			.is('left_at', null);
+
+		if (verifyError) {
+			console.error('💬 [CREATE] ERROR: Failed to verify participants:', verifyError);
+		} else {
+			console.log('💬 [CREATE] Final participant verification:', {
+				conversationId: conversation.id,
+				expectedParticipants: isDirectMessage ? 2 : (participantIds.length + 1),
+				actualParticipants: allParticipants?.length || 0,
+				participants: allParticipants || []
+			});
+
+			if (isDirectMessage && (!allParticipants || allParticipants.length !== 2)) {
+				console.error('💬 [CREATE] ERROR: Direct message conversation should have exactly 2 participants!');
+				console.error('💬 [CREATE] Expected: creator + other user = 2 participants');
+				console.error('💬 [CREATE] Actual:', allParticipants?.length || 0, 'participants');
+			}
 		}
 
 		// Join the creator to the conversation room
