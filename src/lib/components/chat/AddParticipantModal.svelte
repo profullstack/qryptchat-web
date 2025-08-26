@@ -1,6 +1,7 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
 	import { user } from '$lib/stores/auth.js';
+	import { t } from '$lib/stores/i18n.js';
 
 	// Props
 	let { isOpen = false, conversationId = null } = $props();
@@ -36,7 +37,7 @@
 			});
 
 			if (!response.ok) {
-				throw new Error('Failed to search users');
+				throw new Error($t('addParticipants.failedToSearch'));
 			}
 
 			const data = await response.json();
@@ -89,7 +90,7 @@
 
 			if (!response.ok) {
 				const errorData = await response.json();
-				throw new Error(errorData.error || 'Failed to add participants');
+				throw new Error(errorData.error || $t('addParticipants.failedToAdd'));
 			}
 
 			const data = await response.json();
@@ -167,8 +168,8 @@
 			role="document"
 		>
 			<div class="modal-header">
-				<h2 id="modal-title">Add Participants</h2>
-				<button class="close-button" onclick={handleClose} aria-label="Close modal">
+				<h2 id="modal-title">{$t('addParticipants.title')}</h2>
+				<button class="close-button" onclick={handleClose} aria-label={$t('aria.closeModal')}>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
 					</svg>

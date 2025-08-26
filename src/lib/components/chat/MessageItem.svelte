@@ -1,6 +1,7 @@
 <script>
 	import { user } from '$lib/stores/auth.js';
 	import { clientEncryption } from '$lib/crypto/client-encryption.js';
+	import { t } from '$lib/stores/i18n.js';
 	import { onMount } from 'svelte';
 
 	let {
@@ -33,13 +34,13 @@
 				console.log(`🔐 [UI] ✅ Successfully decrypted message ${message.id}: "${decrypted}"`);
 			} catch (error) {
 				console.error(`🔐 [UI] ❌ Failed to decrypt message ${message.id}:`, error);
-				decryptedContent = '[Encrypted message - decryption failed]';
+				decryptedContent = $t('chat.encryptedMessageFailed');
 				decryptionFailed = true;
 			} finally {
 				isDecrypting = false;
 			}
 		} else {
-			decryptedContent = '[Message content unavailable]';
+			decryptedContent = $t('chat.messageUnavailable');
 		}
 	});
 
@@ -62,7 +63,7 @@
 	}
 
 	function getDisplayName(/** @type {any} */ sender) {
-		return sender?.display_name || sender?.username || 'Unknown User';
+		return sender?.display_name || sender?.username || $t('chat.unknownUser');
 	}
 
 	function getInitials(/** @type {string} */ name) {
@@ -100,12 +101,12 @@
 				{#if isDecrypting}
 					<span class="decrypting-indicator">
 						<span class="spinner"></span>
-						Decrypting...
+						{$t('chat.decrypting')}
 					</span>
 				{:else if decryptedContent}
 					{decryptedContent}
 				{:else}
-					[Message content unavailable]
+					{$t('chat.messageUnavailable')}
 				{/if}
 			</div>
 			
