@@ -6,6 +6,7 @@
 import { MESSAGE_TYPES, createSuccessResponse, createErrorResponse } from '../utils/protocol.js';
 import { roomManager } from '../utils/rooms.js';
 import { isAuthenticated, getAuthenticatedUser, getSupabaseClient } from './auth.js';
+import { createSMSNotificationService } from '../../services/sms-notification-service.js';
 
 /**
  * Handle send message request
@@ -94,6 +95,14 @@ export async function handleSendMessage(ws, message, context) {
 			return;
 		}
 
+		// Update sender's activity (they just sent a message)
+		try {
+			await supabase.rpc('update_user_activity', { user_id: user.id });
+		} catch (activityError) {
+			console.error('Failed to update user activity:', activityError);
+			// Don't fail the message send if activity tracking fails
+		}
+
 		// Send success response to sender
 		const successResponse = createSuccessResponse(
 			message.requestId,
@@ -145,6 +154,36 @@ export async function handleSendMessage(ws, message, context) {
 			totalConnections: roomManager.getTotalConnections(),
 			onlineUsers: roomManager.getOnlineUsers()
 		});
+
+		// Send SMS notifications to inactive participants
+		try {
+			const smsService = createSMSNotificationService(supabase);
+			const senderName = user.display_name || user.username || 'Someone';
+			const messagePreview = newMessage.encrypted_content || 'sent you a message';
+			
+			console.log('📨 [SMS] Checking for inactive participants to notify:', {
+				conversationId,
+				senderName,
+				messagePreview: messagePreview.substring(0, 50) + '...'
+			});
+
+			const smsResult = await smsService.notifyInactiveParticipants(
+				conversationId,
+				senderName,
+				messagePreview
+			);
+
+			console.log('📨 [SMS] SMS notification result:', {
+				success: smsResult.success,
+				notificationsSent: smsResult.notificationsSent,
+				totalParticipants: smsResult.totalParticipants,
+				hasError: !!smsResult.error
+			});
+
+		} catch (smsError) {
+			console.error('📨 [SMS] Failed to send SMS notifications:', smsError);
+			// Don't fail the message send if SMS notifications fail
+		}
 
 	} catch (error) {
 		console.error('Error sending message:', error);
@@ -385,6 +424,14 @@ export async function handleLoadMessages(ws, message, context) {
 		console.log('📨 [MESSAGES] Sending success response with', messagesWithReplies.length, 'messages');
 		console.log('📨 [MESSAGES] Response:', JSON.stringify(successResponse, null, 2));
 		ws.send(JSON.stringify(successResponse));
+
+		// Update user activity (they just loaded messages)
+		try {
+			await supabase.rpc('update_user_activity', { user_id: user.id });
+		} catch (activityError) {
+			console.error('Failed to update user activity:', activityError);
+			// Don't fail the message load if activity tracking fails
+		}
 
 		// Mark messages as read
 		if (messagesWithReplies.length > 0) {
