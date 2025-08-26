@@ -5,13 +5,18 @@
 	import PWAToastManager from '$lib/components/PWAToastManager.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { themeUtils } from '$lib/stores/theme.js';
+	import { currentTheme, themeUtils } from '$lib/stores/theme.js';
 	import { i18nUtils } from '$lib/stores/i18n.js';
 
 	let { children } = $props();
 
 	// Hide footer on chat page for full-screen chat experience
 	const shouldShowFooter = $derived($page.route.id !== '/chat');
+	
+	// Subscribe to theme changes and apply them
+	$effect(() => {
+		themeUtils.applyTheme($currentTheme);
+	});
 	
 	onMount(() => {
 		// Initialize theme with system preference detection
@@ -23,7 +28,7 @@
 		
 		const language = localStorage.getItem('qrypt-language') || 'en';
 		
-		themeUtils.applyTheme(theme);
+		themeUtils.setTheme(theme);
 		i18nUtils.applyLanguage(language);
 	});
 </script>

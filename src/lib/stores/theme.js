@@ -131,9 +131,10 @@ export const themeUtils = {
 		const theme = themes[themeName];
 		const root = document.documentElement;
 		
-		// Apply CSS custom properties
+		// Apply CSS custom properties with both prefixed and non-prefixed versions for compatibility
 		Object.entries(theme.colors).forEach(([key, value]) => {
 			root.style.setProperty(`--color-${key}`, value);
+			root.style.setProperty(`--${key}`, value);
 		});
 		
 		// Set data attribute for CSS selectors
