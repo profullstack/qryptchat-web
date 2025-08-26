@@ -378,10 +378,10 @@ function createWebSocketChatStore() {
 									conversationId,
 									message.encrypted_content
 								);
-								message.encrypted_content = decryptedContent;
+								message.content = decryptedContent;
 							} catch (error) {
 								console.error('Failed to decrypt loaded message:', error);
-								message.encrypted_content = '[Encrypted message - decryption failed]';
+								message.content = '[Encrypted message - decryption failed]';
 							}
 						}
 					}
@@ -495,10 +495,10 @@ function createWebSocketChatStore() {
 					message.conversation_id,
 					message.encrypted_content
 				);
-				message.encrypted_content = decryptedContent;
+				message.content = decryptedContent;
 			} catch (error) {
 				console.error('Failed to decrypt received message:', error);
-				message.encrypted_content = '[Encrypted message - decryption failed]';
+				message.content = '[Encrypted message - decryption failed]';
 			}
 		}
 

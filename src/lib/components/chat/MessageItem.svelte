@@ -55,7 +55,7 @@
 
 		<div class="message-bubble" class:own-bubble={isOwn}>
 			<div class="message-text">
-				{message.encrypted_content || message.content || '[Message content unavailable]'}
+				{message.content || '[Message content unavailable]'}
 			</div>
 			
 			{#if isOwn && showTimestamp}
