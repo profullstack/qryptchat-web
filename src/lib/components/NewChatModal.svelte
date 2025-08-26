@@ -90,7 +90,12 @@
 		return selectedUsers.some(u => u.id === user.id);
 	}
 	
-	async function startDirectConversation(/** @type {any} */ otherUser) {
+	async function startDirectConversation() {
+		if (selectedUsers.length === 0) {
+			alert('Please select at least one user');
+			return;
+		}
+		
 		isCreating = true;
 		try {
 			const response = await fetch('/api/chat/conversations', {
@@ -99,8 +104,9 @@
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
-					type: 'direct',
-					participant_ids: [otherUser.id]
+					type: selectedUsers.length === 1 ? 'direct' : 'group',
+					participant_ids: selectedUsers.map(u => u.id),
+					name: selectedUsers.length > 1 ? `Chat with ${selectedUsers.map(u => u.display_name || u.username).join(', ')}` : undefined
 				})
 			});
 			
@@ -109,8 +115,8 @@
 			if (response.ok) {
 				dispatch('conversationCreated', {
 					conversationId: data.conversation_id,
-					type: 'direct',
-					otherUser
+					type: selectedUsers.length === 1 ? 'direct' : 'group',
+					participants: selectedUsers
 				});
 				closeModal();
 			} else {
@@ -175,8 +181,8 @@
 	function handleSubmit(/** @type {Event} */ event) {
 		event.preventDefault();
 		
-		if (activeTab === 'direct' && selectedUsers.length === 1) {
-			startDirectConversation(selectedUsers[0]);
+		if (activeTab === 'direct' && selectedUsers.length > 0) {
+			startDirectConversation();
 		} else if ((activeTab === 'group' || activeTab === 'channel') && selectedUsers.length > 0) {
 			createGroupConversation();
 		}
@@ -184,7 +190,7 @@
 	
 	// Derived state using Svelte 5 runes
 	const canCreate = $derived(activeTab === 'direct'
-		? selectedUsers.length === 1
+		? selectedUsers.length > 0
 		: selectedUsers.length > 0 && (activeTab === 'channel' || groupName.trim()));
 </script>
 
@@ -297,7 +303,7 @@
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 								<path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
 							</svg>
-							<h3>{activeTab === 'direct' ? 'Find User' : 'Add Participants'}</h3>
+							<h3>Add Participants</h3>
 						</div>
 						<div class="search-container">
 							<input
@@ -316,8 +322,8 @@
 						</div>
 					</div>
 					
-					<!-- Selected Users (for group/channel) -->
-					{#if (activeTab === 'group' || activeTab === 'channel') && selectedUsers.length > 0}
+					<!-- Selected Users (for all conversation types) -->
+					{#if selectedUsers.length > 0}
 						<div class="selected-users">
 							<p class="selected-label">
 								Selected Participants ({selectedUsers.length})
@@ -349,13 +355,7 @@
 								<button
 									type="button"
 									class="user-result {isUserSelected(searchUser) ? 'selected' : ''}"
-									onclick={() => {
-										if (activeTab === 'direct') {
-											selectedUsers = [searchUser];
-										} else {
-											toggleUserSelection(searchUser);
-										}
-									}}
+									onclick={() => toggleUserSelection(searchUser)}
 								>
 									<div class="user-avatar">
 										{#if searchUser.avatar_url}
