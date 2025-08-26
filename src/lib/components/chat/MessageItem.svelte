@@ -176,7 +176,7 @@
 	.avatar-placeholder {
 		width: 100%;
 		height: 100%;
-		background: var(--color-primary-500);
+		background: var(--brand-primary);
 		color: white;
 		display: flex;
 		align-items: center;
@@ -215,28 +215,29 @@
 	.sender-name {
 		font-weight: 600;
 		font-size: 0.875rem;
-		color: var(--color-text-primary);
+		color: var(--text-primary);
 	}
 
 	.message-time {
 		font-size: 0.75rem;
-		color: var(--color-text-secondary);
+		color: var(--text-secondary);
 	}
 
 	.message-bubble {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-primary);
 		border-radius: 1rem;
 		padding: 0.75rem 1rem;
 		position: relative;
 		word-wrap: break-word;
 		overflow-wrap: break-word;
+		color: var(--text-primary);
 	}
 
 	.message-bubble.own-bubble {
-		background: var(--color-primary-500);
+		background: var(--brand-primary);
 		color: white;
-		border-color: var(--color-primary-600);
+		border-color: var(--brand-primary);
 	}
 
 	.message-bubble.own-bubble .message-text {
@@ -263,7 +264,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		color: var(--color-text-secondary);
+		color: var(--text-secondary);
 		font-style: italic;
 		font-size: 0.8125rem;
 	}
