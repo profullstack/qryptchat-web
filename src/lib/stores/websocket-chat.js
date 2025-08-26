@@ -12,7 +12,6 @@ import {
 	serializeMessage
 } from '$lib/websocket/utils/protocol.js';
 import { clientEncryption } from '$lib/crypto/client-encryption.js';
-import { keyDistribution } from '$lib/crypto/key-distribution.js';
 
 /**
  * @typedef {Object} WebSocketChatState
@@ -94,12 +93,10 @@ function createWebSocketChatStore() {
 				reconnectAttempts = 0;
 				update(state => ({ ...state, connected: true, error: null }));
 
-				// Initialize client encryption and key distribution
+				// Initialize client encryption
 				console.log('🔐 Initializing client encryption...');
 				await clientEncryption.initialize();
-				console.log('🔐 Initializing key distribution...');
-				await keyDistribution.initialize();
-				console.log('🔐 Client-side encryption services initialized');
+				console.log('🔐 Client-side encryption service initialized');
 
 				// Authenticate immediately after connection
 				if (token) {
@@ -247,21 +244,7 @@ function createWebSocketChatStore() {
 					handlePresenceUpdate(message.payload);
 					break;
 
-				case MESSAGE_TYPES.KEY_SHARE:
-					handleKeyShareMessage(message.payload);
-					break;
-
-				case MESSAGE_TYPES.KEY_REQUEST:
-					handleKeyRequestMessage(message.payload);
-					break;
-
-				case MESSAGE_TYPES.KEY_RESPONSE:
-					handleKeyResponseMessage(message.payload);
-					break;
-
-				case MESSAGE_TYPES.KEY_INIT:
-					handleKeyInitMessage(message.payload);
-					break;
+				// Removed complex key distribution system - using simple encryption only
 
 				default:
 					console.log('Unhandled message type:', message.type);
@@ -611,63 +594,7 @@ function createWebSocketChatStore() {
 		console.log('User presence update:', presenceData);
 	}
 
-	/**
-	 * Handle key share message
-	 * @param {Object} keyShareData - Key share data
-	 */
-	async function handleKeyShareMessage(keyShareData) {
-		try {
-			await keyDistribution.handleKeyShareMessage(keyShareData);
-		} catch (error) {
-			console.error('Failed to handle key share message:', error);
-		}
-	}
-
-	/**
-	 * Handle key request message
-	 * @param {Object} keyRequestData - Key request data
-	 */
-	async function handleKeyRequestMessage(keyRequestData) {
-		try {
-			await keyDistribution.handleKeyRequestMessage(keyRequestData, { sendMessage });
-		} catch (error) {
-			console.error('Failed to handle key request message:', error);
-		}
-	}
-
-	/**
-	 * Handle key response message
-	 * @param {Object} keyResponseData - Key response data
-	 */
-	async function handleKeyResponseMessage(keyResponseData) {
-		try {
-			await keyDistribution.handleKeyResponseMessage(keyResponseData);
-		} catch (error) {
-			console.error('Failed to handle key response message:', error);
-		}
-	}
-
-	/**
-	 * Handle key initialization message
-	 * @param {Object} keyInitData - Key initialization data
-	 */
-	async function handleKeyInitMessage(keyInitData) {
-		try {
-			const { conversationId, participantIds, initiatedBy } = keyInitData;
-			console.log(`🔑 [KEY_INIT] Received key initialization for conversation ${conversationId}`);
-			console.log(`🔑 [KEY_INIT] Participants:`, participantIds);
-			console.log(`🔑 [KEY_INIT] Initiated by:`, initiatedBy);
-			
-			// Initialize conversation key if we don't have one
-			await keyDistribution.initializeConversationKey(
-				conversationId,
-				participantIds,
-				{ sendMessage }
-			);
-		} catch (error) {
-			console.error('Failed to handle key initialization message:', error);
-		}
-	}
+	// Removed complex key distribution handlers - using simple encryption only
 
 	/**
 	 * Create a new conversation
@@ -681,15 +608,9 @@ function createWebSocketChatStore() {
 				const newConversation = response.payload;
 				const conversationId = newConversation.id;
 
-				// Initialize encryption key for the new conversation
-				if (conversationData.participantIds && conversationData.participantIds.length > 0) {
-					console.log(`🔑 Initializing encryption for new conversation: ${conversationId}`);
-					await keyDistribution.initializeConversationKey(
-						conversationId,
-						conversationData.participantIds,
-						{ sendMessage } // Pass WebSocket methods
-					);
-				}
+				// Generate encryption key for the new conversation
+				console.log(`🔑 Generating encryption key for new conversation: ${conversationId}`);
+				await clientEncryption.getConversationKey(conversationId);
 
 				// Reload conversations to include the new one
 				await loadConversations();

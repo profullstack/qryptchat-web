@@ -4,7 +4,7 @@
  * with ChaCha20-Poly1305 for symmetric encryption using Noble crypto libraries
  */
 
-import { chacha20poly1305 } from '@noble/ciphers/chacha';
+import { chacha20poly1305 } from '@noble/ciphers/chacha.js';
 
 /**
  * Crypto configuration constants

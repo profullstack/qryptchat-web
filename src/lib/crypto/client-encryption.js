@@ -1,28 +1,30 @@
 /**
- * @fileoverview Client-side encryption service for QryptChat
- * Handles end-to-end encryption/decryption on the client side
+ * @fileoverview Simplified client-side encryption service for QryptChat
+ * Uses only ChaCha20-Poly1305 with simple key management - KISS principle
  */
 
 import { ChaCha20Poly1305, SecureRandom, Base64, CryptoUtils } from './index.js';
-import { keyManager } from './key-manager.js';
 
 /**
- * Simple client-side encryption service
- * For now, uses basic ChaCha20-Poly1305 encryption with conversation-specific keys
+ * Simplified client-side encryption service
+ * Uses ChaCha20-Poly1305 with conversation-specific keys stored in localStorage
  */
 export class ClientEncryptionService {
 	constructor() {
 		this.conversationKeys = new Map(); // conversationId -> encryption key
 		this.isInitialized = false;
+		this.storageKey = 'qryptchat_conversation_keys';
 	}
 
 	/**
 	 * Initialize the encryption service
 	 */
 	async initialize() {
-		await keyManager.initialize();
+		if (typeof window !== 'undefined') {
+			await this.loadKeysFromStorage();
+		}
 		this.isInitialized = true;
-		console.log('🔐 Client encryption service initialized');
+		console.log('🔐 Simplified encryption service initialized');
 	}
 
 	/**
@@ -31,30 +33,30 @@ export class ClientEncryptionService {
 	 * @returns {Promise<Uint8Array>} Encryption key
 	 */
 	async getConversationKey(conversationId) {
-		// First check in-memory cache
+		// Check in-memory cache first
 		if (this.conversationKeys.has(conversationId)) {
-			const cachedKey = this.conversationKeys.get(conversationId);
-			console.log(`🔐 [KEY] Using cached key for conversation: ${conversationId}`);
-			return cachedKey;
+			console.log(`🔐 Using cached key for conversation: ${conversationId}`);
+			return this.conversationKeys.get(conversationId);
 		}
 
-		// Then check key manager persistent storage
-		let key = await keyManager.getConversationKey(conversationId);
-		
-		if (key) {
-			console.log(`🔐 [KEY] Retrieved existing key from storage for conversation: ${conversationId}`);
-			// Cache in memory for faster access
+		// Check localStorage
+		const storedKey = this.getStoredKey(conversationId);
+		if (storedKey) {
+			const key = Base64.decode(storedKey);
 			this.conversationKeys.set(conversationId, key);
+			console.log(`🔐 Retrieved key from storage for conversation: ${conversationId}`);
 			return key;
 		}
 
-		// Only generate a new key if none exists anywhere
-		console.log(`🔐 [KEY] No existing key found, generating new key for conversation: ${conversationId}`);
-		key = await keyManager.generateConversationKey(conversationId);
+		// Generate new key
+		const key = new Uint8Array(32);
+		crypto.getRandomValues(key);
 		
-		// Cache in memory for faster access
+		// Store in memory and localStorage
 		this.conversationKeys.set(conversationId, key);
-		console.log(`🔐 [KEY] Generated and cached new key for conversation: ${conversationId}`);
+		this.storeKey(conversationId, Base64.encode(key));
+		
+		console.log(`🔐 Generated new key for conversation: ${conversationId}`);
 		return key;
 	}
 
@@ -62,13 +64,12 @@ export class ClientEncryptionService {
 	 * Encrypt a message before sending
 	 * @param {string} conversationId - Conversation ID
 	 * @param {string} messageText - Plain text message
-	 * @returns {Promise<string>} Encrypted message content
+	 * @returns {Promise<string>} Encrypted message content (JSON string)
 	 */
 	async encryptMessage(conversationId, messageText) {
 		try {
 			if (!this.isInitialized) {
-				console.warn('🔐 Encryption service not initialized, sending plain text');
-				return messageText;
+				throw new Error('Encryption service not initialized');
 			}
 
 			const key = await this.getConversationKey(conversationId);
@@ -83,22 +84,20 @@ export class ClientEncryptionService {
 				additionalData
 			);
 
-			// Create encrypted message structure
+			// Simple encrypted message structure
 			const encryptedMessage = {
-				type: 'encrypted',
-				nonce: Base64.encode(nonce),
-				ciphertext: Base64.encode(ciphertext),
-				version: '1.0'
+				v: 1, // version
+				n: Base64.encode(nonce),
+				c: Base64.encode(ciphertext)
 			};
 
-			const encryptedContent = JSON.stringify(encryptedMessage);
-			console.log(`🔐 Encrypted message for conversation: ${conversationId}`);
-			return encryptedContent;
+			const result = JSON.stringify(encryptedMessage);
+			console.log(`🔐 ✅ Encrypted message for conversation: ${conversationId}`);
+			return result;
 
 		} catch (error) {
-			console.error('🔐 Failed to encrypt message:', error);
-			// Fall back to plain text to avoid breaking the app
-			return messageText;
+			console.error('🔐 ❌ Failed to encrypt message:', error);
+			throw error; // Don't fall back to plain text - fail fast
 		}
 	}
 
@@ -111,60 +110,30 @@ export class ClientEncryptionService {
 	async decryptMessage(conversationId, encryptedContent) {
 		try {
 			if (!this.isInitialized) {
+				throw new Error('Encryption service not initialized');
+			}
+
+			console.log(`🔐 Decrypting message for conversation: ${conversationId}`);
+
+			// Parse encrypted message
+			let messageData;
+			try {
+				messageData = JSON.parse(encryptedContent);
+			} catch (parseError) {
+				// If it's not JSON, it might be plain text (legacy)
+				console.log(`🔐 Content is not JSON, treating as plain text`);
 				return encryptedContent;
 			}
 
-			console.log(`🔐 [DECRYPT] Raw encrypted content:`, encryptedContent.substring(0, 200) + '...');
-
-			// Check if the content is hex-encoded (starts with \x or is pure hex)
-			let jsonContent = encryptedContent;
-			if (encryptedContent.startsWith('\\x') || /^[0-9a-fA-F]+$/.test(encryptedContent)) {
-				console.log(`🔐 [DECRYPT] Content appears to be hex-encoded, decoding...`);
-				try {
-					let hexString = encryptedContent;
-					
-					// Handle \x prefixed hex strings
-					if (encryptedContent.startsWith('\\x')) {
-						// Remove \x prefix and convert to plain hex
-						hexString = encryptedContent.replace(/\\x/g, '');
-						console.log(`🔐 [DECRYPT] Cleaned hex string:`, hexString.substring(0, 100) + '...');
-					}
-					
-					// Convert hex to bytes, then to string
-					const hexMatches = hexString.match(/.{1,2}/g);
-					if (!hexMatches) {
-						console.error(`🔐 [DECRYPT] Invalid hex format`);
-						return '[Encrypted message - invalid hex format]';
-					}
-					const bytes = new Uint8Array(hexMatches.map(byte => parseInt(byte, 16)));
-					jsonContent = new TextDecoder().decode(bytes);
-					console.log(`🔐 [DECRYPT] Hex-decoded content:`, jsonContent.substring(0, 200) + '...');
-				} catch (hexError) {
-					console.error(`🔐 [DECRYPT] Failed to decode hex:`, hexError);
-					return '[Encrypted message - hex decode failed]';
-				}
+			// Check if it's our encrypted format
+			if (!messageData.v || !messageData.n || !messageData.c) {
+				console.log(`🔐 Content is not encrypted format, returning as is`);
+				return encryptedContent;
 			}
-
-			// Check if the content is encrypted JSON
-			let messageData;
-			try {
-				messageData = JSON.parse(jsonContent);
-			} catch (parseError) {
-				const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
-				console.log(`🔐 [DECRYPT] Not JSON, assuming plain text:`, errorMessage);
-				return jsonContent;
-			}
-
-			if (messageData.type !== 'encrypted') {
-				console.log(`🔐 [DECRYPT] Not encrypted type, returning as is`);
-				return jsonContent;
-			}
-
-			console.log(`🔐 [DECRYPT] Decrypting encrypted message with nonce:`, messageData.nonce);
 
 			const key = await this.getConversationKey(conversationId);
-			const nonce = Base64.decode(messageData.nonce);
-			const ciphertext = Base64.decode(messageData.ciphertext);
+			const nonce = Base64.decode(messageData.n);
+			const ciphertext = Base64.decode(messageData.c);
 			const additionalData = new TextEncoder().encode(conversationId);
 
 			const plaintext = await ChaCha20Poly1305.decrypt(
@@ -175,12 +144,75 @@ export class ClientEncryptionService {
 			);
 
 			const messageText = new TextDecoder().decode(plaintext);
-			console.log(`🔐 [DECRYPT] ✅ Successfully decrypted message: "${messageText}"`);
+			console.log(`🔐 ✅ Successfully decrypted message: "${messageText}"`);
 			return messageText;
 
 		} catch (error) {
-			console.error('🔐 [DECRYPT] ❌ Failed to decrypt message:', error);
+			console.error('🔐 ❌ Failed to decrypt message:', error);
 			return '[Encrypted message - decryption failed]';
+		}
+	}
+
+	/**
+	 * Load keys from localStorage into memory
+	 * @private
+	 */
+	async loadKeysFromStorage() {
+		try {
+			if (typeof window === 'undefined') return;
+
+			const stored = localStorage.getItem(this.storageKey);
+			if (!stored) return;
+
+			const keys = JSON.parse(stored);
+			for (const [conversationId, keyBase64] of Object.entries(keys)) {
+				const key = Base64.decode(keyBase64);
+				this.conversationKeys.set(conversationId, key);
+			}
+
+			console.log(`🔐 Loaded ${Object.keys(keys).length} keys from storage`);
+		} catch (error) {
+			console.error('🔐 Failed to load keys from storage:', error);
+		}
+	}
+
+	/**
+	 * Get stored key from localStorage
+	 * @param {string} conversationId - Conversation ID
+	 * @returns {string|null} Base64 encoded key or null
+	 * @private
+	 */
+	getStoredKey(conversationId) {
+		try {
+			if (typeof window === 'undefined') return null;
+
+			const stored = localStorage.getItem(this.storageKey);
+			if (!stored) return null;
+
+			const keys = JSON.parse(stored);
+			return keys[conversationId] || null;
+		} catch (error) {
+			console.error('🔐 Failed to get stored key:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * Store key in localStorage
+	 * @param {string} conversationId - Conversation ID
+	 * @param {string} keyBase64 - Base64 encoded key
+	 * @private
+	 */
+	storeKey(conversationId, keyBase64) {
+		try {
+			if (typeof window === 'undefined') return;
+
+			const stored = localStorage.getItem(this.storageKey);
+			const keys = stored ? JSON.parse(stored) : {};
+			keys[conversationId] = keyBase64;
+			localStorage.setItem(this.storageKey, JSON.stringify(keys));
+		} catch (error) {
+			console.error('🔐 Failed to store key:', error);
 		}
 	}
 
@@ -196,8 +228,20 @@ export class ClientEncryptionService {
 			this.conversationKeys.delete(conversationId);
 		}
 
-		// Clear from persistent storage
-		await keyManager.removeConversationKey(conversationId);
+		// Clear from localStorage
+		try {
+			if (typeof window !== 'undefined') {
+				const stored = localStorage.getItem(this.storageKey);
+				if (stored) {
+					const keys = JSON.parse(stored);
+					delete keys[conversationId];
+					localStorage.setItem(this.storageKey, JSON.stringify(keys));
+				}
+			}
+		} catch (error) {
+			console.error('🔐 Failed to clear stored key:', error);
+		}
+
 		console.log(`🔐 Cleared encryption key for conversation: ${conversationId}`);
 	}
 
@@ -207,7 +251,7 @@ export class ClientEncryptionService {
 	 * @returns {boolean} Whether encryption is active
 	 */
 	isEncryptionActive(conversationId) {
-		return this.conversationKeys.has(conversationId) || keyManager.hasConversationKey(conversationId);
+		return this.conversationKeys.has(conversationId) || !!this.getStoredKey(conversationId);
 	}
 
 	/**
@@ -217,9 +261,9 @@ export class ClientEncryptionService {
 	 */
 	async setConversationKey(conversationId, keyBase64) {
 		try {
-			await keyManager.importConversationKey(conversationId, keyBase64);
 			const key = Base64.decode(keyBase64);
 			this.conversationKeys.set(conversationId, key);
+			this.storeKey(conversationId, keyBase64);
 			console.log(`🔐 Set encryption key for conversation: ${conversationId}`);
 		} catch (error) {
 			console.error('🔐 Failed to set conversation key:', error);
@@ -233,11 +277,30 @@ export class ClientEncryptionService {
 	 */
 	async getConversationKeyBase64(conversationId) {
 		try {
-			return await keyManager.exportConversationKey(conversationId);
+			const key = await this.getConversationKey(conversationId);
+			return key ? Base64.encode(key) : null;
 		} catch (error) {
 			console.error('🔐 Failed to get conversation key:', error);
 			return null;
 		}
+	}
+
+	/**
+	 * Clear all stored keys
+	 */
+	async clearAllKeys() {
+		// Clear memory
+		for (const key of this.conversationKeys.values()) {
+			CryptoUtils.secureClear(key);
+		}
+		this.conversationKeys.clear();
+
+		// Clear localStorage
+		if (typeof window !== 'undefined') {
+			localStorage.removeItem(this.storageKey);
+		}
+
+		console.log('🔐 Cleared all encryption keys');
 	}
 }
 
