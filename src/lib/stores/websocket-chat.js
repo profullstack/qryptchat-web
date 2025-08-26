@@ -232,7 +232,10 @@ function createWebSocketChatStore() {
 			// Handle broadcast messages
 			switch (message.type) {
 				case MESSAGE_TYPES.MESSAGE_RECEIVED:
-					handleNewMessage(message.payload.message);
+					// Await the async handleNewMessage to ensure decryption completes before DOM update
+					handleNewMessage(message.payload.message).catch(error => {
+						console.error('Error handling new message:', error);
+					});
 					break;
 
 				case MESSAGE_TYPES.TYPING_UPDATE:
