@@ -62,6 +62,18 @@
 		const urlParams = new URLSearchParams(window.location.search);
 		showWelcome = urlParams.get('welcome') === 'true';
 		
+		// Check for conversation parameter (from direct chat links)
+		const conversationParam = urlParams.get('conversation');
+		if (conversationParam) {
+			// Auto-select the conversation
+			handleConversationSelect(conversationParam);
+			
+			// Remove conversation parameter from URL
+			const url = new URL(window.location.href);
+			url.searchParams.delete('conversation');
+			window.history.replaceState({}, '', url.toString());
+		}
+		
 		if (showWelcome) {
 			// Remove welcome parameter from URL
 			const url = new URL(window.location.href);

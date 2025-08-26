@@ -28,19 +28,29 @@ export class SMSNotificationService {
    * Send SMS notifications to inactive participants in a conversation
    * @param {string} conversationId - The conversation ID
    * @param {string} senderName - Name of the message sender
-   * @param {string} messagePreview - Preview of the message content
    * @returns {Promise<Object>} Result object with success status and details
    */
-  async notifyInactiveParticipants(conversationId, senderName, messagePreview) {
+  async notifyInactiveParticipants(conversationId, senderName) {
   	try {
   		// Validate inputs
-  		this.validateInputs(conversationId, senderName, messagePreview);
+  		this.validateInputs(conversationId, senderName);
  
   		console.log('📨 [SMS-SERVICE] Starting SMS notification process:', {
   			conversationId,
-  			senderName,
-  			messagePreview: messagePreview.substring(0, 50) + '...'
+  			senderName
   		});
+
+  		// Get conversation details for the notification
+  		const { data: conversation, error: conversationError } = await this.supabase
+  			.from('conversations')
+  			.select('name, type')
+  			.eq('id', conversationId)
+  			.single();
+
+  		if (conversationError) {
+  			console.error('📨 [SMS-SERVICE] Failed to get conversation details:', conversationError);
+  			throw new Error(`Failed to get conversation details: ${conversationError.message}`);
+  		}
  
   		// Get inactive participants for this conversation
   		console.log('📨 [SMS-SERVICE] Calling get_inactive_participants function...');
@@ -76,7 +86,7 @@ export class SMSNotificationService {
 
       for (const participant of inactiveParticipants) {
         try {
-          const smsMessage = this.formatNotificationMessage(senderName, messagePreview);
+          const smsMessage = this.formatNotificationMessage(senderName, conversation, conversationId);
           
           // Send SMS using the provider
           const smsResult = await this.smsProvider.sendSMS(
@@ -110,7 +120,7 @@ export class SMSNotificationService {
             participant.user_id,
             conversationId,
             participant.phone_number,
-            this.formatNotificationMessage(senderName, messagePreview),
+            this.formatNotificationMessage(senderName, conversation, conversationId),
             false,
             null,
             smsError.message
@@ -146,20 +156,28 @@ export class SMSNotificationService {
   /**
    * Format the SMS notification message
    * @param {string} senderName - Name of the message sender
-   * @param {string} messagePreview - Preview of the message content
+   * @param {Object} conversation - Conversation details
+   * @param {string} conversationId - Conversation ID for the link
    * @returns {string} Formatted SMS message
    */
-  formatNotificationMessage(senderName, messagePreview) {
+  formatNotificationMessage(senderName, conversation, conversationId) {
     const sender = senderName?.trim() || 'Someone';
-    const preview = messagePreview?.trim() || 'sent you a message';
+    const conversationName = conversation?.name?.trim();
     
-    // Truncate preview to fit SMS length limits (160 chars total)
-    const maxPreviewLength = 120 - sender.length;
-    const truncatedPreview = preview.length > maxPreviewLength 
-      ? `${preview.substring(0, maxPreviewLength - 3)}...`
-      : preview;
-
-    return `${sender}: ${truncatedPreview}`;
+    // Get the base URL for the chat link
+    const baseUrl = process.env.SITE_URL || 'https://qrypt.chat';
+    const chatLink = `${baseUrl}/chats/${conversationId}`;
+    
+    // Create a generic notification message with conversation context and direct link
+    if (conversationName && conversation.type === 'group') {
+      return `${sender} sent a message in "${conversationName}"\n\nOpen: ${chatLink}`;
+    } else if (conversationName) {
+      return `${sender} sent you a message in "${conversationName}"\n\nOpen: ${chatLink}`;
+    } else if (conversation?.type === 'group') {
+      return `${sender} sent a message in a group chat\n\nOpen: ${chatLink}`;
+    } else {
+      return `${sender} sent you a message\n\nOpen: ${chatLink}`;
+    }
   }
 
   /**
@@ -193,100 +211,26 @@ export class SMSNotificationService {
    * Validate input parameters
    * @param {string} conversationId - Conversation ID
    * @param {string} senderName - Sender name
-   * @param {string} messagePreview - Message preview
    * @throws {Error} If validation fails
    */
-  validateInputs(conversationId, senderName, messagePreview) {
+  validateInputs(conversationId, senderName) {
     if (!conversationId?.trim()) {
       throw new Error('Conversation ID is required');
     }
     if (!senderName?.trim()) {
       throw new Error('Sender name is required');
     }
-    if (!messagePreview?.trim()) {
-      throw new Error('Message preview is required');
-    }
-  }
-}
-
-/**
- * Supabase Auth SMS Provider
- * Uses Supabase Auth to send SMS messages (leverages existing Twilio integration)
- */
-export class SupabaseAuthSMSProvider {
-  constructor(supabase) {
-    if (!supabase) {
-      throw new Error('Supabase client is required');
-    }
-    this.supabase = supabase;
-  }
-
-  /**
-   * Send SMS using Supabase Auth
-   * Note: This is a workaround since Supabase Auth doesn't have a direct SMS API
-   * In production, you might want to use Twilio directly or another SMS service
-   * @param {string} phoneNumber - Phone number in E.164 format
-   * @param {string} message - SMS message content
-   * @returns {Promise<Object>} Result with success status and message ID
-   */
-  async sendSMS(phoneNumber, message) {
-    // For now, we'll use a custom SMS endpoint that leverages the existing SMS infrastructure
-    // This could be enhanced to use Twilio directly or another SMS service
-    
-    // Use absolute URL to avoid SvelteKit fetch issues in server context
-    // Use the PORT environment variable directly (both dev and production)
-    const port = process.env.PORT || '8080';
-    const baseUrl = process.env.NODE_ENV === 'production'
-      ? (process.env.SITE_URL || 'https://qrypt.chat')
-      : `http://localhost:${port}`;
-    const smsUrl = `${baseUrl}/api/sms/send-notification`;
-    
-    console.log('📱 [SMS-PROVIDER] Environment debug:', {
-      'process.env.PORT': process.env.PORT,
-      'process.env.NODE_ENV': process.env.NODE_ENV,
-      'all env vars with PORT': Object.keys(process.env).filter(key => key.includes('PORT')).reduce((obj, key) => {
-        obj[key] = process.env[key];
-        return obj;
-      }, {})
-    });
-    
-    console.log('📱 [SMS-PROVIDER] Attempting SMS API call:', {
-      smsUrl,
-      port,
-      environment: process.env.NODE_ENV || 'development',
-      portFromEnv: process.env.PORT
-    });
-    
-    const response = await fetch(smsUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        phoneNumber,
-        message
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to send SMS');
-    }
-
-    const result = await response.json();
-    return {
-      success: true,
-      messageId: result.messageId
-    };
   }
 }
 
 /**
  * Create SMS notification service instance
  * @param {Object} supabase - Supabase client
- * @returns {SMSNotificationService} Configured SMS notification service
+ * @returns {Promise<SMSNotificationService>} Configured SMS notification service
  */
-export function createSMSNotificationService(supabase) {
-  const smsProvider = new SupabaseAuthSMSProvider(supabase);
+export async function createSMSNotificationService(supabase) {
+  // Import TwilioSMSProvider dynamically to avoid import issues
+  const { TwilioSMSProvider } = await import('./twilio-sms-provider.js');
+  const smsProvider = new TwilioSMSProvider();
   return new SMSNotificationService(supabase, smsProvider);
 }

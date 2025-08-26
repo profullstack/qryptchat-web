@@ -157,14 +157,12 @@ export async function handleSendMessage(ws, message, context) {
 
 		// Send SMS notifications to inactive participants
 		try {
-			const smsService = createSMSNotificationService(supabase);
+			const smsService = await createSMSNotificationService(supabase);
 			const senderName = user.display_name || user.username || 'Someone';
-			const messagePreview = newMessage.encrypted_content || 'sent you a message';
 			
 			console.log('📨 [SMS] Checking for inactive participants to notify:', {
 				conversationId,
 				senderName,
-				messagePreview: messagePreview.substring(0, 50) + '...',
 				userId: user.id,
 				userDetails: {
 					id: user.id,
@@ -175,8 +173,7 @@ export async function handleSendMessage(ws, message, context) {
 
 			const smsResult = await smsService.notifyInactiveParticipants(
 				conversationId,
-				senderName,
-				messagePreview
+				senderName
 			);
 
 			console.log('📨 [SMS] SMS notification result:', {
