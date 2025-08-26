@@ -41,12 +41,22 @@
 				
 				// Check if public key is in database
 				if (user?.id) {
+					console.log('🔑 Checking if public key exists in database for user:', user.id);
 					const dbPublicKey = await publicKeyService.getUserPublicKey(user.id);
 					publicKeyInDatabase = !!dbPublicKey;
+					
+					console.log('🔑 Database public key check result:', {
+						hasLocalKey: !!userKeys.publicKey,
+						hasDbKey: !!dbPublicKey,
+						publicKeyInDatabase
+					});
 					
 					if (!publicKeyInDatabase) {
 						console.log('🔑 ⚠️ Public key exists locally but not in database - sync needed');
 					}
+				} else {
+					console.log('🔑 No user ID available for database check');
+					publicKeyInDatabase = false; // Force sync button to show if no user ID
 				}
 			}
 			
@@ -138,6 +148,30 @@
 		} catch (err) {
 			console.error('Failed to copy public key:', err);
 			error = 'Failed to copy public key to clipboard';
+		}
+	}
+	
+	async function syncPublicKey() {
+		try {
+			syncingPublicKey = true;
+			error = '';
+			success = '';
+			
+			// Upload public key to database
+			const uploaded = await publicKeyService.uploadMyPublicKey();
+			
+			if (uploaded) {
+				publicKeyInDatabase = true;
+				success = 'Public key synced to database successfully! You can now send and receive encrypted messages.';
+			} else {
+				error = 'Failed to sync public key to database. Please try again.';
+			}
+			
+		} catch (err) {
+			console.error('Failed to sync public key:', err);
+			error = (err instanceof Error ? err.message : String(err)) || 'Failed to sync public key';
+		} finally {
+			syncingPublicKey = false;
 		}
 	}
 </script>
