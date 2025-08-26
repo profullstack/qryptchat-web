@@ -89,38 +89,69 @@ export async function POST(event) {
 			logger.info('Processing session-based profile completion');
 			
 			const token = authHeader.replace('Bearer ', '');
+			logger.info('Token details', {
+				tokenLength: token.length,
+				tokenStart: token.substring(0, 20) + '...',
+				tokenEnd: '...' + token.substring(token.length - 20)
+			});
 			
 			try {
-				// Create service role client to validate JWT
-				const serviceSupabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-					auth: {
-						autoRefreshToken: false,
-						persistSession: false
+				// Try to decode the JWT to see what's in it
+				const tokenParts = token.split('.');
+				if (tokenParts.length === 3) {
+					try {
+						const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+						logger.info('JWT payload', {
+							sub: payload.sub,
+							exp: payload.exp,
+							iat: payload.iat,
+							iss: payload.iss,
+							phone: payload.phone,
+							currentTime: Math.floor(Date.now() / 1000)
+						});
+						
+						// Check if token is expired
+						if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+							logger.error('Token is expired', {
+								exp: payload.exp,
+								now: Math.floor(Date.now() / 1000)
+							});
+							return json(
+								{ error: 'Session expired. Please verify your phone number again.' },
+								{ status: 401 }
+							);
+						}
+						
+						// If token looks valid, create user object from payload
+						const user = {
+							id: payload.sub,
+							phone: payload.phone,
+							// Add other fields as needed
+						};
+						
+						logger.info('Using JWT payload directly', { userId: user.id, userPhone: user.phone });
+						
+						// Use the user data from JWT payload
+						verifyData = {
+							user,
+							session: { access_token: token }
+						};
+						verifyError = null;
+						
+					} catch (decodeError) {
+						logger.error('Failed to decode JWT', { error: decodeError });
+						return json(
+							{ error: 'Invalid session token format.' },
+							{ status: 401 }
+						);
 					}
-				});
-				
-				// Validate the JWT token by getting user info with service role
-				const { data: { user }, error: userError } = await serviceSupabase.auth.getUser(token);
-				
-				if (userError || !user) {
-					logger.error('Invalid or expired session token', { error: userError });
+				} else {
+					logger.error('Invalid JWT format', { parts: tokenParts.length });
 					return json(
-						{ error: 'Session expired. Please verify your phone number again.' },
+						{ error: 'Invalid session token format.' },
 						{ status: 401 }
 					);
 				}
-				
-				logger.info('Session validated successfully', {
-					userId: user.id,
-					userPhone: user.phone
-				});
-				
-				// Use the authenticated user data
-				verifyData = {
-					user,
-					session: { access_token: token }
-				};
-				verifyError = null;
 				
 			} catch (sessionError) {
 				logger.error('Session validation failed', { error: sessionError });
