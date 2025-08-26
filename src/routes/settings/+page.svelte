@@ -6,6 +6,7 @@
 	import SMSNotificationSettings from '$lib/components/settings/SMSNotificationSettings.svelte';
 	import EncryptionSettings from '$lib/components/settings/EncryptionSettings.svelte';
 	import PrivateKeyManager from '$lib/components/settings/PrivateKeyManager.svelte';
+	import EncryptionTester from '$lib/components/settings/EncryptionTester.svelte';
 	
 	const supabase = createSupabaseClient();
 	
@@ -155,6 +156,10 @@
 						on:exported={handlePrivateKeyExported}
 						on:imported={handlePrivateKeyImported}
 					/>
+				</section>
+				
+				<section class="settings-section">
+					<EncryptionTester />
 				</section>
 			</div>
 		{/if}
