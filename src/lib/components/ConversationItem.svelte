@@ -12,11 +12,11 @@
 
 	// Handle click
 	function handleClick() {
-		dispatch('select', conversation.conversation_id);
+		dispatch('select', conversation.id);
 	}
 
 	// Format last message time
-	function formatTime(timestamp) {
+	function formatTime(/** @type {string | null | undefined} */ timestamp) {
 		if (!timestamp) return '';
 		
 		const date = new Date(timestamp);
@@ -35,10 +35,16 @@
 	}
 
 	// Truncate message content
-	function truncateMessage(content, maxLength = 50) {
+	function truncateMessage(/** @type {string | null | undefined} */ content, maxLength = 50) {
 		if (!content) return '';
 		if (content.length <= maxLength) return content;
 		return content.substring(0, maxLength) + '...';
+	}
+
+	// Truncate conversation ID for debugging
+	function truncateConversationId(/** @type {string | null | undefined} */ id) {
+		if (!id) return '';
+		return id.substring(0, 8);
 	}
 </script>
 
@@ -49,8 +55,8 @@
 	onclick={handleClick}
 >
 	<div class="conversation-avatar">
-		{#if conversation.conversation_avatar_url}
-			<img src={conversation.conversation_avatar_url} alt={conversation.conversation_name} />
+		{#if conversation.avatar_url}
+			<img src={conversation.avatar_url} alt={conversation.name} />
 		{:else if isRoom}
 			<div class="room-icon">
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -59,7 +65,7 @@
 			</div>
 		{:else}
 			<div class="avatar-placeholder">
-				{(conversation.conversation_name || 'U').charAt(0).toUpperCase()}
+				{(conversation.name || 'U').charAt(0).toUpperCase()}
 			</div>
 		{/if}
 	</div>
@@ -70,24 +76,29 @@
 				{#if isRoom}
 					<span class="room-prefix">#</span>
 				{/if}
-				{conversation.conversation_name || 'Unknown'}
+				{conversation.name || 'Unknown'}
 			</div>
 			
-			{#if conversation.latest_message_created_at}
-				<div class="conversation-time">
-					{formatTime(conversation.latest_message_created_at)}
+			<div class="conversation-meta">
+				{#if conversation.last_message_at}
+					<div class="conversation-time">
+						{formatTime(conversation.last_message_at)}
+					</div>
+				{/if}
+				<div class="conversation-id" title={conversation.id}>
+					{truncateConversationId(conversation.id)}
 				</div>
-			{/if}
+			</div>
 		</div>
 
 		<div class="conversation-preview">
-			{#if conversation.latest_message_content}
+			{#if conversation.last_message_content}
 				<div class="last-message">
-					{#if conversation.latest_message_sender_username && conversation.conversation_type !== 'direct'}
-						<span class="sender-name">{conversation.latest_message_sender_username}:</span>
+					{#if conversation.last_message_sender_username && conversation.type !== 'direct'}
+						<span class="sender-name">{conversation.last_message_sender_username}:</span>
 					{/if}
 					<span class="message-content">
-						{truncateMessage(conversation.latest_message_content)}
+						{truncateMessage(conversation.last_message_content)}
 					</span>
 				</div>
 			{:else}
@@ -96,7 +107,7 @@
 				</div>
 			{/if}
 
-			{#if conversation.unread_count > 0}
+			{#if conversation.unread_count && conversation.unread_count > 0}
 				<div class="unread-badge">
 					{conversation.unread_count > 99 ? '99+' : conversation.unread_count}
 				</div>
@@ -214,9 +225,27 @@
 		font-weight: 400;
 	}
 
+	.conversation-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
+	}
+
 	.conversation-time {
 		font-size: 0.75rem;
 		color: var(--color-text-secondary);
+		flex-shrink: 0;
+	}
+
+	.conversation-id {
+		font-size: 0.625rem;
+		color: var(--color-text-secondary);
+		opacity: 0.6;
+		font-family: monospace;
+		background: var(--color-surface-hover);
+		padding: 0.125rem 0.25rem;
+		border-radius: 0.25rem;
 		flex-shrink: 0;
 	}
 

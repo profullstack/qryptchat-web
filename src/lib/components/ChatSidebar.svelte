@@ -21,13 +21,13 @@
 	// Derived state using Svelte 5 runes
 	const filteredConversations = $derived(searchQuery
 		? $conversations.filter(conv =>
-			conv.conversation_name?.toLowerCase().includes(searchQuery.toLowerCase())
+			conv.name?.toLowerCase().includes(searchQuery.toLowerCase())
 		)
 		: $conversations);
 
-	const directMessages = $derived(filteredConversations.filter(conv => conv.conversation_type === 'direct'));
-	const groupConversations = $derived(filteredConversations.filter(conv => conv.conversation_type === 'group'));
-	const roomConversations = $derived(filteredConversations.filter(conv => conv.conversation_type === 'room'));
+	const directMessages = $derived(filteredConversations.filter(conv => conv.type === 'direct'));
+	const groupConversations = $derived(filteredConversations.filter(conv => conv.type === 'group'));
+	const roomConversations = $derived(filteredConversations.filter(conv => conv.type === 'room'));
 
 	// Group rooms by group_id
 	const groupedRooms = $derived(roomConversations.reduce((acc, room) => {
@@ -215,12 +215,12 @@
 							
 							{#if expandedGroups.has(group.group_id) && groupedRooms[group.group_id]}
 								<div class="group-rooms">
-									{#each (groupedRooms[group.group_id] || []) as room (room.conversation_id)}
+									{#each (groupedRooms[group.group_id] || []) as room (room.id)}
 										<ConversationItem
 											conversation={room}
-											active={activeConversationId === room.conversation_id}
+											active={activeConversationId === room.id}
 											isRoom={true}
-											on:select={() => handleConversationSelect(room.conversation_id)}
+											on:select={() => handleConversationSelect(room.id)}
 										/>
 									{/each}
 								</div>
@@ -238,11 +238,11 @@
 						<span class="section-count">{directMessages.length}</span>
 					</div>
 					
-					{#each directMessages as conversation (conversation.conversation_id)}
+					{#each directMessages as conversation (conversation.id)}
 						<ConversationItem
 							{conversation}
-							active={activeConversationId === conversation.conversation_id}
-							on:select={() => handleConversationSelect(conversation.conversation_id)}
+							active={activeConversationId === conversation.id}
+							on:select={() => handleConversationSelect(conversation.id)}
 						/>
 					{/each}
 				</div>
@@ -256,11 +256,11 @@
 						<span class="section-count">{groupConversations.length}</span>
 					</div>
 					
-					{#each groupConversations as conversation (conversation.conversation_id)}
+					{#each groupConversations as conversation (conversation.id)}
 						<ConversationItem
 							{conversation}
-							active={activeConversationId === conversation.conversation_id}
-							on:select={() => handleConversationSelect(conversation.conversation_id)}
+							active={activeConversationId === conversation.id}
+							on:select={() => handleConversationSelect(conversation.id)}
 						/>
 					{/each}
 				</div>

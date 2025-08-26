@@ -3,30 +3,33 @@
  * Handles conversation-related WebSocket messages
  */
 
-import { createClient } from '@supabase/supabase-js';
-import { 
-	MESSAGE_TYPES, 
-	serializeMessage, 
+// Remove service role client import - use authenticated user client instead
+import {
+	MESSAGE_TYPES,
+	serializeMessage,
 	createErrorResponse,
-	createSuccessResponse 
+	createSuccessResponse
 } from '../utils/protocol.js';
 import { roomManager } from '../utils/rooms.js';
 
 /**
- * Get Supabase client for user context
- * @param {Object} context - Connection context
- * @returns {Object} Supabase client
+ * Get authenticated Supabase client for the user
+ * @param {Object} context - Connection context with user info
+ * @returns {Object} Authenticated Supabase client
  */
-function getSupabaseClient(context) {
-	if (!context.supabase && context.user) {
-		// Create Supabase client with user's JWT token
-		const supabaseUrl = process.env.PUBLIC_SUPABASE_URL;
-		const supabaseKey = process.env.PUBLIC_SUPABASE_ANON_KEY;
+async function getSupabaseClient(context) {
+	if (!context.supabase && context.user?.access_token) {
+		// Create a client with the user's access token
+		const { createClient } = await import('@supabase/supabase-js');
+		
+		// Use environment variables that should be available in the WebSocket plugin context
+		const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+		const supabaseKey = process.env.PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 		
 		if (!supabaseUrl || !supabaseKey) {
 			throw new Error('Supabase configuration missing');
 		}
-
+		
 		context.supabase = createClient(supabaseUrl, supabaseKey, {
 			global: {
 				headers: {
@@ -67,9 +70,9 @@ export async function handleLoadConversations(ws, message, context) {
 			return;
 		}
 
-		console.log('💬 [CONVERSATIONS] Getting Supabase client...');
-		const supabase = getSupabaseClient(context);
-		console.log('💬 [CONVERSATIONS] Supabase client obtained:', !!supabase);
+		console.log('💬 [CONVERSATIONS] Getting authenticated Supabase client...');
+		const supabase = await getSupabaseClient(context);
+		console.log('💬 [CONVERSATIONS] Authenticated Supabase client obtained:', !!supabase);
 
 		// Call the database function to get user conversations
 		// Use the internal user ID since the function expects the internal UUID for conversation_participants lookup
@@ -206,8 +209,8 @@ export async function handleJoinConversation(ws, message, context) {
 			return;
 		}
 
-		console.log('💬 [JOIN] Getting Supabase client...');
-		const supabase = getSupabaseClient(context);
+		console.log('💬 [JOIN] Getting authenticated Supabase client...');
+		const supabase = await getSupabaseClient(context);
 
 		// Verify user has access to this conversation
 		// Use the internal user ID (not auth_user_id) for conversation_participants lookup
@@ -384,10 +387,65 @@ export async function handleCreateConversation(ws, message, context) {
 			return;
 		}
 
-		const supabase = getSupabaseClient(context);
+		const supabase = await getSupabaseClient(context);
 
 		// Determine conversation type and data
 		const isDirectMessage = !isGroup && participantIds.length === 1;
+		
+		// For direct messages, check if a conversation already exists between these users
+		if (isDirectMessage) {
+			const otherUserId = participantIds[0];
+			console.log('💬 [CREATE] Checking for existing direct conversation:', {
+				currentUserId: context.user.id,
+				otherUserId: otherUserId,
+				isDirectMessage: true
+			});
+			
+			// Query for existing direct conversation between these two users
+			const { data: existingConversations, error: searchError } = await supabase
+				.from('conversations')
+				.select(`
+					*,
+					conversation_participants!inner(user_id)
+				`)
+				.eq('type', 'direct')
+				.eq('conversation_participants.user_id', context.user.id);
+			
+			if (searchError) {
+				console.error('💬 [CREATE] Error searching for existing conversations:', searchError);
+			} else if (existingConversations && existingConversations.length > 0) {
+				// Check if any of these conversations also include the other user
+				for (const conv of existingConversations) {
+					const { data: otherParticipant, error: participantError } = await supabase
+						.from('conversation_participants')
+						.select('user_id')
+						.eq('conversation_id', conv.id)
+						.eq('user_id', otherUserId)
+						.single();
+					
+					if (!participantError && otherParticipant) {
+						console.log('💬 [CREATE] Found existing direct conversation:', {
+							conversationId: conv.id,
+							participants: [context.user.id, otherUserId]
+						});
+						
+						// Return the existing conversation instead of creating a new one
+						const response = createSuccessResponse(
+							message.requestId,
+							MESSAGE_TYPES.CONVERSATION_CREATED,
+							{ conversation: conv }
+						);
+						
+						console.log('💬 [CREATE] Returning existing conversation:', JSON.stringify(response, null, 2));
+						ws.send(serializeMessage(response));
+						return;
+					}
+				}
+			}
+			
+			console.log('💬 [CREATE] No existing direct conversation found, creating new one');
+		}
+
 		const conversationData = {
 			type: isDirectMessage ? 'direct' : 'room',
 			name: isDirectMessage ? null : (name || null), // Direct messages don't have names
@@ -420,42 +478,53 @@ export async function handleCreateConversation(ws, message, context) {
 			created_by: conversation.created_by
 		});
 
-		// Add participants (including creator)
-		const allParticipantIds = [...new Set([context.user.id, ...participantIds])];
-		console.log('💬 [CREATE] Participant IDs processing:', {
-			creatorId: context.user.id,
-			originalParticipantIds: participantIds,
-			allParticipantIds: allParticipantIds,
-			participantCount: allParticipantIds.length
-		});
-		
-		const participantData = allParticipantIds.map(userId => ({
-			conversation_id: conversation.id,
-			user_id: userId,
-			joined_at: new Date().toISOString()
-		}));
-
-		console.log('💬 [CREATE] Inserting participant data:', participantData);
-		const { error: participantError } = await supabase
-			.from('conversation_participants')
-			.insert(participantData);
-
-		if (participantError) {
-			console.error('💬 [CREATE] ERROR: Failed to add participants');
-			console.error('💬 [CREATE] Participant error:', participantError);
-			// Try to clean up the conversation
-			await supabase.from('conversations').delete().eq('id', conversation.id);
+		// Add additional participants (creator is automatically added by database trigger)
+		if (participantIds && participantIds.length > 0) {
+			// Filter out the creator since they're already added by the trigger
+			const additionalParticipantIds = participantIds.filter(id => id !== context.user.id);
 			
-			const errorResponse = createErrorResponse(
-				message.requestId,
-				'Failed to add participants',
-				'DATABASE_ERROR'
-			);
-			ws.send(serializeMessage(errorResponse));
-			return;
-		}
+			if (additionalParticipantIds.length > 0) {
+				console.log('💬 [CREATE] Adding additional participants:', {
+					creatorId: context.user.id,
+					originalParticipantIds: participantIds,
+					additionalParticipantIds: additionalParticipantIds,
+					additionalParticipantCount: additionalParticipantIds.length
+				});
+				
+				const participantData = additionalParticipantIds.map(userId => ({
+					conversation_id: conversation.id,
+					user_id: userId,
+					role: 'member',
+					joined_at: new Date().toISOString()
+				}));
 
-		console.log('💬 [CREATE] Participants added successfully');
+				console.log('💬 [CREATE] Inserting additional participant data:', participantData);
+				const { error: participantError } = await supabase
+					.from('conversation_participants')
+					.insert(participantData);
+
+				if (participantError) {
+					console.error('💬 [CREATE] ERROR: Failed to add additional participants');
+					console.error('💬 [CREATE] Participant error:', participantError);
+					// Try to clean up the conversation
+					await supabase.from('conversations').delete().eq('id', conversation.id);
+					
+					const errorResponse = createErrorResponse(
+						message.requestId,
+						'Failed to add participants',
+						'DATABASE_ERROR'
+					);
+					ws.send(serializeMessage(errorResponse));
+					return;
+				}
+
+				console.log('💬 [CREATE] Additional participants added successfully');
+			} else {
+				console.log('💬 [CREATE] No additional participants to add (creator already added by trigger)');
+			}
+		} else {
+			console.log('💬 [CREATE] No additional participants specified');
+		}
 
 		// Join the creator to the conversation room
 		console.log('💬 [CREATE] Adding creator to room:', {
