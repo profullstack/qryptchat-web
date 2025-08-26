@@ -217,7 +217,7 @@ export class SMSAuthDiagnostics {
 
 		try {
 			// Check if required tables exist
-			const tables = ['users', 'phone_verifications'];
+			const tables = ['users'];
 			
 			for (const table of tables) {
 				const { error } = await this.supabase.from(table).select('*').limit(1);
