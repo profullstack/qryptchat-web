@@ -1,4 +1,4 @@
-<script>
+e<script>
 	import { user } from '$lib/stores/auth.js';
 
 	let {
@@ -55,7 +55,15 @@
 
 		<div class="message-bubble" class:own-bubble={isOwn}>
 			<div class="message-text">
-				{message.content || '[Message content unavailable]'}
+				{#if message.content}
+					{message.content}
+				{:else if message.encrypted_content}
+					<span style="color: red; font-family: monospace; font-size: 0.7rem;">
+						🔐 ENCRYPTED: {message.encrypted_content.substring(0, 100)}...
+					</span>
+				{:else}
+					[Message content unavailable]
+				{/if}
 			</div>
 			
 			{#if isOwn && showTimestamp}

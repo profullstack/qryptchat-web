@@ -57,7 +57,8 @@ export const MESSAGE_TYPES = {
 	// Key distribution messages
 	KEY_SHARE: 'key_share',
 	KEY_REQUEST: 'key_request',
-	KEY_RESPONSE: 'key_response'
+	KEY_RESPONSE: 'key_response',
+	KEY_INIT: 'key_init'
 };
 
 /**

@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { createSupabaseClient } from '$lib/supabase.js';
 	import SMSNotificationSettings from '$lib/components/settings/SMSNotificationSettings.svelte';
+	import EncryptionSettings from '$lib/components/settings/EncryptionSettings.svelte';
 	
 	const supabase = createSupabaseClient();
 	
@@ -35,7 +36,7 @@
 			
 		} catch (err) {
 			console.error('Failed to load user settings:', err);
-			error = err.message || 'Failed to load settings';
+			error = (err instanceof Error ? err.message : String(err)) || 'Failed to load settings';
 		} finally {
 			loading = false;
 		}

@@ -45,6 +45,8 @@
 		"vitest": "^3.2.4"
 	},
 	"dependencies": {
+		"@noble/ciphers": "^2.0.0",
+		"@noble/hashes": "^2.0.0",
 		"@supabase/ssr": "^0.7.0",
 		"@supabase/supabase-js": "^2.56.0",
 		"twilio": "^5.8.0",

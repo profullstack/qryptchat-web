@@ -256,6 +256,10 @@ function createWebSocketChatStore() {
 					handleKeyResponseMessage(message.payload);
 					break;
 
+				case MESSAGE_TYPES.KEY_INIT:
+					handleKeyInitMessage(message.payload);
+					break;
+
 				default:
 					console.log('Unhandled message type:', message.type);
 					break;
@@ -598,6 +602,28 @@ function createWebSocketChatStore() {
 			await keyDistribution.handleKeyResponseMessage(keyResponseData);
 		} catch (error) {
 			console.error('Failed to handle key response message:', error);
+		}
+	}
+
+	/**
+	 * Handle key initialization message
+	 * @param {Object} keyInitData - Key initialization data
+	 */
+	async function handleKeyInitMessage(keyInitData) {
+		try {
+			const { conversationId, participantIds, initiatedBy } = keyInitData;
+			console.log(`🔑 [KEY_INIT] Received key initialization for conversation ${conversationId}`);
+			console.log(`🔑 [KEY_INIT] Participants:`, participantIds);
+			console.log(`🔑 [KEY_INIT] Initiated by:`, initiatedBy);
+			
+			// Initialize conversation key if we don't have one
+			await keyDistribution.initializeConversationKey(
+				conversationId,
+				participantIds,
+				{ sendMessage }
+			);
+		} catch (error) {
+			console.error('Failed to handle key initialization message:', error);
 		}
 	}
 

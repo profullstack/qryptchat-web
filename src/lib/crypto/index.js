@@ -1,8 +1,10 @@
 /**
  * @fileoverview Post-Quantum Cryptography utilities for QryptChat
  * Implements CRYSTALS-Kyber (KEM) and CRYSTALS-Dilithium (Digital Signatures)
- * with ChaCha20-Poly1305 for symmetric encryption
+ * with ChaCha20-Poly1305 for symmetric encryption using Noble crypto libraries
  */
+
+import { chacha20poly1305 } from '@noble/ciphers/chacha';
 
 /**
  * Crypto configuration constants
@@ -159,11 +161,11 @@ export class HKDF {
 }
 
 /**
- * ChaCha20-Poly1305 symmetric encryption
+ * ChaCha20-Poly1305 symmetric encryption using Noble crypto library (quantum-resistant)
  */
 export class ChaCha20Poly1305 {
 	/**
-	 * Encrypt data using ChaCha20-Poly1305
+	 * Encrypt data using ChaCha20-Poly1305 from Noble crypto library
 	 * @param {Uint8Array} key
 	 * @param {Uint8Array} nonce
 	 * @param {Uint8Array} plaintext
@@ -171,29 +173,17 @@ export class ChaCha20Poly1305 {
 	 * @returns {Promise<Uint8Array>}
 	 */
 	static async encrypt(key, nonce, plaintext, additionalData = new Uint8Array(0)) {
-		const cryptoKey = await crypto.subtle.importKey(
-			'raw',
-			key,
-			{ name: 'ChaCha20-Poly1305' },
-			false,
-			['encrypt']
-		);
-
-		const encrypted = await crypto.subtle.encrypt(
-			{
-				name: 'ChaCha20-Poly1305',
-				iv: nonce,
-				additionalData: additionalData
-			},
-			cryptoKey,
-			plaintext
-		);
-
-		return new Uint8Array(encrypted);
+		try {
+			const cipher = chacha20poly1305(key, nonce, additionalData);
+			const ciphertext = cipher.encrypt(plaintext);
+			return ciphertext;
+		} catch (error) {
+			throw new EncryptionError(`ChaCha20-Poly1305 encryption failed: ${error.message}`);
+		}
 	}
 
 	/**
-	 * Decrypt data using ChaCha20-Poly1305
+	 * Decrypt data using ChaCha20-Poly1305 from Noble crypto library
 	 * @param {Uint8Array} key
 	 * @param {Uint8Array} nonce
 	 * @param {Uint8Array} ciphertext
@@ -201,25 +191,13 @@ export class ChaCha20Poly1305 {
 	 * @returns {Promise<Uint8Array>}
 	 */
 	static async decrypt(key, nonce, ciphertext, additionalData = new Uint8Array(0)) {
-		const cryptoKey = await crypto.subtle.importKey(
-			'raw',
-			key,
-			{ name: 'ChaCha20-Poly1305' },
-			false,
-			['decrypt']
-		);
-
-		const decrypted = await crypto.subtle.decrypt(
-			{
-				name: 'ChaCha20-Poly1305',
-				iv: nonce,
-				additionalData: additionalData
-			},
-			cryptoKey,
-			ciphertext
-		);
-
-		return new Uint8Array(decrypted);
+		try {
+			const cipher = chacha20poly1305(key, nonce, additionalData);
+			const plaintext = cipher.decrypt(ciphertext);
+			return plaintext;
+		} catch (error) {
+			throw new DecryptionError(`ChaCha20-Poly1305 decryption failed: ${error.message}`);
+		}
 	}
 }
 

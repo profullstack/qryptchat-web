@@ -111,9 +111,16 @@ export async function POST(event) {
 			// Don't fail the request if system message fails
 		}
 
+		// Trigger key distribution for new participants
+		// This will be handled by the WebSocket system when participants connect
+		// We could also broadcast a KEY_INIT message here if we had access to the WebSocket server
+		console.log(`🔑 New participants added to conversation ${conversationId}:`, newUserIds);
+		console.log('🔑 Key distribution will be handled when participants connect to WebSocket');
+
 		return json({ 
 			message: `Successfully added ${newUserIds.length} participant(s)`,
-			added_count: newUserIds.length
+			added_count: newUserIds.length,
+			new_participant_ids: newUserIds // Include this for potential WebSocket notification
 		});
 	} catch (error) {
 		console.error('API error:', error);

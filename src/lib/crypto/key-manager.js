@@ -273,6 +273,91 @@ export class KeyManager {
 
 		return false;
 	}
+
+	/**
+	 * Check if user has encryption keys initialized
+	 * @returns {Promise<boolean>} Whether user has keys
+	 */
+	async hasUserKeys() {
+		try {
+			if (!browser) return false;
+			
+			const userKeys = localStorage.getItem('qryptchat_user_keys');
+			return !!userKeys;
+		} catch (error) {
+			console.error('🔑 Failed to check user keys:', error);
+			return false;
+		}
+	}
+
+	/**
+	 * Generate user encryption keys
+	 * @returns {Promise<void>}
+	 */
+	async generateUserKeys() {
+		try {
+			if (!browser) {
+				throw new Error('User keys can only be generated in browser environment');
+			}
+
+			// Generate a master key for the user
+			const masterKey = new Uint8Array(32);
+			crypto.getRandomValues(masterKey);
+
+			// Generate key pair for key exchange (using same approach as conversation keys for simplicity)
+			const keyExchangeKey = new Uint8Array(32);
+			crypto.getRandomValues(keyExchangeKey);
+
+			const userKeys = {
+				masterKey: Base64.encode(masterKey),
+				keyExchangeKey: Base64.encode(keyExchangeKey),
+				timestamp: Date.now(),
+				version: '1.0'
+			};
+
+			localStorage.setItem('qryptchat_user_keys', JSON.stringify(userKeys));
+			console.log('🔑 Generated user encryption keys');
+
+			// Clear sensitive data from memory
+			CryptoUtils.secureClear(masterKey);
+			CryptoUtils.secureClear(keyExchangeKey);
+		} catch (error) {
+			console.error('🔑 Failed to generate user keys:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Clear user encryption keys
+	 * @returns {Promise<void>}
+	 */
+	async clearUserKeys() {
+		try {
+			if (!browser) return;
+			
+			localStorage.removeItem('qryptchat_user_keys');
+			console.log('🔑 Cleared user encryption keys');
+		} catch (error) {
+			console.error('🔑 Failed to clear user keys:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get user encryption keys
+	 * @returns {Promise<Object|null>} User keys or null
+	 */
+	async getUserKeys() {
+		try {
+			if (!browser) return null;
+			
+			const stored = localStorage.getItem('qryptchat_user_keys');
+			return stored ? JSON.parse(stored) : null;
+		} catch (error) {
+			console.error('🔑 Failed to get user keys:', error);
+			return null;
+		}
+	}
 }
 
 // Create and export singleton instance

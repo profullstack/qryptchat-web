@@ -603,6 +603,33 @@ export async function handleCreateConversation(ws, message, context) {
 		});
 		roomManager.joinRoom(ws, conversation.id, context.user.id);
 
+		// Initialize encryption key distribution for the new conversation
+		console.log('💬 [CREATE] 🔑 Initializing encryption key distribution...');
+		try {
+			// Get all participant IDs including the creator
+			const allParticipantIds = [context.user.id, ...participantIds.filter(id => id !== context.user.id)];
+			console.log('💬 [CREATE] 🔑 All participants for key distribution:', allParticipantIds);
+			
+			// Broadcast key initialization to all participants via WebSocket
+			// This will be handled by the client-side key distribution system
+			const keyInitMessage = {
+				type: MESSAGE_TYPES.KEY_INIT,
+				payload: {
+					conversationId: conversation.id,
+					participantIds: allParticipantIds,
+					initiatedBy: context.user.id
+				}
+			};
+			
+			// Broadcast to all participants in the conversation room
+			roomManager.broadcastToRoom(conversation.id, keyInitMessage, context.user.id);
+			console.log('💬 [CREATE] 🔑 Key initialization broadcast sent to all participants');
+		} catch (keyError) {
+			console.error('💬 [CREATE] 🔑 Failed to initialize key distribution:', keyError);
+			// Don't fail conversation creation if key distribution fails
+			// The client-side will handle key generation and distribution
+		}
+
 		const response = createSuccessResponse(
 			message.requestId,
 			MESSAGE_TYPES.CONVERSATION_CREATED,
