@@ -310,8 +310,8 @@
 	.chat-sidebar {
 		width: 320px;
 		height: 100vh;
-		background: var(--color-surface);
-		border-right: 1px solid var(--color-border);
+		background: var(--color-bg-primary);
+		border-right: 1px solid var(--color-border-primary);
 		box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
 		display: flex;
 		flex-direction: column;
@@ -322,11 +322,11 @@
 
 	.sidebar-header {
 		padding: 1rem;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border-primary);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		background: var(--color-surface);
+		background: var(--color-bg-primary);
 		z-index: 1;
 	}
 
@@ -355,7 +355,7 @@
 	.avatar-placeholder {
 		width: 100%;
 		height: 100%;
-		background: var(--color-primary-500);
+		background: var(--color-brand-primary);
 		color: white;
 		display: flex;
 		align-items: center;
@@ -380,7 +380,7 @@
 
 	.user-status {
 		font-size: 0.75rem;
-		color: var(--color-success-600);
+		color: var(--color-success);
 	}
 
 	.header-actions {
@@ -402,13 +402,13 @@
 	}
 
 	.action-button:hover {
-		background: var(--color-surface-hover);
+		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
 	}
 
 	.search-section {
 		padding: 1rem;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border-primary);
 	}
 
 	.search-input {
@@ -427,9 +427,9 @@
 	.search-input input {
 		width: 100%;
 		padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-primary);
 		border-radius: 0.5rem;
-		background: var(--color-background);
+		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
 		font-size: 0.875rem;
 		transition: border-color 0.2s ease;
@@ -437,7 +437,7 @@
 
 	.search-input input:focus {
 		outline: none;
-		border-color: var(--color-primary-500);
+		border-color: var(--color-brand-primary);
 	}
 
 	.search-input input::placeholder {
@@ -474,7 +474,7 @@
 	.section-count {
 		font-size: 0.75rem;
 		color: var(--color-text-secondary);
-		background: var(--color-surface-hover);
+		background: var(--color-bg-secondary);
 		padding: 0.125rem 0.375rem;
 		border-radius: 0.75rem;
 		min-width: 1.25rem;
@@ -487,7 +487,7 @@
 
 	.group-rooms {
 		margin-left: 1rem;
-		border-left: 2px solid var(--color-border);
+		border-left: 2px solid var(--color-border-primary);
 		padding-left: 0.5rem;
 	}
 
@@ -503,8 +503,8 @@
 	.loading-spinner {
 		width: 32px;
 		height: 32px;
-		border: 3px solid var(--color-border);
-		border-top: 3px solid var(--color-primary-500);
+		border: 3px solid var(--color-border-primary);
+		border-top: 3px solid var(--color-brand-primary);
 		border-radius: 50%;
 		animation: spin 1s linear infinite;
 		margin-bottom: 1rem;
@@ -551,7 +551,7 @@
 	}
 
 	.primary-button {
-		background: var(--color-primary-600);
+		background: var(--color-brand-primary);
 		color: white;
 		border: none;
 		padding: 0.75rem 1.5rem;
@@ -562,13 +562,13 @@
 	}
 
 	.primary-button:hover {
-		background: var(--color-primary-700);
+		background: var(--color-brand-secondary);
 	}
 
 	.secondary-button {
-		background: var(--color-surface-hover);
+		background: var(--color-bg-secondary);
 		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-border-primary);
 		padding: 0.5rem 1rem;
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
@@ -577,7 +577,7 @@
 	}
 
 	.secondary-button:hover {
-		background: var(--color-border);
+		background: var(--color-border-primary);
 	}
 
 	/* Responsive */
@@ -598,7 +598,7 @@
 	}
 
 	.sidebar-content::-webkit-scrollbar-thumb {
-		background: var(--color-border);
+		background: var(--color-border-primary);
 		border-radius: 3px;
 	}
 
