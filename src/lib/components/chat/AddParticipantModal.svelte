@@ -160,11 +160,10 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="modal-title"
+		tabindex="-1"
 	>
 		<div
 			class="modal-content"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
 			role="document"
 		>
 			<div class="modal-header">
