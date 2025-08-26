@@ -8,14 +8,19 @@
 	import ChatSidebar from '$lib/components/ChatSidebar.svelte';
 	import MessageList from '$lib/components/chat/MessageList.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
+	import AddParticipantModal from '$lib/components/chat/AddParticipantModal.svelte';
 
 	let showWelcome = $state(false);
 	let activeConversationId = $state(/** @type {string | null} */ (null));
 	let showSidebar = $state(true);
+	let showAddParticipantModal = $state(false);
+	let currentConversation = $state(/** @type {any} */ (null));
 
 	// Handle conversation selection
 	function handleConversationSelect(/** @type {string} */ conversationId) {
 		activeConversationId = conversationId;
+		// Get conversation details from the store
+		currentConversation = $activeConversation;
 		// On mobile, hide sidebar when a conversation is selected
 		if (window.innerWidth <= 768) {
 			showSidebar = false;
@@ -33,7 +38,29 @@
 	function handleBackToConversations() {
 		showSidebar = true;
 		activeConversationId = null;
+		currentConversation = null;
 	}
+
+	// Handle add participant modal
+	function handleAddParticipants() {
+		showAddParticipantModal = true;
+	}
+
+	function handleCloseAddParticipantModal() {
+		showAddParticipantModal = false;
+	}
+
+	function handleParticipantsAdded(/** @type {CustomEvent} */ event) {
+		console.log('Participants added:', event.detail);
+		// The conversation will be updated via WebSocket, so we don't need to manually refresh
+		showAddParticipantModal = false;
+	}
+
+	// Check if current conversation supports adding participants
+	const canAddParticipants = $derived(currentConversation && (
+		currentConversation.type === 'group' ||
+		currentConversation.type === 'direct' // Direct messages can be converted to groups
+	));
 
 	// Redirect if not authenticated and initialize WebSocket
 	onMount(() => {
@@ -128,11 +155,27 @@
 								← Back
 							</button>
 							<div class="conversation-title">
-								Chat
+								{currentConversation?.name || 'Chat'}
 							</div>
-							<button class="menu-button" onclick={toggleSidebar}>
-								☰
-							</button>
+							<div class="header-actions">
+								{#if canAddParticipants}
+									<button
+										class="add-participant-button"
+										onclick={handleAddParticipants}
+										title="Add participants"
+										aria-label="Add participants to conversation"
+									>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+											<path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A2.996 2.996 0 0 0 17.06 7c-.8 0-1.54.37-2.01.97L12 11.5v3c0 .55-.45 1-1 1s-1-.45-1-1v-4l-4.5-4.5C5.19 5.69 4.8 5.5 4.38 5.5c-.83 0-1.5.67-1.5 1.5 0 .42.19.81.5 1.11L7 11.5V22h2v-6h2v6h9z"/>
+											<path d="M12.5 11.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5S11 9.17 11 10s.67 1.5 1.5 1.5z"/>
+											<path d="M19 13h-2v2h-2v-2h-2v-2h2V9h2v2h2v2z"/>
+										</svg>
+									</button>
+								{/if}
+								<button class="menu-button" onclick={toggleSidebar}>
+									☰
+								</button>
+							</div>
 						</div>
 						
 						<MessageList conversationId={activeConversationId} />
@@ -171,6 +214,14 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- Add Participant Modal -->
+		<AddParticipantModal
+			isOpen={showAddParticipantModal}
+			conversationId={activeConversationId}
+			on:close={handleCloseAddParticipantModal}
+			on:participantsAdded={handleParticipantsAdded}
+		/>
 	</div>
 {/if}
 
@@ -260,15 +311,22 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 1rem;
-		background: var(--color-surface);
-		border-bottom: 1px solid var(--color-border);
+		background: var(--color-bg-primary);
+		border-bottom: 1px solid var(--color-border-primary);
 		position: sticky;
 		top: 0;
 		z-index: 10;
 	}
 
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
 	.back-button,
-	.menu-button {
+	.menu-button,
+	.add-participant-button {
 		background: none;
 		border: none;
 		color: var(--color-text-primary);
@@ -277,11 +335,24 @@
 		padding: 0.5rem;
 		border-radius: 0.375rem;
 		transition: background-color 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.back-button:hover,
-	.menu-button:hover {
-		background: var(--color-background);
+	.menu-button:hover,
+	.add-participant-button:hover {
+		background: var(--color-bg-secondary);
+	}
+
+	.add-participant-button {
+		color: var(--color-brand-primary);
+	}
+
+	.add-participant-button:hover {
+		background: var(--color-brand-primary);
+		color: white;
 	}
 
 	.conversation-title {
