@@ -112,23 +112,8 @@ export async function handleSendMessage(ws, message, context) {
 		);
 		ws.send(JSON.stringify(successResponse));
 
-		// Server no longer decodes encrypted content - clients handle encryption/decryption
-		// Just pass through the encrypted content as-is for broadcasting
-		if (newMessage.encrypted_content && typeof newMessage.encrypted_content !== 'string') {
-			try {
-				// Only decode if it's bytea from database, but keep it as encrypted content
-				if (newMessage.encrypted_content instanceof Uint8Array) {
-					newMessage.encrypted_content = new TextDecoder().decode(newMessage.encrypted_content);
-				} else if (typeof newMessage.encrypted_content === 'string' && newMessage.encrypted_content.startsWith('\\x')) {
-					const hexString = newMessage.encrypted_content.slice(2);
-					const bytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-					newMessage.encrypted_content = new TextDecoder().decode(bytes);
-				}
-			} catch (error) {
-				console.error('📨 [SEND] Error processing message content for broadcast:', error);
-				newMessage.encrypted_content = '[Message content unavailable]';
-			}
-		}
+		// Server passes through encrypted content exactly as stored in database
+		// No server-side decoding - clients handle all encryption/decryption
 
 		// Broadcast message to all participants in the conversation
 		const broadcastMessage = {
@@ -359,27 +344,8 @@ export async function handleLoadMessages(ws, message, context) {
 		let messagesWithReplies = messages || [];
 		console.log('📨 [MESSAGES] Processing reply data for', messagesWithReplies.length, 'messages');
 		
-		// Decode encrypted_content from bytea to text for all messages
-		if (messagesWithReplies.length > 0) {
-			messagesWithReplies.forEach(msg => {
-				if (msg.encrypted_content) {
-					try {
-						// If encrypted_content is bytea, decode it to text
-						if (msg.encrypted_content instanceof Uint8Array) {
-							msg.encrypted_content = new TextDecoder().decode(msg.encrypted_content);
-						} else if (typeof msg.encrypted_content === 'string' && msg.encrypted_content.startsWith('\\x')) {
-							// Handle PostgreSQL bytea hex format
-							const hexString = msg.encrypted_content.slice(2); // Remove \x prefix
-							const bytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-							msg.encrypted_content = new TextDecoder().decode(bytes);
-						}
-						// If it's already a string, leave it as is
-					} catch (error) {
-						console.error('📨 [MESSAGES] Error decoding message content:', error);
-						msg.encrypted_content = '[Message content unavailable]';
-					}
-				}
-			});
+		// Server passes through encrypted content exactly as stored in database
+		// No server-side decoding - clients handle all encryption/decryption
 			
 			const replyIds = messagesWithReplies
 				.filter(msg => msg.reply_to_id)
@@ -395,25 +361,8 @@ export async function handleLoadMessages(ws, message, context) {
 
 				console.log('📨 [MESSAGES] Reply data loaded:', replyData?.length || 0, 'replies');
 
-				// Map reply data to messages and decode reply content
+				// Map reply data to messages - no server-side decoding
 				if (replyData) {
-					replyData.forEach(reply => {
-						if (reply.encrypted_content) {
-							try {
-								if (reply.encrypted_content instanceof Uint8Array) {
-									reply.encrypted_content = new TextDecoder().decode(reply.encrypted_content);
-								} else if (typeof reply.encrypted_content === 'string' && reply.encrypted_content.startsWith('\\x')) {
-									const hexString = reply.encrypted_content.slice(2);
-									const bytes = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-									reply.encrypted_content = new TextDecoder().decode(bytes);
-								}
-							} catch (error) {
-								console.error('📨 [MESSAGES] Error decoding reply content:', error);
-								reply.encrypted_content = '[Reply content unavailable]';
-							}
-						}
-					});
-					
 					messagesWithReplies.forEach(msg => {
 						if (msg.reply_to_id) {
 							msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
