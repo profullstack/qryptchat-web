@@ -1,7 +1,7 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { keyManager } from '$lib/crypto/key-manager.js';
-	import { clientEncryption } from '$lib/crypto/client-encryption.js';
+	import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
+	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 	
 	const dispatch = createEventDispatcher();
 	
@@ -12,6 +12,8 @@
 	let success = $state('');
 	let keyStatus = $state('checking');
 	let hasEncryptionKeys = $state(false);
+	let userPublicKey = $state('');
+	let publicKeyCopied = $state(false);
 	
 	// Check if user has encryption keys on component mount
 	$effect(() => {
@@ -23,15 +25,21 @@
 	async function checkEncryptionStatus() {
 		try {
 			keyStatus = 'checking';
-			await keyManager.initialize();
+			await postQuantumEncryption.initialize();
+			await publicKeyService.initialize();
 			
-			// Check if user has any encryption keys stored
-			const hasKeys = await keyManager.hasUserKeys();
-			hasEncryptionKeys = hasKeys;
-			keyStatus = hasKeys ? 'enabled' : 'disabled';
+			// Check if user has post-quantum encryption keys stored
+			const userKeys = await postQuantumEncryption.getUserKeys();
+			hasEncryptionKeys = !!(userKeys && userKeys.publicKey && userKeys.privateKey);
+			keyStatus = hasEncryptionKeys ? 'enabled' : 'disabled';
+			
+			// Store the public key for display
+			if (hasEncryptionKeys && userKeys.publicKey) {
+				userPublicKey = userKeys.publicKey;
+			}
 			
 		} catch (err) {
-			console.error('Failed to check encryption status:', err);
+			console.error('Failed to check post-quantum encryption status:', err);
 			keyStatus = 'error';
 			error = 'Failed to check encryption status';
 		}
@@ -43,21 +51,30 @@
 			error = '';
 			success = '';
 			
-			// Initialize encryption services
-			await clientEncryption.initialize();
-			await keyManager.initialize();
+			// Initialize post-quantum encryption services
+			await postQuantumEncryption.initialize();
+			await publicKeyService.initialize();
 			
-			// Generate user's master encryption keys
-			await keyManager.generateUserKeys();
+			// Generate user's post-quantum encryption keys
+			await postQuantumEncryption.getUserKeys(); // This will generate keys if they don't exist
+			
+			// Initialize user encryption (uploads public key to database)
+			await publicKeyService.initializeUserEncryption();
+			
+			// Load the generated public key for display
+			const userKeys = await postQuantumEncryption.getUserKeys();
+			if (userKeys && userKeys.publicKey) {
+				userPublicKey = userKeys.publicKey;
+			}
 			
 			hasEncryptionKeys = true;
 			keyStatus = 'enabled';
-			success = 'Encryption keys generated successfully! Your messages are now end-to-end encrypted.';
+			success = 'Post-quantum encryption keys generated successfully! Your messages are now quantum-resistant end-to-end encrypted.';
 			
 			dispatch('updated', { encryptionEnabled: true });
 			
 		} catch (err) {
-			console.error('Failed to generate encryption keys:', err);
+			console.error('Failed to generate post-quantum encryption keys:', err);
 			error = (err instanceof Error ? err.message : String(err)) || 'Failed to generate encryption keys';
 		} finally {
 			loading = false;
@@ -65,7 +82,7 @@
 	}
 	
 	async function regenerateKeys() {
-		if (!confirm('Are you sure you want to regenerate your encryption keys? This will make old encrypted messages unreadable.')) {
+		if (!confirm('Are you sure you want to regenerate your post-quantum encryption keys? This will make old encrypted messages unreadable.')) {
 			return;
 		}
 		
@@ -74,19 +91,41 @@
 			error = '';
 			success = '';
 			
-			// Clear existing keys and generate new ones
-			await keyManager.clearUserKeys();
-			await keyManager.generateUserKeys();
+			// Clear existing post-quantum keys and generate new ones
+			await postQuantumEncryption.clearUserKeys();
+			await postQuantumEncryption.getUserKeys(); // This will generate new keys
 			
-			success = 'Encryption keys regenerated successfully! Note: Previous encrypted messages may no longer be readable.';
+			// Re-initialize user encryption (uploads new public key to database)
+			await publicKeyService.initializeUserEncryption();
+			
+			// Load the new public key for display
+			const userKeys = await postQuantumEncryption.getUserKeys();
+			if (userKeys && userKeys.publicKey) {
+				userPublicKey = userKeys.publicKey;
+			}
+			
+			success = 'Post-quantum encryption keys regenerated successfully! Note: Previous encrypted messages may no longer be readable.';
 			
 			dispatch('updated', { encryptionEnabled: true, keysRegenerated: true });
 			
 		} catch (err) {
-			console.error('Failed to regenerate encryption keys:', err);
+			console.error('Failed to regenerate post-quantum encryption keys:', err);
 			error = (err instanceof Error ? err.message : String(err)) || 'Failed to regenerate encryption keys';
 		} finally {
 			loading = false;
+		}
+	}
+	
+	async function copyPublicKey() {
+		try {
+			await navigator.clipboard.writeText(userPublicKey);
+			publicKeyCopied = true;
+			setTimeout(() => {
+				publicKeyCopied = false;
+			}, 2000);
+		} catch (err) {
+			console.error('Failed to copy public key:', err);
+			error = 'Failed to copy public key to clipboard';
 		}
 	}
 </script>
@@ -184,13 +223,49 @@
 		{/if}
 	</div>
 	
+	{#if hasEncryptionKeys && userPublicKey}
+		<div class="public-key-section">
+			<h4>📬 Your Public Key (Safe to Share)</h4>
+			<p class="key-explanation">
+				This is your "public address" that others can see. Think of it like your home address -
+				everyone can know it, but only you have the private key (like your house key) to unlock messages sent to you.
+			</p>
+			
+			<div class="key-display">
+				<div class="key-content">
+					<code class="public-key">{userPublicKey}</code>
+				</div>
+				<button
+					class="btn copy-btn"
+					onclick={copyPublicKey}
+					title="Copy public key to clipboard"
+				>
+					{#if publicKeyCopied}
+						✅ Copied!
+					{:else}
+						📋 Copy
+					{/if}
+				</button>
+			</div>
+			
+			<div class="key-info">
+				<p><strong>🔑 How Your Keys Work:</strong></p>
+				<ul>
+					<li><strong>Public Key:</strong> Like your mailbox address - everyone can see it and send you encrypted mail</li>
+					<li><strong>Private Key:</strong> Like your house key - stays hidden in your browser and only you can use it to read your mail</li>
+					<li><strong>Quantum-Safe:</strong> Uses ML-KEM-768 algorithm that even quantum computers can't break</li>
+				</ul>
+			</div>
+		</div>
+	{/if}
+	
 	<div class="encryption-info">
 		<h4>About End-to-End Encryption</h4>
 		<ul>
-			<li><strong>Quantum-Resistant:</strong> Uses ChaCha20-Poly1305 encryption that's secure against quantum computers</li>
+			<li><strong>Quantum-Resistant:</strong> Uses ML-KEM-768 + ChaCha20-Poly1305 encryption that's secure against quantum computers</li>
 			<li><strong>Client-Side:</strong> All encryption happens in your browser - the server never sees your messages</li>
-			<li><strong>Per-Conversation:</strong> Each conversation has its own unique encryption key</li>
-			<li><strong>Forward Secrecy:</strong> Keys are automatically shared securely between participants</li>
+			<li><strong>Post-Quantum KEM:</strong> Uses FIPS 203 ML-KEM-768 for quantum-resistant key exchange</li>
+			<li><strong>Forward Secrecy:</strong> Public keys are automatically shared securely between participants</li>
 		</ul>
 	</div>
 </div>
@@ -385,6 +460,102 @@
 	}
 	
 	.encryption-info li:last-child {
+		margin-bottom: 0;
+	}
+	
+	.public-key-section {
+		margin-bottom: 2rem;
+		padding: 1.5rem;
+		background: var(--color-bg-secondary);
+		border-radius: 0.5rem;
+		border: 1px solid var(--color-border);
+	}
+	
+	.public-key-section h4 {
+		margin: 0 0 0.75rem 0;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-text-primary);
+	}
+	
+	.key-explanation {
+		margin: 0 0 1rem 0;
+		font-size: 0.875rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	
+	.key-display {
+		display: flex;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+		align-items: flex-start;
+	}
+	
+	.key-content {
+		flex: 1;
+		min-width: 0;
+	}
+	
+	.public-key {
+		display: block;
+		width: 100%;
+		padding: 0.75rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 0.375rem;
+		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+		font-size: 0.75rem;
+		color: var(--color-text-primary);
+		word-break: break-all;
+		line-height: 1.4;
+		white-space: pre-wrap;
+	}
+	
+	.copy-btn {
+		flex-shrink: 0;
+		padding: 0.75rem 1rem;
+		font-size: 0.8125rem;
+		background: var(--color-primary-500);
+		color: white;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+	}
+	
+	.copy-btn:hover {
+		background: var(--color-primary-600);
+	}
+	
+	.key-info {
+		padding: 1rem;
+		background: var(--color-surface);
+		border-radius: 0.375rem;
+		border: 1px solid var(--color-border);
+	}
+	
+	.key-info p {
+		margin: 0 0 0.5rem 0;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-text-primary);
+	}
+	
+	.key-info ul {
+		margin: 0;
+		padding-left: 1.25rem;
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	
+	.key-info li {
+		margin-bottom: 0.5rem;
+	}
+	
+	.key-info li:last-child {
 		margin-bottom: 0;
 	}
 </style>
