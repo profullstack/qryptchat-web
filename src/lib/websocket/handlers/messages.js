@@ -97,7 +97,7 @@ export async function handleSendMessage(ws, message, context) {
 
 		// Update sender's activity (they just sent a message)
 		try {
-			await supabase.rpc('update_user_activity', { user_id: user.id });
+			await supabase.rpc('update_user_activity', { user_uuid: user.id });
 		} catch (activityError) {
 			console.error('Failed to update user activity:', activityError);
 			// Don't fail the message send if activity tracking fails
@@ -164,7 +164,13 @@ export async function handleSendMessage(ws, message, context) {
 			console.log('📨 [SMS] Checking for inactive participants to notify:', {
 				conversationId,
 				senderName,
-				messagePreview: messagePreview.substring(0, 50) + '...'
+				messagePreview: messagePreview.substring(0, 50) + '...',
+				userId: user.id,
+				userDetails: {
+					id: user.id,
+					username: user.username,
+					display_name: user.display_name
+				}
 			});
 
 			const smsResult = await smsService.notifyInactiveParticipants(
@@ -177,11 +183,18 @@ export async function handleSendMessage(ws, message, context) {
 				success: smsResult.success,
 				notificationsSent: smsResult.notificationsSent,
 				totalParticipants: smsResult.totalParticipants,
-				hasError: !!smsResult.error
+				hasError: !!smsResult.error,
+				errorMessage: smsResult.error,
+				details: smsResult.details
 			});
+
+			if (!smsResult.success && smsResult.error) {
+				console.error('📨 [SMS] SMS notification error details:', smsResult.error);
+			}
 
 		} catch (smsError) {
 			console.error('📨 [SMS] Failed to send SMS notifications:', smsError);
+			console.error('📨 [SMS] SMS error stack:', smsError.stack);
 			// Don't fail the message send if SMS notifications fail
 		}
 
@@ -427,7 +440,7 @@ export async function handleLoadMessages(ws, message, context) {
 
 		// Update user activity (they just loaded messages)
 		try {
-			await supabase.rpc('update_user_activity', { user_id: user.id });
+			await supabase.rpc('update_user_activity', { user_uuid: user.id });
 		} catch (activityError) {
 			console.error('Failed to update user activity:', activityError);
 			// Don't fail the message load if activity tracking fails

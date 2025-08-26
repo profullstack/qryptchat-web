@@ -32,19 +32,34 @@ export class SMSNotificationService {
    * @returns {Promise<Object>} Result object with success status and details
    */
   async notifyInactiveParticipants(conversationId, senderName, messagePreview) {
-    try {
-      // Validate inputs
-      this.validateInputs(conversationId, senderName, messagePreview);
-
-      // Get inactive participants for this conversation
-      const { data: inactiveParticipants, error: dbError } = await this.supabase.rpc(
-        'get_inactive_participants',
-        { conversation_id: conversationId }
-      );
-
-      if (dbError) {
-        throw new Error(`Database error: ${dbError.message}`);
-      }
+  	try {
+  		// Validate inputs
+  		this.validateInputs(conversationId, senderName, messagePreview);
+ 
+  		console.log('📨 [SMS-SERVICE] Starting SMS notification process:', {
+  			conversationId,
+  			senderName,
+  			messagePreview: messagePreview.substring(0, 50) + '...'
+  		});
+ 
+  		// Get inactive participants for this conversation
+  		console.log('📨 [SMS-SERVICE] Calling get_inactive_participants function...');
+  		const { data: inactiveParticipants, error: dbError } = await this.supabase.rpc(
+  			'get_inactive_participants',
+  			{ conversation_uuid: conversationId }
+  		);
+ 
+  		console.log('📨 [SMS-SERVICE] Database function result:', {
+  			hasData: !!inactiveParticipants,
+  			dataLength: inactiveParticipants?.length || 0,
+  			hasError: !!dbError,
+  			error: dbError
+  		});
+ 
+  		if (dbError) {
+  			console.error('📨 [SMS-SERVICE] Database error:', dbError);
+  			throw new Error(`Database error: ${dbError.message}`);
+  		}
 
       if (!inactiveParticipants || inactiveParticipants.length === 0) {
         return {
@@ -160,13 +175,13 @@ export class SMSNotificationService {
   async logNotification(userId, conversationId, phoneNumber, message, success, messageId = null, errorMessage = null) {
     try {
       await this.supabase.rpc('log_sms_notification', {
-        p_user_id: userId,
-        p_conversation_id: conversationId,
-        p_phone_number: phoneNumber,
-        p_message: message,
-        p_success: success,
-        p_message_id: messageId,
-        p_error_message: errorMessage
+        user_uuid: userId,
+        conversation_uuid: conversationId,
+        message_uuid: null, // We don't have message UUID in this context
+        phone: phoneNumber,
+        content: message,
+        notification_status: success ? 'sent' : 'failed',
+        error_msg: errorMessage
       });
     } catch (error) {
       // Don't throw here - logging failures shouldn't break the main flow
@@ -218,7 +233,11 @@ export class SupabaseAuthSMSProvider {
     // For now, we'll use a custom SMS endpoint that leverages the existing SMS infrastructure
     // This could be enhanced to use Twilio directly or another SMS service
     
-    const response = await fetch('/api/sms/send-notification', {
+    // Use absolute URL to avoid SvelteKit fetch issues in server context
+    const baseUrl = process.env.PUBLIC_SUPABASE_URL?.replace('/rest/v1', '') || 'http://localhost:5173';
+    const smsUrl = `${baseUrl}/api/sms/send-notification`;
+    
+    const response = await fetch(smsUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

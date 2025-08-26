@@ -67,7 +67,7 @@
 			<input
 				type="checkbox"
 				bind:checked={smsNotificationsEnabled}
-				on:change={updateSMSPreference}
+				onchange={updateSMSPreference}
 				disabled={loading}
 				class="toggle-input"
 			/>
