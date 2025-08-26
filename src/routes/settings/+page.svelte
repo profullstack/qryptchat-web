@@ -76,8 +76,7 @@
 	 */
 	function handlePrivateKeyImported(event) {
 		console.log('Private keys imported:', event.detail);
-		// Refresh the page or update state as needed
-		window.location.reload();
+		// No need to reload the page - the component handles its own state updates
 	}
 	
 	/**
