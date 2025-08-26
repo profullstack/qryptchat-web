@@ -91,8 +91,16 @@ export async function POST(event) {
 			const token = authHeader.replace('Bearer ', '');
 			
 			try {
-				// Validate the JWT token by getting user info
-				const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+				// Create service role client to validate JWT
+				const serviceSupabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+					auth: {
+						autoRefreshToken: false,
+						persistSession: false
+					}
+				});
+				
+				// Validate the JWT token by getting user info with service role
+				const { data: { user }, error: userError } = await serviceSupabase.auth.getUser(token);
 				
 				if (userError || !user) {
 					logger.error('Invalid or expired session token', { error: userError });
