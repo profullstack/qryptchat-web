@@ -212,29 +212,6 @@
 		color: rgba(255, 255, 255, 0.8);
 	}
 
-	.decrypting-indicator {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--text-secondary);
-		font-style: italic;
-		font-size: 0.8125rem;
-	}
-
-	.spinner {
-		width: 0.875rem;
-		height: 0.875rem;
-		border: 2px solid transparent;
-		border-top: 2px solid currentColor;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
 
 	/* Removed message bubble tails to fix visual artifacts */
 

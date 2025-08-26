@@ -9,6 +9,9 @@
 	import MessageList from '$lib/components/chat/MessageList.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
 	import AddParticipantModal from '$lib/components/chat/AddParticipantModal.svelte';
+	
+	// Import debug utilities for development
+	import '$lib/debug/encryption-debug.js';
 
 	let showWelcome = $state(false);
 	let activeConversationId = $state(/** @type {string | null} */ (null));
