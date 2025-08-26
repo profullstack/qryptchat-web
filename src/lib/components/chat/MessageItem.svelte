@@ -34,13 +34,13 @@
 				console.log(`🔐 [UI] ✅ Successfully decrypted message ${message.id}: "${decrypted}"`);
 			} catch (error) {
 				console.error(`🔐 [UI] ❌ Failed to decrypt message ${message.id}:`, error);
-				decryptedContent = $t('chat.encryptedMessageFailed');
+				decryptedContent = '[Encrypted message - decryption failed]';
 				decryptionFailed = true;
 			} finally {
 				isDecrypting = false;
 			}
 		} else {
-			decryptedContent = $t('chat.messageUnavailable');
+			decryptedContent = '[Message content unavailable]';
 		}
 	});
 
@@ -63,7 +63,7 @@
 	}
 
 	function getDisplayName(/** @type {any} */ sender) {
-		return sender?.display_name || sender?.username || $t('chat.unknownUser');
+		return sender?.display_name || sender?.username || 'Unknown User';
 	}
 
 	function getInitials(/** @type {string} */ name) {
@@ -101,12 +101,12 @@
 				{#if isDecrypting}
 					<span class="decrypting-indicator">
 						<span class="spinner"></span>
-						{$t('chat.decrypting')}
+						Decrypting...
 					</span>
 				{:else if decryptedContent}
 					{decryptedContent}
 				{:else}
-					{$t('chat.messageUnavailable')}
+					[Message content unavailable]
 				{/if}
 			</div>
 			
