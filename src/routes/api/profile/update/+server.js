@@ -31,29 +31,7 @@ export async function POST(event) {
 
 		console.log('Authenticated user from JWT:', { id: user.id, email: user.email, phone: user.phone });
 
-		// Find user by auth_user_id
-		const { data: existingUsers, error: userCheckError } = await supabase
-			.from('users')
-			.select('id, username, display_name, auth_user_id')
-			.eq('auth_user_id', user.id);
-
-		if (userCheckError) {
-			console.error('Error checking user in users table:', { userId: user.id, error: userCheckError });
-			return json({ error: 'Database error while checking user' }, { status: 500 });
-		}
-
-		if (!existingUsers || existingUsers.length === 0) {
-			console.error('User not found in users table:', {
-				jwtUserId: user.id,
-				message: 'No user found with matching auth_user_id'
-			});
-			return json({
-				error: 'User profile not found. Please log out and log back in to refresh your session.'
-			}, { status: 404 });
-		}
-
-		const existingUser = existingUsers[0];
-		console.log('Found existing user:', existingUser);
+		console.log('Authenticated user from JWT:', { id: user.id, email: user.email, phone: user.phone });
 
 		// Validate input
 		if (bio && typeof bio !== 'string') {
@@ -86,11 +64,11 @@ export async function POST(event) {
 			...(website !== undefined && { website: website.trim() || null })
 		};
 
-		// Update user profile using the found user's ID
+		// Update user profile using RLS - the policy ensures only the authenticated user can update their own profile
 		const { data: updatedUsers, error: updateError } = await supabase
 			.from('users')
 			.update(updateData)
-			.eq('id', existingUser.id)
+			.eq('auth_user_id', user.id)
 			.select('id, username, display_name, avatar_url, bio, website');
 
 		if (updateError) {
