@@ -312,12 +312,22 @@
 		height: 100vh;
 		background: var(--color-bg-primary);
 		border-right: 1px solid var(--color-border-primary);
-		box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+		box-shadow:
+			2px 0 12px rgba(0, 0, 0, 0.15),
+			2px 0 24px rgba(0, 0, 0, 0.1);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
 		position: relative;
 		z-index: 10;
+	}
+
+	/* Enhanced shadow for dark mode */
+	:global([data-theme="dark"]) .chat-sidebar {
+		box-shadow:
+			2px 0 12px rgba(0, 0, 0, 0.4),
+			2px 0 24px rgba(0, 0, 0, 0.3),
+			2px 0 36px rgba(0, 0, 0, 0.2);
 	}
 
 	.sidebar-header {
