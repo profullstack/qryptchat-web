@@ -4,6 +4,7 @@
  */
 
 import { postQuantumEncryption } from './post-quantum-encryption.js';
+import { browser } from '$app/environment';
 
 /**
  * Public key management service
@@ -34,7 +35,7 @@ export class PublicKeyService {
 				throw new Error('No public key available');
 			}
 
-			// Upload via API endpoint
+			// Upload via API endpoint (SvelteKit handles auth via cookies/session)
 			const response = await fetch('/api/crypto/public-keys', {
 				method: 'PUT',
 				headers: {
@@ -74,7 +75,7 @@ export class PublicKeyService {
 
 			console.log(`🔑 Fetching public key for user ${userId} via API`);
 
-			// Fetch via API endpoint
+			// Fetch via API endpoint (SvelteKit handles auth via cookies/session)
 			const response = await fetch(`/api/crypto/public-keys?user_id=${encodeURIComponent(userId)}`);
 			
 			if (!response.ok) {
@@ -118,7 +119,7 @@ export class PublicKeyService {
 		try {
 			console.log(`🔑 Fetching public keys for ${userIds.length} users via API`);
 
-			// Use the bulk API endpoint for better performance
+			// Use the bulk API endpoint for better performance (SvelteKit handles auth via cookies/session)
 			const response = await fetch('/api/crypto/public-keys', {
 				method: 'POST',
 				headers: {
@@ -174,7 +175,7 @@ export class PublicKeyService {
 	 */
 	async getConversationParticipantKeys(conversationId) {
 		try {
-			// Get conversation participants via API
+			// Get conversation participants via API (SvelteKit handles auth via cookies/session)
 			const response = await fetch(`/api/chat/conversations/${conversationId}/participants`);
 			
 			if (!response.ok) {
@@ -189,7 +190,7 @@ export class PublicKeyService {
 				return new Map();
 			}
 
-			const userIds = participants.map(p => p.user_id);
+			const userIds = participants.map(/** @param {any} p */ (p) => p.user_id);
 			console.log(`🔑 Getting public keys for ${userIds.length} participants in conversation ${conversationId}`);
 
 			return await this.getMultipleUserPublicKeys(userIds);
