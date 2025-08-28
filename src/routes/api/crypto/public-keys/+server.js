@@ -75,6 +75,7 @@ export async function POST({ request, locals }) {
 			return json({ error: 'Missing or invalid user_ids array' }, { status: 400 });
 		}
 
+		/** @type {Record<string, string|null>} */
 		const publicKeys = {};
 
 		// Process each user ID
