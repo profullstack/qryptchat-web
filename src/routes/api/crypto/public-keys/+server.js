@@ -2,19 +2,100 @@
 // Handles fetching user public keys for encryption
 
 import { json } from '@sveltejs/kit';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 
-// Create service role client instance
+// Create service role client instance for database operations
 const supabaseServiceRole = createServiceRoleClient();
+
+// Create regular client for JWT validation
+const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+
+/**
+ * Authenticate user from request cookies
+ * @param {Request} request
+ * @returns {Promise<{user?: any, error?: string}>}
+ */
+async function authenticateUser(request) {
+	try {
+		// Get access token from cookies
+		const cookieHeader = request.headers.get('cookie');
+		if (!cookieHeader) {
+			return { error: 'No cookies found' };
+		}
+
+		// Parse cookies to find auth token
+		const cookies = Object.fromEntries(
+			cookieHeader.split('; ').map(cookie => {
+				const [name, value] = cookie.split('=');
+				return [name, decodeURIComponent(value)];
+			})
+		);
+
+		// Try different cookie sources for the access token
+		let accessToken = null;
+		
+		// Try Supabase-specific cookies first
+		if (cookies['sb-xydzwxwsbgmznthiiscl-auth-token']) {
+			try {
+				let tokenData = cookies['sb-xydzwxwsbgmznthiiscl-auth-token'];
+				if (tokenData.startsWith('base64-')) {
+					tokenData = Buffer.from(tokenData.substring(7), 'base64').toString('utf-8');
+				}
+				const parsed = JSON.parse(tokenData);
+				accessToken = parsed.access_token;
+			} catch (error) {
+				console.log('Failed to parse Supabase auth cookie:', error.message);
+			}
+		}
+
+		// Fallback to session cookie if it looks like a JWT
+		if (!accessToken && cookies.session) {
+			const sessionToken = cookies.session;
+			// Basic JWT validation - should have 3 parts
+			if (sessionToken.split('.').length === 3) {
+				accessToken = sessionToken;
+			}
+		}
+
+		if (!accessToken) {
+			return { error: 'No access token found' };
+		}
+
+		// Verify the JWT token with regular Supabase client (not service role)
+		const { data: { user }, error } = await supabaseClient.auth.getUser(accessToken);
+
+		if (error || !user) {
+			return { error: `Invalid token: ${error?.message}` };
+		}
+
+		// Get the internal user record from the auth user ID
+		const { data: userData, error: userError } = await supabaseServiceRole
+			.from('users')
+			.select('id, auth_user_id, username')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !userData) {
+			return { error: `No internal user record found: ${userError?.message}` };
+		}
+
+		return { user: userData };
+	} catch (error) {
+		return { error: `Authentication error: ${error.message}` };
+	}
+}
 
 /**
  * GET /api/crypto/public-keys?user_id=xxx
  * Get a single user's public key
  */
-export async function GET({ url, locals }) {
+export async function GET({ url, request }) {
 	try {
-		// Verify user is authenticated
-		if (!locals.user?.id) {
+		// Authenticate user
+		const { user, error: authError } = await authenticateUser(request);
+		if (authError || !user) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -62,10 +143,11 @@ export async function GET({ url, locals }) {
  * POST /api/crypto/public-keys
  * Get multiple users' public keys
  */
-export async function POST({ request, locals }) {
+export async function POST({ request }) {
 	try {
-		// Verify user is authenticated
-		if (!locals.user?.id) {
+		// Authenticate user
+		const { user, error: authError } = await authenticateUser(request);
+		if (authError || !user) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -122,51 +204,5 @@ export async function POST({ request, locals }) {
 	}
 }
 
-/**
- * PUT /api/crypto/public-keys
- * Upload current user's public key
- */
-export async function PUT({ request, locals }) {
-	try {
-		// Verify user is authenticated
-		if (!locals.user?.id) {
-			return json({ error: 'Unauthorized' }, { status: 401 });
-		}
-
-		const { public_key } = await request.json();
-		
-		if (!public_key) {
-			return json({ error: 'Missing public_key' }, { status: 400 });
-		}
-
-		// Get current user's auth_user_id
-		const { data: userData, error: userError } = await supabaseServiceRole
-			.from('users')
-			.select('auth_user_id')
-			.eq('id', locals.user.id)
-			.single();
-
-		if (userError || !userData?.auth_user_id) {
-			return json({ error: 'User not found' }, { status: 404 });
-		}
-
-		// Upload public key using auth_user_id
-		const { data, error } = await supabaseServiceRole
-			.rpc('upsert_user_public_key', {
-				target_user_id: userData.auth_user_id,
-				public_key_param: public_key,
-				key_type_param: 'ML-KEM-768'
-			});
-
-		if (error) {
-			console.error('Error uploading public key:', error);
-			return json({ error: 'Failed to upload public key' }, { status: 500 });
-		}
-
-		return json({ success: true });
-
-	} catch (error) {
-		console.error('Error in PUT /api/crypto/public-keys:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
-	}
-}
+// PUT endpoint removed - public keys are auto-generated during account creation
+// and should not be uploaded manually for proper E2E encryption security

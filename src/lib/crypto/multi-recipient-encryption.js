@@ -1,15 +1,16 @@
 /**
- * @fileoverview Multi-recipient encryption service for QryptChat
- * Encrypts messages for multiple recipients using their individual public keys
+ * @fileoverview Multi-recipient post-quantum encryption service for QryptChat
+ * Encrypts messages for multiple recipients using their individual ML-KEM-768 public keys
  * Each recipient gets their own encrypted copy that only they can decrypt
+ * Uses only post-quantum encryption methods - no legacy encryption
  */
 
-import { asymmetricEncryption } from './asymmetric-encryption.js';
+import { postQuantumEncryption } from './post-quantum-encryption.js';
 import { publicKeyService } from './public-key-service.js';
 
 /**
- * Multi-recipient encryption service
- * Handles encrypting messages for all conversation participants
+ * Multi-recipient post-quantum encryption service
+ * Handles encrypting messages for all conversation participants using ML-KEM-768
  */
 export class MultiRecipientEncryptionService {
 	constructor() {
@@ -21,10 +22,10 @@ export class MultiRecipientEncryptionService {
 	 */
 	async initialize() {
 		if (!this.isInitialized) {
-			await asymmetricEncryption.initialize();
+			await postQuantumEncryption.initialize();
 			await publicKeyService.initialize();
 			this.isInitialized = true;
-			console.log('🔐 Multi-recipient encryption service initialized');
+			console.log('🔐 Multi-recipient post-quantum encryption service initialized (ML-KEM-768)');
 		}
 	}
 
@@ -59,7 +60,7 @@ export class MultiRecipientEncryptionService {
 				try {
 					console.log(`🔐 [MULTI] Encrypting for participant: ${userId}`);
 					
-					const encryptedContent = await asymmetricEncryption.encryptForRecipient(
+					const encryptedContent = await postQuantumEncryption.encryptForRecipient(
 						messageContent,
 						publicKey
 					);
@@ -100,7 +101,7 @@ export class MultiRecipientEncryptionService {
 
 			console.log('🔐 [MULTI] Decrypting message for current user');
 
-			const decryptedContent = await asymmetricEncryption.decryptFromSender(
+			const decryptedContent = await postQuantumEncryption.decryptFromSender(
 				encryptedContent,
 				senderPublicKey
 			);
@@ -142,7 +143,7 @@ export class MultiRecipientEncryptionService {
 
 					console.log(`🔐 [MULTI] Encrypting for recipient: ${userId}`);
 					
-					const encryptedContent = await asymmetricEncryption.encryptForRecipient(
+					const encryptedContent = await postQuantumEncryption.encryptForRecipient(
 						messageContent,
 						publicKey
 					);
@@ -177,7 +178,7 @@ export class MultiRecipientEncryptionService {
 		if (!this.isInitialized) {
 			await this.initialize();
 		}
-		return await asymmetricEncryption.getPublicKey();
+		return await postQuantumEncryption.getPublicKey();
 	}
 
 	/**

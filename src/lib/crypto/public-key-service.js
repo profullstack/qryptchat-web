@@ -23,42 +23,8 @@ export class PublicKeyService {
 		console.log('🔑 Public key service initialized');
 	}
 
-	/**
-	 * Upload current user's public key to the database
-	 * @returns {Promise<boolean>} Success status
-	 */
-	async uploadMyPublicKey() {
-		try {
-			// Get our public key
-			const publicKey = await postQuantumEncryption.getPublicKey();
-			if (!publicKey) {
-				throw new Error('No public key available');
-			}
-
-			// Upload via API endpoint (SvelteKit handles auth via cookies/session)
-			const response = await fetch('/api/crypto/public-keys', {
-				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					public_key: publicKey
-				})
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error || 'Failed to upload public key');
-			}
-
-			console.log('🔑 ✅ Uploaded public key to database via API');
-			return true;
-
-		} catch (error) {
-			console.error('🔑 ❌ Failed to upload public key:', error);
-			return false;
-		}
-	}
+	// uploadMyPublicKey method removed - public keys are auto-generated during account creation
+	// and should not be uploaded manually for proper E2E encryption security
 
 	/**
 	 * Get a user's public key from database
@@ -246,8 +212,8 @@ export class PublicKeyService {
 	}
 
 	/**
-	 * Initialize user's encryption keys and upload public key
-	 * This should be called when user first logs in or registers
+	 * Initialize user's encryption keys locally
+	 * Public keys are auto-generated during account creation, so no upload needed
 	 * @returns {Promise<boolean>} Success status
 	 */
 	async initializeUserEncryption() {
@@ -260,16 +226,9 @@ export class PublicKeyService {
 			// Ensure we have user keys
 			await postQuantumEncryption.getUserKeys();
 
-			// Upload public key to database
-			const uploaded = await this.uploadMyPublicKey();
-
-			if (uploaded) {
-				console.log('🔑 ✅ User post-quantum encryption initialized successfully');
-				return true;
-			} else {
-				console.log('🔑 ⚠️ User post-quantum encryption initialized but public key upload failed');
-				return false;
-			}
+			console.log('🔑 ✅ User post-quantum encryption initialized successfully');
+			console.log('🔑 ℹ️ Public key should already exist in database from account creation');
+			return true;
 
 		} catch (error) {
 			console.error('🔑 ❌ Failed to initialize user post-quantum encryption:', error);

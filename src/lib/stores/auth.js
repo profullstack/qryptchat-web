@@ -8,7 +8,6 @@ import { browser } from '$app/environment';
 import { createSupabaseClient } from '$lib/supabase.js';
 import { messages } from './messages.js';
 import { keyManager } from '$lib/crypto/key-manager.js';
-import { clientEncryption } from '$lib/crypto/client-encryption.js';
 
 /**
  * @typedef {Object} User

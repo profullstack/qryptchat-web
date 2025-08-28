@@ -1,36 +1,42 @@
 /**
- * Browser debugging utilities for encryption
+ * Browser debugging utilities for post-quantum encryption
  */
 
-import { clientEncryption } from '../crypto/client-encryption.js';
+import { postQuantumEncryption } from '../crypto/post-quantum-encryption.js';
 
 /**
- * Debug encryption in the browser console
+ * Debug post-quantum encryption in the browser console
  */
 export async function debugEncryption() {
-	console.log('🔐 === ENCRYPTION DEBUG START ===');
+	console.log('🔐 === POST-QUANTUM ENCRYPTION DEBUG START ===');
 	
 	try {
 		// Initialize encryption service
-		console.log('🔐 Initializing encryption service...');
-		await clientEncryption.initialize();
-		console.log('🔐 ✅ Encryption service initialized');
+		console.log('🔐 Initializing post-quantum encryption service...');
+		await postQuantumEncryption.initialize();
+		console.log('🔐 ✅ Post-quantum encryption service initialized');
 		
-		// Test basic encryption/decryption
-		const testConversationId = 'debug-conversation-' + Date.now();
-		const testMessage = 'Debug test message: ' + new Date().toISOString();
-		
-		console.log('🔐 Testing encryption with:', {
-			conversationId: testConversationId,
-			message: testMessage
+		// Generate test keys
+		const testKeys = await postQuantumEncryption.getUserKeys();
+		console.log('🔐 Test keys generated:', {
+			publicKeyLength: testKeys.publicKey.length,
+			privateKeyLength: testKeys.privateKey.length
 		});
 		
-		// Encrypt
-		const encrypted = await clientEncryption.encryptMessage(testConversationId, testMessage);
+		// Test basic encryption/decryption
+		const testMessage = 'Debug test message: ' + new Date().toISOString();
+		
+		console.log('🔐 Testing post-quantum encryption with:', {
+			message: testMessage,
+			algorithm: 'ML-KEM-768'
+		});
+		
+		// Encrypt for self (using own public key)
+		const encrypted = await postQuantumEncryption.encryptForRecipient(testMessage, testKeys.publicKey);
 		console.log('🔐 Encrypted result:', encrypted);
 		
 		// Decrypt
-		const decrypted = await clientEncryption.decryptMessage(testConversationId, encrypted);
+		const decrypted = await postQuantumEncryption.decryptFromSender(encrypted, testKeys.publicKey);
 		console.log('🔐 Decrypted result:', decrypted);
 		
 		// Verify
@@ -38,7 +44,7 @@ export async function debugEncryption() {
 		console.log('🔐 Test result:', success ? '✅ SUCCESS' : '❌ FAILED');
 		
 		if (!success) {
-			console.error('🔐 ❌ Encryption test failed!', {
+			console.error('🔐 ❌ Post-quantum encryption test failed!', {
 				original: testMessage,
 				decrypted: decrypted,
 				match: decrypted === testMessage
@@ -48,27 +54,28 @@ export async function debugEncryption() {
 		return success;
 		
 	} catch (error) {
-		console.error('🔐 ❌ Encryption debug failed:', error);
+		console.error('🔐 ❌ Post-quantum encryption debug failed:', error);
 		return false;
 	} finally {
-		console.log('🔐 === ENCRYPTION DEBUG END ===');
+		console.log('🔐 === POST-QUANTUM ENCRYPTION DEBUG END ===');
 	}
 }
 
 /**
- * Clear all encryption keys and restart
+ * Clear all post-quantum encryption keys and restart
  */
 export async function clearAllEncryptionKeys() {
-	console.log('🔐 === CLEARING ALL ENCRYPTION KEYS ===');
+	console.log('🔐 === CLEARING ALL POST-QUANTUM ENCRYPTION KEYS ===');
 	
 	try {
-		// Clear from encryption service
-		await clientEncryption.clearAllKeys();
-		console.log('🔐 ✅ Cleared keys from encryption service');
+		// Clear from post-quantum encryption service
+		await postQuantumEncryption.clearUserKeys();
+		console.log('🔐 ✅ Cleared keys from post-quantum encryption service');
 		
 		// Clear from localStorage manually (in case there are old keys)
 		const keysToRemove = [
-			'qryptchat_conversation_keys',
+			'qryptchat_pq_keypair', // post-quantum keys
+			'qryptchat_conversation_keys', // old conversation keys
 			'qryptchat_keys', // old key format
 			'qrypt_encryption_keys', // another old format
 		];
@@ -81,27 +88,28 @@ export async function clearAllEncryptionKeys() {
 		}
 		
 		// Re-initialize
-		await clientEncryption.initialize();
-		console.log('🔐 ✅ Re-initialized encryption service');
+		await postQuantumEncryption.initialize();
+		console.log('🔐 ✅ Re-initialized post-quantum encryption service');
 		
-		console.log('🔐 === KEYS CLEARED SUCCESSFULLY ===');
+		console.log('🔐 === POST-QUANTUM KEYS CLEARED SUCCESSFULLY ===');
 		return true;
 		
 	} catch (error) {
-		console.error('🔐 ❌ Failed to clear encryption keys:', error);
+		console.error('🔐 ❌ Failed to clear post-quantum encryption keys:', error);
 		return false;
 	}
 }
 
 /**
- * Show current encryption status
+ * Show current post-quantum encryption status
  */
 export function showEncryptionStatus() {
-	console.log('🔐 === ENCRYPTION STATUS ===');
+	console.log('🔐 === POST-QUANTUM ENCRYPTION STATUS ===');
 	
 	// Check localStorage
 	const storageKeys = [
-		'qryptchat_conversation_keys',
+		'qryptchat_pq_keypair', // post-quantum keys
+		'qryptchat_conversation_keys', // old conversation keys
 		'qryptchat_keys',
 		'qrypt_encryption_keys'
 	];
@@ -112,7 +120,15 @@ export function showEncryptionStatus() {
 		if (value) {
 			try {
 				const parsed = JSON.parse(value);
-				console.log(`  ${key}:`, Object.keys(parsed).length, 'conversations');
+				if (key === 'qryptchat_pq_keypair') {
+					console.log(`  ${key}:`, {
+						algorithm: parsed.algorithm || 'unknown',
+						version: parsed.version || 'unknown',
+						timestamp: parsed.timestamp ? new Date(parsed.timestamp).toISOString() : 'unknown'
+					});
+				} else {
+					console.log(`  ${key}:`, Object.keys(parsed).length, 'entries');
+				}
 			} catch {
 				console.log(`  ${key}:`, 'invalid JSON');
 			}
@@ -122,9 +138,11 @@ export function showEncryptionStatus() {
 	}
 	
 	// Check service state
-	console.log('🔐 Service state:');
-	console.log('  isInitialized:', clientEncryption.isInitialized);
-	console.log('  conversationKeys size:', clientEncryption.conversationKeys?.size || 0);
+	console.log('🔐 Post-quantum service state:');
+	console.log('  isInitialized:', postQuantumEncryption.isInitialized);
+	console.log('  algorithm:', postQuantumEncryption.kemName);
+	console.log('  publicKeyCache size:', postQuantumEncryption.publicKeyCache?.size || 0);
+	console.log('  hasUserKeys:', !!postQuantumEncryption.userKeys);
 }
 
 // Make functions available globally for browser console debugging
@@ -133,8 +151,8 @@ if (typeof window !== 'undefined') {
 	window.clearAllEncryptionKeys = clearAllEncryptionKeys;
 	window.showEncryptionStatus = showEncryptionStatus;
 	
-	console.log('🔐 Encryption debug functions available:');
-	console.log('  - debugEncryption()');
-	console.log('  - clearAllEncryptionKeys()');
-	console.log('  - showEncryptionStatus()');
+	console.log('🔐 Post-quantum encryption debug functions available:');
+	console.log('  - debugEncryption() - Test ML-KEM-768 encryption');
+	console.log('  - clearAllEncryptionKeys() - Clear all post-quantum keys');
+	console.log('  - showEncryptionStatus() - Show current encryption status');
 }

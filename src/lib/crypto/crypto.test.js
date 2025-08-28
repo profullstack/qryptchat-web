@@ -1,20 +1,19 @@
 /**
  * @fileoverview Tests for QryptChat Post-Quantum Cryptography
- * Using Vitest for testing the crypto implementations
+ * Using Vitest for testing the ML-KEM-768 post-quantum encryption
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { 
-	CRYPTO_CONFIG, 
-	Base64, 
-	SecureRandom, 
-	HKDF, 
+import { describe, it, expect } from 'vitest';
+import {
+	CRYPTO_CONFIG,
+	Base64,
+	SecureRandom,
+	HKDF,
 	ChaCha20Poly1305,
-	CryptoUtils 
+	CryptoUtils
 } from './index.js';
-import { Kyber, KyberKeyManager } from './kyber.js';
-import { Dilithium, DilithiumKeyManager } from './dilithium.js';
-import { X3DHProtocol, DoubleRatchetProtocol, QryptChatEncryption } from './protocol.js';
+import { postQuantumEncryption } from './post-quantum-encryption.js';
+import { multiRecipientEncryption } from './multi-recipient-encryption.js';
 
 describe('Crypto Utilities', () => {
 	describe('Base64', () => {
@@ -90,298 +89,137 @@ describe('Crypto Utilities', () => {
 	});
 });
 
-describe('CRYSTALS-Kyber', () => {
+describe('Post-Quantum Encryption (ML-KEM-768)', () => {
 	describe('Key Generation', () => {
-		it('should generate key pair with correct sizes', async () => {
-			const keyPair = await Kyber.generateKeyPair();
+		it('should generate ML-KEM-768 key pair', async () => {
+			await postQuantumEncryption.initialize();
+			const keys = await postQuantumEncryption.getUserKeys();
 			
-			expect(keyPair.publicKey.length).toBe(CRYPTO_CONFIG.KYBER.PUBLIC_KEY_SIZE);
-			expect(keyPair.privateKey.length).toBe(CRYPTO_CONFIG.KYBER.PRIVATE_KEY_SIZE);
+			expect(keys).toHaveProperty('publicKey');
+			expect(keys).toHaveProperty('privateKey');
+			expect(typeof keys.publicKey).toBe('string');
+			expect(typeof keys.privateKey).toBe('string');
 		});
 
 		it('should generate different key pairs', async () => {
-			const keyPair1 = await Kyber.generateKeyPair();
-			const keyPair2 = await Kyber.generateKeyPair();
+			await postQuantumEncryption.initialize();
+			const keys1 = await postQuantumEncryption.generateUserKeys();
+			const keys2 = await postQuantumEncryption.generateUserKeys();
 			
-			expect(keyPair1.publicKey).not.toEqual(keyPair2.publicKey);
-			expect(keyPair1.privateKey).not.toEqual(keyPair2.privateKey);
+			expect(keys1.publicKey).not.toBe(keys2.publicKey);
+			expect(keys1.privateKey).not.toBe(keys2.privateKey);
 		});
 	});
 
-	describe('Key Encapsulation', () => {
-		it('should encapsulate and decapsulate correctly', async () => {
-			const keyPair = await Kyber.generateKeyPair();
-			
-			const { ciphertext, sharedSecret: secret1 } = await Kyber.encapsulate(keyPair.publicKey);
-			const secret2 = await Kyber.decapsulate(ciphertext, keyPair.privateKey);
-			
-			expect(secret1).toEqual(secret2);
-		});
-
-		it('should generate different shared secrets for different key pairs', async () => {
-			const keyPair1 = await Kyber.generateKeyPair();
-			const keyPair2 = await Kyber.generateKeyPair();
-			
-			const { sharedSecret: secret1 } = await Kyber.encapsulate(keyPair1.publicKey);
-			const { sharedSecret: secret2 } = await Kyber.encapsulate(keyPair2.publicKey);
-			
-			expect(secret1).not.toEqual(secret2);
-		});
-	});
-
-	describe('Serialization', () => {
-		it('should serialize and deserialize key pairs', async () => {
-			const keyPair = await Kyber.generateKeyPair();
-			const serialized = Kyber.serializeKeyPair(keyPair);
-			const deserialized = Kyber.deserializeKeyPair(serialized);
-			
-			expect(deserialized.publicKey).toEqual(keyPair.publicKey);
-			expect(deserialized.privateKey).toEqual(keyPair.privateKey);
-		});
-	});
-});
-
-describe('CRYSTALS-Dilithium', () => {
-	describe('Key Generation', () => {
-		it('should generate key pair with correct sizes', async () => {
-			const keyPair = await Dilithium.generateKeyPair();
-			
-			expect(keyPair.publicKey.length).toBe(CRYPTO_CONFIG.DILITHIUM.PUBLIC_KEY_SIZE);
-			expect(keyPair.privateKey.length).toBe(CRYPTO_CONFIG.DILITHIUM.PRIVATE_KEY_SIZE);
-		});
-	});
-
-	describe('Digital Signatures', () => {
-		it('should sign and verify correctly', async () => {
-			const keyPair = await Dilithium.generateKeyPair();
-			const message = new TextEncoder().encode('Test message for signing');
-			
-			const signature = await Dilithium.sign(message, keyPair.privateKey);
-			const isValid = await Dilithium.verify(message, signature, keyPair.publicKey);
-			
-			expect(isValid).toBe(true);
-		});
-
-		it('should fail verification with wrong public key', async () => {
-			const keyPair1 = await Dilithium.generateKeyPair();
-			const keyPair2 = await Dilithium.generateKeyPair();
-			const message = new TextEncoder().encode('Test message for signing');
-			
-			const signature = await Dilithium.sign(message, keyPair1.privateKey);
-			const isValid = await Dilithium.verify(message, signature, keyPair2.publicKey);
-			
-			expect(isValid).toBe(false);
-		});
-
-		it('should fail verification with modified message', async () => {
-			const keyPair = await Dilithium.generateKeyPair();
-			const message1 = new TextEncoder().encode('Original message');
-			const message2 = new TextEncoder().encode('Modified message');
-			
-			const signature = await Dilithium.sign(message1, keyPair.privateKey);
-			const isValid = await Dilithium.verify(message2, signature, keyPair.publicKey);
-			
-			expect(isValid).toBe(false);
-		});
-	});
-});
-
-describe('Key Management', () => {
-	describe('KyberKeyManager', () => {
-		it('should generate one-time pre-keys', async () => {
-			const keys = await KyberKeyManager.generateOneTimePreKeys(5);
-			
-			expect(keys).toHaveLength(5);
-			keys.forEach(key => {
-				expect(key).toHaveProperty('keyId');
-				expect(key).toHaveProperty('publicKey');
-				expect(key).toHaveProperty('privateKey');
-			});
-		});
-
-		it('should generate signed pre-key', async () => {
-			const signedPreKey = await KyberKeyManager.generateSignedPreKey();
-			
-			expect(signedPreKey).toHaveProperty('keyId');
-			expect(signedPreKey).toHaveProperty('publicKey');
-			expect(signedPreKey).toHaveProperty('privateKey');
-		});
-	});
-
-	describe('DilithiumKeyManager', () => {
-		it('should generate identity key', async () => {
-			const userId = 'test-user-123';
-			const identityKey = await DilithiumKeyManager.generateIdentityKey(userId);
-			
-			expect(identityKey).toHaveProperty('keyId');
-			expect(identityKey).toHaveProperty('publicKey');
-			expect(identityKey).toHaveProperty('privateKey');
-			expect(identityKey.userId).toBe(userId);
-		});
-
-		it('should sign and verify pre-keys', async () => {
-			const identityKeyPair = await Dilithium.generateKeyPair();
-			const kyberKeyPair = await Kyber.generateKeyPair();
-			const kyberPublicKeyB64 = Base64.encode(kyberKeyPair.publicKey);
-			
-			const signature = await DilithiumKeyManager.signPreKey(
-				kyberPublicKeyB64,
-				identityKeyPair.privateKey
-			);
-			
-			const isValid = await DilithiumKeyManager.verifySignedPreKey(
-				kyberPublicKeyB64,
-				signature,
-				identityKeyPair.publicKey
-			);
-			
-			expect(isValid).toBe(true);
-		});
-	});
-});
-
-describe('Encryption Protocol', () => {
-	let aliceKeys, bobKeys, bobKeyBundle;
-
-	beforeEach(async () => {
-		// Generate Alice's keys
-		const aliceIdentity = await Dilithium.generateKeyPair();
-		const aliceSignedPreKey = await Kyber.generateKeyPair();
-		
-		aliceKeys = {
-			identityPublicKey: aliceIdentity.publicKey,
-			identityPrivateKey: aliceIdentity.privateKey,
-			signedPreKeyPrivate: aliceSignedPreKey.privateKey
-		};
-
-		// Generate Bob's keys and key bundle
-		const bobIdentity = await Dilithium.generateKeyPair();
-		const bobSignedPreKey = await Kyber.generateKeyPair();
-		const bobOneTimeKeys = await KyberKeyManager.generateOneTimePreKeys(3);
-		
-		bobKeys = {
-			identityPrivateKey: bobIdentity.privateKey,
-			signedPreKeyPrivate: bobSignedPreKey.privateKey,
-			oneTimePreKeys: bobOneTimeKeys
-		};
-
-		// Create Bob's key bundle
-		bobKeyBundle = {
-			identityKey: {
-				keyId: 'bob-identity',
-				publicKey: Base64.encode(bobIdentity.publicKey)
-			},
-			signedPreKey: {
-				keyId: 'bob-signed-prekey',
-				publicKey: Base64.encode(bobSignedPreKey.publicKey),
-				signature: await DilithiumKeyManager.signPreKey(
-					Base64.encode(bobSignedPreKey.publicKey),
-					bobIdentity.privateKey
-				)
-			},
-			oneTimePreKeys: bobOneTimeKeys.map(key => ({
-				keyId: key.keyId,
-				publicKey: key.publicKey
-			}))
-		};
-	});
-
-	describe('X3DH Protocol', () => {
-		it('should perform key agreement successfully', async () => {
-			const keyAgreement = await X3DHProtocol.initiateKeyAgreement(
-				bobKeyBundle,
-				aliceKeys.identityPrivateKey
-			);
-			
-			expect(keyAgreement).toHaveProperty('sharedSecret');
-			expect(keyAgreement).toHaveProperty('ephemeralPublicKey');
-			expect(keyAgreement).toHaveProperty('usedOneTimeKeyId');
-		});
-
-		it('should derive same shared secret on both sides', async () => {
-			const keyAgreement = await X3DHProtocol.initiateKeyAgreement(
-				bobKeyBundle,
-				aliceKeys.identityPrivateKey
-			);
-			
-			const bobSharedSecret = await X3DHProtocol.completeKeyAgreement(
-				keyAgreement.ephemeralPublicKey,
-				keyAgreement.usedOneTimeKeyId,
-				keyAgreement.salt,
-				bobKeys
-			);
-			
-			expect(bobSharedSecret).toEqual(keyAgreement.sharedSecret);
-		});
-	});
-
-	describe('Double Ratchet Protocol', () => {
-		it('should initialize session correctly', async () => {
-			const sharedSecret = SecureRandom.getRandomBytes(32);
-			const session = await DoubleRatchetProtocol.initializeSession(sharedSecret, true);
-			
-			expect(session).toHaveProperty('rootKey');
-			expect(session).toHaveProperty('sendingChain');
-			expect(session).toHaveProperty('sessionId');
-		});
-
-		it('should encrypt and decrypt messages', async () => {
-			const sharedSecret = SecureRandom.getRandomBytes(32);
-			const aliceSession = await DoubleRatchetProtocol.initializeSession(sharedSecret, true);
-			
-			const message = 'Hello from Alice!';
-			const plaintext = new TextEncoder().encode(message);
-			
-			const { ciphertext, header, newState } = await DoubleRatchetProtocol.encryptMessage(
-				aliceSession,
-				plaintext
-			);
-			
-			expect(ciphertext).toBeDefined();
-			expect(header).toHaveProperty('messageNumber');
-			expect(newState.sendingChain.messageNumber).toBe(1);
-		});
-	});
-
-	describe('QryptChatEncryption', () => {
-		it('should initialize conversation', async () => {
-			const result = await QryptChatEncryption.initializeConversation(
-				'alice-123',
-				bobKeyBundle,
-				aliceKeys
-			);
-			
-			expect(result).toHaveProperty('conversationKey');
-			expect(result).toHaveProperty('initialMessage');
-			expect(result.initialMessage.type).toBe('key_exchange');
-		});
-
-		it('should encrypt and decrypt messages end-to-end', async () => {
-			// Initialize conversation
-			const { conversationKey, conversationData } = await QryptChatEncryption.initializeConversation(
-				'alice-123',
-				bobKeyBundle,
-				aliceKeys
-			);
+	describe('Encryption and Decryption', () => {
+		it('should encrypt and decrypt messages correctly', async () => {
+			await postQuantumEncryption.initialize();
+			const keys = await postQuantumEncryption.getUserKeys();
+			const message = 'Hello, post-quantum world!';
 			
 			// Encrypt message
-			const messageText = 'Hello, this is a quantum-resistant message!';
-			const { encryptedMessage, newRatchetState } = await QryptChatEncryption.encryptMessage(
-				conversationKey,
-				messageText,
-				conversationData.ratchetState
-			);
-			
-			expect(encryptedMessage).toHaveProperty('encryptedContent');
-			expect(encryptedMessage).toHaveProperty('header');
+			const encrypted = await postQuantumEncryption.encryptForRecipient(message, keys.publicKey);
+			expect(typeof encrypted).toBe('string');
 			
 			// Decrypt message
-			const { plaintext } = await QryptChatEncryption.decryptMessage(
-				encryptedMessage,
-				newRatchetState
-			);
+			const decrypted = await postQuantumEncryption.decryptFromSender(encrypted, keys.publicKey);
+			expect(decrypted).toBe(message);
+		});
+
+		it('should fail decryption with wrong private key', async () => {
+			await postQuantumEncryption.initialize();
+			const keys1 = await postQuantumEncryption.generateUserKeys();
+			const keys2 = await postQuantumEncryption.generateUserKeys();
+			const message = 'Secret message';
 			
-			expect(plaintext).toBe(messageText);
+			// Encrypt with keys1
+			const encrypted = await postQuantumEncryption.encryptForRecipient(message, keys1.publicKey);
+			
+			// Try to decrypt with keys2 (should fail)
+			const decrypted = await postQuantumEncryption.decryptFromSender(encrypted, keys2.publicKey);
+			expect(decrypted).toBe('[Encrypted message - decryption failed]');
+		});
+
+		it('should handle different message lengths', async () => {
+			await postQuantumEncryption.initialize();
+			const keys = await postQuantumEncryption.getUserKeys();
+			
+			const messages = [
+				'Short',
+				'This is a medium length message for testing',
+				'This is a very long message that contains multiple sentences and should test the encryption system with larger amounts of data to ensure it works correctly with various message sizes.'
+			];
+			
+			for (const message of messages) {
+				const encrypted = await postQuantumEncryption.encryptForRecipient(message, keys.publicKey);
+				const decrypted = await postQuantumEncryption.decryptFromSender(encrypted, keys.publicKey);
+				expect(decrypted).toBe(message);
+			}
+		});
+	});
+
+	describe('Algorithm Information', () => {
+		it('should return correct algorithm info', async () => {
+			await postQuantumEncryption.initialize();
+			const info = postQuantumEncryption.getAlgorithmInfo();
+			
+			expect(info.name).toBe('ML-KEM-768');
+			expect(info.quantumResistant).toBe(true);
+			expect(info.securityLevel).toBe(3);
+		});
+	});
+});
+
+describe('Multi-Recipient Encryption', () => {
+	describe('Service Initialization', () => {
+		it('should initialize successfully', async () => {
+			await multiRecipientEncryption.initialize();
+			expect(multiRecipientEncryption.isReady()).toBe(true);
+		});
+	});
+
+	describe('Message Encryption for Multiple Recipients', () => {
+		it('should encrypt message for multiple recipients', async () => {
+			await multiRecipientEncryption.initialize();
+			
+			// Generate test keys for multiple users
+			const user1Keys = await postQuantumEncryption.generateUserKeys();
+			const user2Keys = await postQuantumEncryption.generateUserKeys();
+			const user3Keys = await postQuantumEncryption.generateUserKeys();
+			
+			const message = 'Hello to all recipients!';
+			const recipientIds = ['user1', 'user2', 'user3'];
+			
+			// Mock the public key service to return our test keys
+			const originalGetUserPublicKey = multiRecipientEncryption.publicKeyService?.getUserPublicKey;
+			if (multiRecipientEncryption.publicKeyService) {
+				multiRecipientEncryption.publicKeyService.getUserPublicKey = async (userId) => {
+					switch (userId) {
+						case 'user1': return user1Keys.publicKey;
+						case 'user2': return user2Keys.publicKey;
+						case 'user3': return user3Keys.publicKey;
+						default: return null;
+					}
+				};
+			}
+			
+			try {
+				const encryptedContents = await multiRecipientEncryption.encryptForRecipients(message, recipientIds);
+				
+				expect(Object.keys(encryptedContents)).toHaveLength(3);
+				expect(encryptedContents).toHaveProperty('user1');
+				expect(encryptedContents).toHaveProperty('user2');
+				expect(encryptedContents).toHaveProperty('user3');
+				
+				// Each encrypted content should be different
+				expect(encryptedContents.user1).not.toBe(encryptedContents.user2);
+				expect(encryptedContents.user2).not.toBe(encryptedContents.user3);
+			} finally {
+				// Restore original method
+				if (originalGetUserPublicKey && multiRecipientEncryption.publicKeyService) {
+					multiRecipientEncryption.publicKeyService.getUserPublicKey = originalGetUserPublicKey;
+				}
+			}
 		});
 	});
 });

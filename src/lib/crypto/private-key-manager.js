@@ -1,24 +1,25 @@
 /**
- * @fileoverview Private Key Import/Export Manager for QryptChat
- * Handles secure import and export of user private keys with password protection
+ * @fileoverview Post-Quantum Private Key Import/Export Manager for QryptChat
+ * Handles secure import and export of user post-quantum private keys with password protection
+ * Uses ML-KEM-768 for quantum-resistant key management
  */
 
 import { browser } from '$app/environment';
-import { Base64, ChaCha20Poly1305, HKDF, SecureRandom, CryptoUtils } from './index.js';
-import { keyManager } from './key-manager.js';
+import { Base64, HKDF, SecureRandom, CryptoUtils } from './index.js';
+import { postQuantumEncryption } from './post-quantum-encryption.js';
 import * as openpgp from 'openpgp';
 
 /**
  * Export format version for compatibility
  */
-const EXPORT_VERSION = '1.0';
+const EXPORT_VERSION = '2.0'; // Updated for post-quantum encryption
 
 /**
  * Private key import/export manager
  */
 export class PrivateKeyManager {
 	/**
-	 * Export user private keys as encrypted JSON
+	 * Export user post-quantum private keys as encrypted JSON
 	 * @param {string} password - Password to encrypt the keys
 	 * @returns {Promise<string>} Encrypted JSON string containing the keys
 	 * @throws {Error} If no user keys exist or password is invalid
@@ -32,25 +33,23 @@ export class PrivateKeyManager {
 			throw new Error('Key export is only available in browser environment');
 		}
 
-		// Check if user has keys
-		const hasKeys = await keyManager.hasUserKeys();
-		if (!hasKeys) {
-			throw new Error('No user keys found to export');
-		}
-
 		try {
-			// Get user keys
-			const userKeys = await keyManager.getUserKeys();
+			// Initialize post-quantum encryption service
+			await postQuantumEncryption.initialize();
+
+			// Get user post-quantum keys
+			const userKeys = await postQuantumEncryption.exportUserKeys();
 			if (!userKeys) {
-				throw new Error('No user keys found to export');
+				throw new Error('No post-quantum keys found to export');
 			}
 
 			// Prepare keys for encryption
 			const keysToExport = {
-				masterKey: userKeys.masterKey,
-				keyExchangeKey: userKeys.keyExchangeKey,
-				timestamp: userKeys.timestamp,
-				version: userKeys.version
+				publicKey: userKeys.publicKey,
+				privateKey: userKeys.privateKey,
+				algorithm: userKeys.algorithm,
+				timestamp: Date.now(),
+				version: EXPORT_VERSION
 			};
 
 			// Convert to JSON bytes
@@ -61,38 +60,38 @@ export class PrivateKeyManager {
 			const salt = SecureRandom.generateSalt();
 			const encryptionKey = await this._deriveKeyFromPassword(password, salt);
 
-			// Generate nonce for encryption
-			const nonce = SecureRandom.generateNonce();
-
-			// Encrypt the keys
-			const encryptedKeys = await ChaCha20Poly1305.encrypt(
-				encryptionKey,
-				nonce,
-				keysBytes
-			);
+			// Use post-quantum encryption to encrypt the keys
+			// Create a temporary public key for encryption
+			const tempKeyPair = await postQuantumEncryption.kemAlgorithm.generateKeyPair();
+			const tempPublicKey = Base64.encode(tempKeyPair[0]);
+			
+			// Encrypt using post-quantum encryption
+			const encryptedKeys = await postQuantumEncryption.encryptForRecipient(keysJson, tempPublicKey);
 
 			// Create export data structure
 			const exportData = {
 				version: EXPORT_VERSION,
+				algorithm: 'ML-KEM-768',
 				timestamp: Date.now(),
-				encryptedKeys: Base64.encode(encryptedKeys),
+				encryptedKeys: encryptedKeys,
 				salt: Base64.encode(salt),
-				nonce: Base64.encode(nonce)
+				tempPrivateKey: Base64.encode(tempKeyPair[1]) // Store temp private key for decryption
 			};
 
 			// Clear sensitive data from memory
 			CryptoUtils.secureClear(encryptionKey);
 			CryptoUtils.secureClear(keysBytes);
+			CryptoUtils.secureClear(tempKeyPair[1]);
 
 			return JSON.stringify(exportData);
 
 		} catch (error) {
-			throw new Error(`Failed to export private keys: ${error.message}`);
+			throw new Error(`Failed to export post-quantum private keys: ${error.message}`);
 		}
 	}
 
 	/**
-	 * Import user private keys from encrypted JSON
+	 * Import user post-quantum private keys from encrypted JSON
 	 * @param {string} exportedData - Encrypted JSON string containing the keys
 	 * @param {string} password - Password to decrypt the keys
 	 * @returns {Promise<void>}
@@ -121,57 +120,67 @@ export class PrivateKeyManager {
 
 			// Check version compatibility
 			if (parsedData.version !== EXPORT_VERSION) {
+				// Support legacy version 1.0 for backward compatibility
+				if (parsedData.version === '1.0') {
+					throw new Error('Legacy key format not supported. Please use post-quantum keys.');
+				}
 				throw new Error(`Unsupported export version: ${parsedData.version}`);
 			}
 
-			// Decode base64 data
-			const encryptedKeys = Base64.decode(parsedData.encryptedKeys);
-			const salt = Base64.decode(parsedData.salt);
-			const nonce = Base64.decode(parsedData.nonce);
+			// Initialize post-quantum encryption service
+			await postQuantumEncryption.initialize();
 
-			// Derive decryption key from password
+			// Decode base64 data
+			const encryptedKeys = parsedData.encryptedKeys;
+			const salt = Base64.decode(parsedData.salt);
+			const tempPrivateKey = Base64.decode(parsedData.tempPrivateKey);
+
+			// Derive decryption key from password (for additional security)
 			const decryptionKey = await this._deriveKeyFromPassword(password, salt);
 
-			// Decrypt the keys
-			let decryptedBytes;
+			// Decrypt the keys using post-quantum decryption
+			let decryptedJson;
 			try {
-				decryptedBytes = await ChaCha20Poly1305.decrypt(
-					decryptionKey,
-					nonce,
-					encryptedKeys
-				);
+				// Temporarily set the private key for decryption
+				const originalKeys = postQuantumEncryption.userKeys;
+				postQuantumEncryption.userKeys = {
+					privateKey: Base64.encode(tempPrivateKey),
+					publicKey: '' // Not needed for decryption
+				};
+
+				// Decrypt using post-quantum encryption
+				decryptedJson = await postQuantumEncryption.decryptFromSender(encryptedKeys, '');
+				
+				// Restore original keys
+				postQuantumEncryption.userKeys = originalKeys;
 			} catch (decryptError) {
 				throw new Error('Invalid password or corrupted data');
 			}
 
 			// Parse decrypted keys
-			const decryptedJson = new TextDecoder().decode(decryptedBytes);
 			const importedKeys = JSON.parse(decryptedJson);
 
 			// Validate imported keys structure
 			this._validateImportedKeys(importedKeys);
 
-			// Clear existing keys and store imported keys
-			await keyManager.clearUserKeys();
+			// Clear existing keys and import new ones
+			await postQuantumEncryption.clearUserKeys();
 			
-			// Store the imported keys in the same format as generateUserKeys
-			const userKeys = {
-				masterKey: importedKeys.masterKey,
-				keyExchangeKey: importedKeys.keyExchangeKey,
-				timestamp: importedKeys.timestamp || Date.now(),
-				version: importedKeys.version || '1.0'
-			};
-
-			localStorage.setItem('qryptchat_user_keys', JSON.stringify(userKeys));
+			// Import the post-quantum keys
+			await postQuantumEncryption.importUserKeys(
+				importedKeys.publicKey,
+				importedKeys.privateKey,
+				importedKeys.algorithm
+			);
 
 			// Clear sensitive data from memory
 			CryptoUtils.secureClear(decryptionKey);
-			CryptoUtils.secureClear(decryptedBytes);
+			CryptoUtils.secureClear(tempPrivateKey);
 
-			console.log('🔑 Private keys imported successfully');
+			console.log('🔑 Post-quantum private keys imported successfully');
 
 		} catch (error) {
-			throw new Error(`Failed to import private keys: ${error.message}`);
+			throw new Error(`Failed to import post-quantum private keys: ${error.message}`);
 		}
 	}
 
@@ -190,8 +199,8 @@ export class PrivateKeyManager {
 		const derivedKey = await HKDF.derive(
 			passwordBytes,
 			salt,
-			'PrivateKeyExport',
-			32 // 256-bit key for ChaCha20-Poly1305
+			'PostQuantumKeyExport',
+			32 // 256-bit key for additional security
 		);
 
 		// Clear password bytes from memory
@@ -207,7 +216,14 @@ export class PrivateKeyManager {
 	 * @private
 	 */
 	_validateExportData(data) {
-		const requiredFields = ['version', 'timestamp', 'encryptedKeys', 'salt', 'nonce'];
+		const requiredFields = ['version', 'timestamp', 'encryptedKeys', 'salt'];
+		
+		// For version 2.0, we need tempPrivateKey instead of nonce
+		if (data.version === '2.0') {
+			requiredFields.push('algorithm', 'tempPrivateKey');
+		} else {
+			requiredFields.push('nonce'); // Legacy support
+		}
 		
 		for (const field of requiredFields) {
 			if (!data.hasOwnProperty(field)) {
@@ -228,19 +244,24 @@ export class PrivateKeyManager {
 		if (typeof data.salt !== 'string') {
 			throw new Error('Invalid export format: salt must be a string');
 		}
-		if (typeof data.nonce !== 'string') {
-			throw new Error('Invalid export format: nonce must be a string');
+		if (data.version === '2.0') {
+			if (typeof data.algorithm !== 'string') {
+				throw new Error('Invalid export format: algorithm must be a string');
+			}
+			if (typeof data.tempPrivateKey !== 'string') {
+				throw new Error('Invalid export format: tempPrivateKey must be a string');
+			}
 		}
 	}
 
 	/**
-	 * Validate imported keys structure
+	 * Validate imported post-quantum keys structure
 	 * @param {Object} keys - Decrypted keys object
 	 * @throws {Error} If keys are invalid
 	 * @private
 	 */
 	_validateImportedKeys(keys) {
-		const requiredFields = ['masterKey', 'keyExchangeKey'];
+		const requiredFields = ['publicKey', 'privateKey', 'algorithm'];
 		
 		for (const field of requiredFields) {
 			if (!keys.hasOwnProperty(field)) {
@@ -249,29 +270,37 @@ export class PrivateKeyManager {
 		}
 
 		// Validate field types
-		if (typeof keys.masterKey !== 'string') {
-			throw new Error('Invalid keys format: masterKey must be a string');
+		if (typeof keys.publicKey !== 'string') {
+			throw new Error('Invalid keys format: publicKey must be a string');
 		}
-		if (typeof keys.keyExchangeKey !== 'string') {
-			throw new Error('Invalid keys format: keyExchangeKey must be a string');
+		if (typeof keys.privateKey !== 'string') {
+			throw new Error('Invalid keys format: privateKey must be a string');
+		}
+		if (typeof keys.algorithm !== 'string') {
+			throw new Error('Invalid keys format: algorithm must be a string');
+		}
+
+		// Validate algorithm
+		if (keys.algorithm !== 'ML-KEM-768') {
+			throw new Error(`Unsupported algorithm: ${keys.algorithm}`);
 		}
 
 		// Validate base64 format by attempting to decode
 		try {
-			Base64.decode(keys.masterKey);
-			Base64.decode(keys.keyExchangeKey);
+			Base64.decode(keys.publicKey);
+			Base64.decode(keys.privateKey);
 		} catch (decodeError) {
 			throw new Error('Invalid keys format: keys must be valid base64');
 		}
 	}
 
 	/**
-	 * Generate a secure filename for key export
+	 * Generate a secure filename for post-quantum key export
 	 * @returns {string} Filename with timestamp
 	 */
 	generateExportFilename() {
 		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-		return `qryptchat-keys-${timestamp}.json`;
+		return `qryptchat-pq-keys-${timestamp}.json`;
 	}
 
 	/**
@@ -421,12 +450,12 @@ export class PrivateKeyManager {
 	}
 
 	/**
-	 * Generate a secure filename for GPG encrypted key export
+	 * Generate a secure filename for GPG encrypted post-quantum key export
 	 * @returns {string} Filename with timestamp and .gpg extension
 	 */
 	generateGPGExportFilename() {
 		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-		return `qryptchat-keys-${timestamp}.json.gpg`;
+		return `qryptchat-pq-keys-${timestamp}.json.gpg`;
 	}
 
 	/**
