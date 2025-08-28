@@ -3,7 +3,6 @@
  * Handles storing and retrieving user public keys from the database
  */
 
-import { supabase } from '$lib/supabase.js';
 import { postQuantumEncryption } from './post-quantum-encryption.js';
 
 /**
@@ -29,30 +28,29 @@ export class PublicKeyService {
 	 */
 	async uploadMyPublicKey() {
 		try {
-			// Get current user
-			const { data: { user }, error: userError } = await supabase.auth.getUser();
-			if (userError || !user) {
-				throw new Error('User not authenticated');
-			}
-
 			// Get our public key
 			const publicKey = await postQuantumEncryption.getPublicKey();
 			if (!publicKey) {
 				throw new Error('No public key available');
 			}
 
-			// Upload to database
-			const { data, error } = await supabase.rpc('upsert_user_public_key', {
-				target_user_id: user.id,
-				public_key_param: publicKey,
-				key_type_param: 'ML-KEM-768'
+			// Upload via API endpoint
+			const response = await fetch('/api/crypto/public-keys', {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					public_key: publicKey
+				})
 			});
 
-			if (error) {
-				throw error;
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || 'Failed to upload public key');
 			}
 
-			console.log('🔑 ✅ Uploaded public key to database');
+			console.log('🔑 ✅ Uploaded public key to database via API');
 			return true;
 
 		} catch (error) {
@@ -70,27 +68,39 @@ export class PublicKeyService {
 		try {
 			// Check cache first
 			if (this.cache.has(userId)) {
+				console.log(`🔑 Using cached public key for user ${userId}`);
 				return this.cache.get(userId);
 			}
 
-			// Fetch from database
-			const { data, error } = await supabase.rpc('get_user_public_key', {
-				target_user_id: userId,
-				key_type_param: 'ML-KEM-768'
+			console.log(`🔑 Fetching public key for user ${userId} via API`);
+
+			// Fetch via API endpoint
+			const response = await fetch(`/api/crypto/public-keys?user_id=${encodeURIComponent(userId)}`);
+			
+			if (!response.ok) {
+				if (response.status === 404) {
+					console.log(`🔑 ⚠️ No public key found for user ${userId}`);
+					return null;
+				}
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+			
+			console.log(`🔑 API response for user ${userId}:`, {
+				hasPublicKey: !!data.public_key,
+				dataType: typeof data.public_key,
+				dataLength: data.public_key ? data.public_key.length : 0
 			});
 
-			if (error) {
-				throw error;
-			}
-
-			if (data) {
+			if (data.public_key) {
 				// Cache the result
-				this.cache.set(userId, data);
-				console.log(`🔑 Retrieved public key for user ${userId}`);
-				return data;
+				this.cache.set(userId, data.public_key);
+				console.log(`🔑 ✅ Retrieved and cached public key for user ${userId}`);
+				return data.public_key;
 			}
 
-			console.log(`🔑 No public key found for user ${userId}`);
+			console.log(`🔑 ⚠️ No public key found for user ${userId} in API response`);
 			return null;
 
 		} catch (error) {
@@ -105,18 +115,56 @@ export class PublicKeyService {
 	 * @returns {Promise<Map<string, string>>} Map of userId -> publicKey
 	 */
 	async getMultipleUserPublicKeys(userIds) {
-		const results = new Map();
+		try {
+			console.log(`🔑 Fetching public keys for ${userIds.length} users via API`);
 
-		// Process in parallel
-		const promises = userIds.map(async (userId) => {
-			const publicKey = await this.getUserPublicKey(userId);
-			if (publicKey) {
-				results.set(userId, publicKey);
+			// Use the bulk API endpoint for better performance
+			const response = await fetch('/api/crypto/public-keys', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					user_ids: userIds
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
-		});
 
-		await Promise.all(promises);
-		return results;
+			const data = await response.json();
+			const results = new Map();
+
+			// Process the results and cache them
+			for (const [userId, publicKey] of Object.entries(data.public_keys)) {
+				if (publicKey) {
+					results.set(userId, publicKey);
+					this.cache.set(userId, publicKey);
+					console.log(`🔑 ✅ Retrieved and cached public key for user ${userId}`);
+				} else {
+					console.log(`🔑 ⚠️ No public key found for user ${userId}`);
+				}
+			}
+
+			console.log(`🔑 Successfully fetched ${results.size} public keys out of ${userIds.length} requested`);
+			return results;
+
+		} catch (error) {
+			console.error('🔑 ❌ Failed to get multiple public keys, falling back to individual requests:', error);
+			
+			// Fallback to individual requests
+			const results = new Map();
+			const promises = userIds.map(async (userId) => {
+				const publicKey = await this.getUserPublicKey(userId);
+				if (publicKey) {
+					results.set(userId, publicKey);
+				}
+			});
+
+			await Promise.all(promises);
+			return results;
+		}
 	}
 
 	/**
@@ -126,17 +174,17 @@ export class PublicKeyService {
 	 */
 	async getConversationParticipantKeys(conversationId) {
 		try {
-			// Get conversation participants
-			const { data: participants, error } = await supabase
-				.from('conversation_participants')
-				.select('user_id')
-				.eq('conversation_id', conversationId);
-
-			if (error) {
-				throw error;
+			// Get conversation participants via API
+			const response = await fetch(`/api/chat/conversations/${conversationId}/participants`);
+			
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
 
-			if (!participants || participants.length === 0) {
+			const data = await response.json();
+			const participants = data.participants || [];
+
+			if (participants.length === 0) {
 				console.log(`🔑 No participants found for conversation ${conversationId}`);
 				return new Map();
 			}

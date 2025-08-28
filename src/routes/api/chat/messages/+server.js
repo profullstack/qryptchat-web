@@ -1,5 +1,6 @@
 // Messages API endpoint with disappearing messages support
 // Handles message creation with automatic delivery fan-out
+// Now supports per-participant encryption
 
 import { json } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
@@ -18,11 +19,16 @@ export async function POST({ request, locals }) {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { conversation_id, encrypted_content, content_type = 'text', has_attachments = false, reply_to_id } = await request.json();
+    const { conversation_id, encrypted_contents, content_type = 'text', has_attachments = false, reply_to_id } = await request.json();
 
     // Validate required fields
-    if (!conversation_id || !encrypted_content) {
-      return json({ error: 'Missing required fields: conversation_id, encrypted_content' }, { status: 400 });
+    if (!conversation_id || !encrypted_contents) {
+      return json({ error: 'Missing required fields: conversation_id, encrypted_contents' }, { status: 400 });
+    }
+
+    // Validate encrypted_contents is an object with user_id -> encrypted_content mappings
+    if (typeof encrypted_contents !== 'object' || Object.keys(encrypted_contents).length === 0) {
+      return json({ error: 'encrypted_contents must be an object with user_id -> encrypted_content mappings' }, { status: 400 });
     }
 
     // Verify user is a participant in the conversation
@@ -38,30 +44,13 @@ export async function POST({ request, locals }) {
       return json({ error: 'Not authorized to send messages in this conversation' }, { status: 403 });
     }
 
-    // Convert encrypted content to bytea format
-    let contentBytes;
-    try {
-      if (typeof encrypted_content === 'string') {
-        // Assume base64 encoded string
-        contentBytes = Buffer.from(encrypted_content, 'base64');
-      } else if (encrypted_content instanceof ArrayBuffer) {
-        contentBytes = Buffer.from(encrypted_content);
-      } else if (Array.isArray(encrypted_content)) {
-        contentBytes = Buffer.from(encrypted_content);
-      } else {
-        throw new Error('Invalid encrypted_content format');
-      }
-    } catch (error) {
-      return json({ error: 'Invalid encrypted content format' }, { status: 400 });
-    }
-
-    // Create the message
+    // Create the message (without encrypted_content in main table)
     const { data: message, error: messageError } = await supabaseServiceRole
       .from('messages')
       .insert([{
         conversation_id,
         sender_id: locals.user.id,
-        encrypted_content: contentBytes,
+        encrypted_content: Buffer.from(''), // Empty buffer - actual content stored in message_recipients
         content_type,
         has_attachments,
         reply_to_id: reply_to_id || null
@@ -72,6 +61,33 @@ export async function POST({ request, locals }) {
     if (messageError) {
       console.error('Error creating message:', messageError);
       return json({ error: 'Failed to create message' }, { status: 500 });
+    }
+
+    // Create per-participant encrypted message copies
+    try {
+      const { error: recipientsError } = await supabaseServiceRole
+        .rpc('fn_create_message_recipients', {
+          p_message_id: message.id,
+          p_encrypted_contents: encrypted_contents
+        });
+
+      if (recipientsError) {
+        console.error('Error creating message recipients:', recipientsError);
+        // Clean up the message if recipients creation failed
+        await supabaseServiceRole
+          .from('messages')
+          .delete()
+          .eq('id', message.id);
+        return json({ error: 'Failed to create encrypted message copies' }, { status: 500 });
+      }
+    } catch (error) {
+      console.error('Error in message recipients creation:', error);
+      // Clean up the message if recipients creation failed
+      await supabaseServiceRole
+        .from('messages')
+        .delete()
+        .eq('id', message.id);
+      return json({ error: 'Failed to create encrypted message copies' }, { status: 500 });
     }
 
     // Fan out deliveries to all recipients (excluding sender)
@@ -137,14 +153,13 @@ export async function GET({ url, locals }) {
     }
 
     // Get messages that haven't expired for this user
-    // Join with deliveries to filter out expired messages
+    // Join with deliveries and message_recipients to get user-specific encrypted content
     const { data: messages, error: messagesError } = await supabaseServiceRole
       .from('messages')
       .select(`
         id,
         conversation_id,
         sender_id,
-        encrypted_content,
         content_type,
         has_attachments,
         created_at,
@@ -154,10 +169,14 @@ export async function GET({ url, locals }) {
           read_ts,
           expires_at,
           deleted_ts
+        ),
+        message_recipients!inner(
+          encrypted_content
         )
       `)
       .eq('conversation_id', conversationId)
       .eq('deliveries.recipient_user_id', locals.user.id)
+      .eq('message_recipients.recipient_user_id', locals.user.id)
       .is('deliveries.deleted_ts', null)
       .order('created_at', { ascending: true })
       .range(offset, offset + limit - 1);
@@ -172,7 +191,8 @@ export async function GET({ url, locals }) {
       id: message.id,
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
-      encrypted_content: message.encrypted_content ? Buffer.from(message.encrypted_content).toString('base64') : null,
+      encrypted_content: message.message_recipients[0]?.encrypted_content ?
+        Buffer.from(message.message_recipients[0].encrypted_content).toString('base64') : null,
       content_type: message.content_type,
       has_attachments: message.has_attachments,
       created_at: message.created_at,

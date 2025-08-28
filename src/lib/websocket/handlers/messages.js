@@ -26,15 +26,26 @@ export async function handleSendMessage(ws, message, context) {
 	}
 
 	try {
-		const { conversationId, content, messageType = 'text', replyToId } = message.payload;
+		const { conversationId, encryptedContents, messageType = 'text', replyToId } = message.payload;
 		const user = getAuthenticatedUser(context);
 		const supabase = getSupabaseClient(context);
 
-		if (!conversationId || !content) {
+		if (!conversationId || !encryptedContents) {
 			const errorResponse = createErrorResponse(
 				message.requestId,
-				'Conversation ID and content are required',
+				'Conversation ID and encrypted contents are required',
 				'MISSING_REQUIRED_FIELDS'
+			);
+			ws.send(JSON.stringify(errorResponse));
+			return;
+		}
+
+		// Validate encryptedContents is an object with user_id -> encrypted_content mappings
+		if (typeof encryptedContents !== 'object' || Object.keys(encryptedContents).length === 0) {
+			const errorResponse = createErrorResponse(
+				message.requestId,
+				'encryptedContents must be an object with user_id -> encrypted_content mappings',
+				'INVALID_ENCRYPTED_CONTENTS'
 			);
 			ws.send(JSON.stringify(errorResponse));
 			return;
@@ -59,16 +70,12 @@ export async function handleSendMessage(ws, message, context) {
 			return;
 		}
 
-		// Content is already encrypted on the client side
-		// Server just passes it through without modification
-		const encryptedContent = content;
-
-		// Insert message into database
+		// Insert message into database (without encrypted_content in main table)
 		const messageData = {
 			conversation_id: conversationId,
 			sender_id: user.id,
 			message_type: messageType,
-			encrypted_content: encryptedContent,
+			encrypted_content: Buffer.from(''), // Empty buffer - actual content stored in message_recipients
 			...(replyToId && { reply_to_id: replyToId }),
 			metadata: {},
 			created_at: new Date().toISOString()
@@ -89,6 +96,47 @@ export async function handleSendMessage(ws, message, context) {
 				message.requestId,
 				'Failed to send message',
 				'DATABASE_ERROR'
+			);
+			ws.send(JSON.stringify(errorResponse));
+			return;
+		}
+
+		// Create per-participant encrypted message copies
+		try {
+			const { error: recipientsError } = await supabase
+				.rpc('fn_create_message_recipients', {
+					p_message_id: newMessage.id,
+					p_encrypted_contents: encryptedContents
+				});
+
+			if (recipientsError) {
+				console.error('Error creating message recipients:', recipientsError);
+				// Clean up the message if recipients creation failed
+				await supabase
+					.from('messages')
+					.delete()
+					.eq('id', newMessage.id);
+				
+				const errorResponse = createErrorResponse(
+					message.requestId,
+					'Failed to create encrypted message copies',
+					'DATABASE_ERROR'
+				);
+				ws.send(JSON.stringify(errorResponse));
+				return;
+			}
+		} catch (error) {
+			console.error('Error in message recipients creation:', error);
+			// Clean up the message if recipients creation failed
+			await supabase
+				.from('messages')
+				.delete()
+				.eq('id', newMessage.id);
+			
+			const errorResponse = createErrorResponse(
+				message.requestId,
+				'Failed to create encrypted message copies',
+				'SERVER_ERROR'
 			);
 			ws.send(JSON.stringify(errorResponse));
 			return;
@@ -297,15 +345,17 @@ export async function handleLoadMessages(ws, message, context) {
 
 		console.log('📨 [MESSAGES] SUCCESS: Access granted for participant:', participant);
 
-		// Load messages for the conversation
+		// Load messages for the conversation with user-specific encrypted content
 		console.log('📨 [MESSAGES] Loading messages from database...');
 		const { data: messages, error: messagesError } = await supabase
 			.from('messages')
 			.select(`
 				*,
-				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
+				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
+				message_recipients!inner(encrypted_content)
 			`)
 			.eq('conversation_id', conversationId)
+			.eq('message_recipients.recipient_user_id', user.id)
 			.is('deleted_at', null)
 			.order('created_at', { ascending: true })
 			.limit(limit);
@@ -340,9 +390,19 @@ export async function handleLoadMessages(ws, message, context) {
 			return;
 		}
 
-		// Load reply data separately to avoid PostgREST issues
+		// Process messages and add user-specific encrypted content
 		let messagesWithReplies = messages || [];
 		console.log('📨 [MESSAGES] Processing reply data for', messagesWithReplies.length, 'messages');
+		
+		// Add user-specific encrypted content to each message
+		messagesWithReplies.forEach(msg => {
+			if (msg.message_recipients && msg.message_recipients.length > 0) {
+				// Use the user-specific encrypted content
+				msg.encrypted_content = msg.message_recipients[0].encrypted_content;
+			}
+			// Remove the message_recipients array as it's no longer needed
+			delete msg.message_recipients;
+		});
 		
 		// Server passes through encrypted content exactly as stored in database
 		// No server-side decoding - clients handle all encryption/decryption
@@ -355,10 +415,16 @@ export async function handleLoadMessages(ws, message, context) {
 			console.log('📨 [MESSAGES] Reply IDs found:', replyIds);
 
 			if (replyIds.length > 0) {
+				// Load reply data with user-specific encrypted content
 				const { data: replyData } = await supabase
 					.from('messages')
-					.select('id, encrypted_content, sender_id')
-					.in('id', replyIds);
+					.select(`
+						id,
+						sender_id,
+						message_recipients!inner(encrypted_content)
+					`)
+					.in('id', replyIds)
+					.eq('message_recipients.recipient_user_id', user.id);
 
 				console.log('📨 [MESSAGES] Reply data loaded:', replyData?.length || 0, 'replies');
 
@@ -366,7 +432,14 @@ export async function handleLoadMessages(ws, message, context) {
 				if (replyData) {
 					messagesWithReplies.forEach(msg => {
 						if (msg.reply_to_id) {
-							msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
+							const replyMsg = replyData.find(reply => reply.id === msg.reply_to_id);
+							if (replyMsg && replyMsg.message_recipients && replyMsg.message_recipients.length > 0) {
+								msg.reply_to = {
+									id: replyMsg.id,
+									sender_id: replyMsg.sender_id,
+									encrypted_content: replyMsg.message_recipients[0].encrypted_content
+								};
+							}
 						}
 					});
 				}
@@ -488,14 +561,16 @@ export async function handleLoadMoreMessages(ws, message, context) {
 			return;
 		}
 
-		// Load older messages
+		// Load older messages with user-specific encrypted content
 		const { data: messages, error: messagesError } = await supabase
 			.from('messages')
 			.select(`
 				*,
-				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
+				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
+				message_recipients!inner(encrypted_content)
 			`)
 			.eq('conversation_id', conversationId)
+			.eq('message_recipients.recipient_user_id', user.id)
 			.is('deleted_at', null)
 			.lt('created_at', beforeMessage.created_at)
 			.order('created_at', { ascending: false })
@@ -512,23 +587,45 @@ export async function handleLoadMoreMessages(ws, message, context) {
 			return;
 		}
 
-		// Load reply data separately
+		// Process messages and add user-specific encrypted content
 		let messagesWithReplies = messages || [];
+		messagesWithReplies.forEach(msg => {
+			if (msg.message_recipients && msg.message_recipients.length > 0) {
+				// Use the user-specific encrypted content
+				msg.encrypted_content = msg.message_recipients[0].encrypted_content;
+			}
+			// Remove the message_recipients array as it's no longer needed
+			delete msg.message_recipients;
+		});
+		
 		if (messagesWithReplies.length > 0) {
 			const replyIds = messagesWithReplies
 				.filter(msg => msg.reply_to_id)
 				.map(msg => msg.reply_to_id);
 
 			if (replyIds.length > 0) {
+				// Load reply data with user-specific encrypted content
 				const { data: replyData } = await supabase
 					.from('messages')
-					.select('id, encrypted_content, sender_id')
-					.in('id', replyIds);
+					.select(`
+						id,
+						sender_id,
+						message_recipients!inner(encrypted_content)
+					`)
+					.in('id', replyIds)
+					.eq('message_recipients.recipient_user_id', user.id);
 
 				if (replyData) {
 					messagesWithReplies.forEach(msg => {
 						if (msg.reply_to_id) {
-							msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
+							const replyMsg = replyData.find(reply => reply.id === msg.reply_to_id);
+							if (replyMsg && replyMsg.message_recipients && replyMsg.message_recipients.length > 0) {
+								msg.reply_to = {
+									id: replyMsg.id,
+									sender_id: replyMsg.sender_id,
+									encrypted_content: replyMsg.message_recipients[0].encrypted_content
+								};
+							}
 						}
 					});
 				}

@@ -11,7 +11,7 @@ import {
 	parseMessage,
 	serializeMessage
 } from '$lib/websocket/utils/protocol.js';
-import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
+import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
 import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 /**
@@ -94,14 +94,14 @@ function createWebSocketChatStore() {
 				reconnectAttempts = 0;
 				update(state => ({ ...state, connected: true, error: null }));
 
-				// Initialize post-quantum encryption and public key service
-				console.log('🔐 Initializing post-quantum encryption...');
-				await postQuantumEncryption.initialize();
+				// Initialize multi-recipient encryption and public key service
+				console.log('🔐 Initializing multi-recipient encryption...');
+				await multiRecipientEncryption.initialize();
 				await publicKeyService.initialize();
 				
 				// Initialize user encryption (generates keys and uploads public key)
 				await publicKeyService.initializeUserEncryption();
-				console.log('🔐 Post-quantum encryption and public key service initialized');
+				console.log('🔐 Multi-recipient encryption and public key service initialized');
 
 				// Authenticate immediately after connection
 				if (token) {
@@ -373,19 +373,22 @@ function createWebSocketChatStore() {
 			});
 			
 			if (response.type === MESSAGE_TYPES.MESSAGES_LOADED) {
-				// Decrypt all loaded messages using post-quantum encryption
+				// Decrypt all loaded messages using multi-recipient encryption
 				const messages = response.payload.messages || [];
-				console.log(`🔐 [LOAD] Processing ${messages.length} messages for post-quantum decryption`);
+				console.log(`🔐 [LOAD] Processing ${messages.length} messages for multi-recipient decryption`);
 				
 				for (const message of messages) {
 					if (message.encrypted_content) {
 						try {
 							console.log(`🔐 [LOAD] Decrypting message ${message.id} from sender ${message.sender_id}`);
 							
-							// Decrypt using our own private key (the senderPublicKey parameter is not actually used in KEM)
-							const decryptedContent = await postQuantumEncryption.decryptFromSender(
+							// Get sender's public key for verification (optional)
+							const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id) || '';
+							
+							// Decrypt using multi-recipient encryption
+							const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
 								message.encrypted_content,
-								'' // senderPublicKey not needed for KEM-based decryption, but required by API
+								senderPublicKey
 							);
 							
 							message.content = decryptedContent;
@@ -428,27 +431,13 @@ function createWebSocketChatStore() {
 	 */
 	async function sendChatMessage(conversationId, content, messageType = 'text', replyToId = null) {
 		try {
-			// Get all participant public keys for this conversation
-			console.log(`🔐 [SEND] Getting participant keys for conversation: ${conversationId}`);
-			const participantKeys = await publicKeyService.getConversationParticipantKeys(conversationId);
-			
-			let encryptedContent;
-			if (participantKeys.size === 0) {
-				console.warn(`🔐 [SEND] No participant keys found for conversation ${conversationId}, using self-encryption`);
-				// Fallback to self-encryption
-				const myPublicKey = await postQuantumEncryption.getPublicKey();
-				encryptedContent = await postQuantumEncryption.encryptForRecipient(content, myPublicKey);
-			} else {
-				console.log(`🔐 [SEND] Found ${participantKeys.size} participant keys`);
-				// For now, encrypt for the first participant (simplified approach)
-				// TODO: Implement proper multi-recipient encryption
-				const firstParticipantKey = participantKeys.values().next().value;
-				encryptedContent = await postQuantumEncryption.encryptForRecipient(content, firstParticipantKey);
-			}
+			// Encrypt message for all conversation participants using multi-recipient encryption
+			console.log(`🔐 [SEND] Encrypting message for all participants in conversation: ${conversationId}`);
+			const encryptedContents = await multiRecipientEncryption.encryptForConversation(conversationId, content);
 			
 			const payload = {
 				conversationId,
-				content: encryptedContent,
+				encryptedContents, // Now sending per-participant encrypted contents
 				messageType
 			};
 			
@@ -464,10 +453,14 @@ function createWebSocketChatStore() {
 				if (sentMessage.encrypted_content) {
 					try {
 						console.log(`🔐 [SENT] Decrypting sent message ${sentMessage.id} for immediate display`);
-						// Decrypt using our own private key (the senderPublicKey parameter is not actually used in KEM)
-						const decryptedContent = await postQuantumEncryption.decryptFromSender(
+						
+						// Get our own public key for verification
+						const myPublicKey = await multiRecipientEncryption.getUserPublicKey();
+						
+						// Decrypt using multi-recipient encryption
+						const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
 							sentMessage.encrypted_content,
-							'' // senderPublicKey not needed for KEM-based decryption, but required by API
+							myPublicKey
 						);
 						sentMessage.content = decryptedContent;
 						console.log(`🔐 [SENT] ✅ Decrypted sent message ${sentMessage.id}: "${decryptedContent}"`);
@@ -539,15 +532,18 @@ function createWebSocketChatStore() {
 	async function handleNewMessage(message) {
 		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
 		
-		// Decrypt the message content using post-quantum encryption
+		// Decrypt the message content using multi-recipient encryption
 		if (message.encrypted_content) {
 			try {
 				console.log(`🔐 [NEW] Decrypting new message ${message.id} from sender ${message.sender_id}`);
 				
-				// Decrypt using our own private key (the senderPublicKey parameter is not actually used in KEM)
-				const decryptedContent = await postQuantumEncryption.decryptFromSender(
+				// Get sender's public key for verification (optional)
+				const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id) || '';
+				
+				// Decrypt using multi-recipient encryption
+				const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
 					message.encrypted_content,
-					'' // senderPublicKey not needed for KEM-based decryption, but required by API
+					senderPublicKey
 				);
 				
 				message.content = decryptedContent;

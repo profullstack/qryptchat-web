@@ -1,166 +1,49 @@
-import { json } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+// Conversation Participants API endpoint
+// Handles fetching participants for a conversation
 
-/** @type {import('./$types').RequestHandler} */
-export async function POST(event) {
+import { json } from '@sveltejs/kit';
+import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+
+// Create service role client instance
+const supabaseServiceRole = createServiceRoleClient();
+
+/**
+ * GET /api/chat/conversations/[id]/participants
+ * Get all participants in a conversation
+ */
+export async function GET({ params, locals }) {
 	try {
-		const supabase = createSupabaseServerClient(event);
-		const { id: conversationId } = event.params;
-		const { user_ids } = await event.request.json();
-		
-		// Get user from session
-		const { data: { user }, error: userError } = await supabase.auth.getUser();
-		if (userError || !user) {
+		// Verify user is authenticated
+		if (!locals.user?.id) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
-			return json({ error: 'user_ids is required and must be a non-empty array' }, { status: 400 });
+		const conversationId = params.id;
+		if (!conversationId) {
+			return json({ error: 'Missing conversation ID' }, { status: 400 });
 		}
 
-		// Check if user is a participant in this conversation
-		const { data: userParticipant, error: participantError } = await supabase
-			.from('conversation_participants')
-			.select('role')
-			.eq('conversation_id', conversationId)
-			.eq('user_id', user.id)
-			.eq('left_at', null)
-			.single();
-
-		if (participantError || !userParticipant) {
-			return json({ error: 'You are not a participant in this conversation' }, { status: 403 });
-		}
-
-		// Get conversation details
-		const { data: conversation, error: convError } = await supabase
-			.from('conversations')
-			.select('type, name')
-			.eq('id', conversationId)
-			.single();
-
-		if (convError || !conversation) {
-			return json({ error: 'Conversation not found' }, { status: 404 });
-		}
-
-		// If this is a direct message, convert it to a group conversation
-		if (conversation.type === 'direct') {
-			const { error: updateError } = await supabase
-				.from('conversations')
-				.update({ 
-					type: 'group',
-					name: conversation.name || 'Group Chat'
-				})
-				.eq('id', conversationId);
-
-			if (updateError) {
-				console.error('Update conversation error:', updateError);
-				return json({ error: 'Failed to convert to group conversation' }, { status: 500 });
-			}
-		}
-
-		// Check which users are already participants
-		const { data: existingParticipants } = await supabase
+		// Verify user is a participant in the conversation
+		const { data: userParticipant, error: participantError } = await supabaseServiceRole
 			.from('conversation_participants')
 			.select('user_id')
 			.eq('conversation_id', conversationId)
-			.is('left_at', null);
-
-		const existingUserIds = existingParticipants?.map(p => p.user_id) || [];
-		const newUserIds = user_ids.filter(id => !existingUserIds.includes(id));
-
-		if (newUserIds.length === 0) {
-			return json({ message: 'All users are already participants' });
-		}
-
-		// Add new participants
-		const newParticipants = newUserIds.map(userId => ({
-			conversation_id: conversationId,
-			user_id: userId,
-			role: 'member'
-		}));
-
-		const { error: addError } = await supabase
-			.from('conversation_participants')
-			.insert(newParticipants);
-
-		if (addError) {
-			console.error('Add participants error:', addError);
-			return json({ error: 'Failed to add participants' }, { status: 500 });
-		}
-
-		// Create a system message about the new participants
-		const { data: newUsers } = await supabase
-			.from('users')
-			.select('display_name, username')
-			.in('id', newUserIds);
-
-		const userNames = newUsers?.map(u => u.display_name || u.username).join(', ') || 'New users';
-		const systemMessage = `${userNames} ${newUserIds.length === 1 ? 'was' : 'were'} added to the conversation`;
-
-		const { error: messageError } = await supabase
-			.from('messages')
-			.insert({
-				conversation_id: conversationId,
-				sender_id: user.id,
-				encrypted_content: systemMessage,
-				message_type: 'system'
-			});
-
-		if (messageError) {
-			console.error('System message error:', messageError);
-			// Don't fail the request if system message fails
-		}
-
-		// Trigger key distribution for new participants
-		// This will be handled by the WebSocket system when participants connect
-		// We could also broadcast a KEY_INIT message here if we had access to the WebSocket server
-		console.log(`🔑 New participants added to conversation ${conversationId}:`, newUserIds);
-		console.log('🔑 Key distribution will be handled when participants connect to WebSocket');
-
-		return json({ 
-			message: `Successfully added ${newUserIds.length} participant(s)`,
-			added_count: newUserIds.length,
-			new_participant_ids: newUserIds // Include this for potential WebSocket notification
-		});
-	} catch (error) {
-		console.error('API error:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
-	}
-}
-
-/** @type {import('./$types').RequestHandler} */
-export async function GET(event) {
-	try {
-		const supabase = createSupabaseServerClient(event);
-		const { id: conversationId } = event.params;
-		
-		// Get user from session
-		const { data: { user }, error: userError } = await supabase.auth.getUser();
-		if (userError || !user) {
-			return json({ error: 'Unauthorized' }, { status: 401 });
-		}
-
-		// Check if user is a participant in this conversation
-		const { data: userParticipant, error: participantError } = await supabase
-			.from('conversation_participants')
-			.select('role')
-			.eq('conversation_id', conversationId)
-			.eq('user_id', user.id)
+			.eq('user_id', locals.user.id)
 			.is('left_at', null)
 			.single();
 
 		if (participantError || !userParticipant) {
-			return json({ error: 'You are not a participant in this conversation' }, { status: 403 });
+			return json({ error: 'Not authorized to view participants in this conversation' }, { status: 403 });
 		}
 
-		// Get all participants
-		const { data: participants, error } = await supabase
+		// Get all participants in the conversation
+		const { data: participants, error } = await supabaseServiceRole
 			.from('conversation_participants')
 			.select(`
 				user_id,
 				role,
 				joined_at,
-				users (
+				users!conversation_participants_user_id_fkey(
 					id,
 					username,
 					display_name,
@@ -168,17 +51,29 @@ export async function GET(event) {
 				)
 			`)
 			.eq('conversation_id', conversationId)
-			.is('left_at', null)
-			.order('joined_at', { ascending: true });
+			.is('left_at', null);
 
 		if (error) {
-			console.error('Database error:', error);
-			return json({ error: 'Failed to load participants' }, { status: 500 });
+			console.error('Error fetching conversation participants:', error);
+			return json({ error: 'Failed to fetch participants' }, { status: 500 });
 		}
 
-		return json({ participants: participants || [] });
+		// Transform the data for easier consumption
+		const transformedParticipants = participants?.map(participant => ({
+			user_id: participant.user_id,
+			role: participant.role,
+			joined_at: participant.joined_at,
+			user: participant.users
+		})) || [];
+
+		return json({
+			success: true,
+			participants: transformedParticipants,
+			conversation_id: conversationId
+		});
+
 	} catch (error) {
-		console.error('API error:', error);
+		console.error('Error in GET /api/chat/conversations/[id]/participants:', error);
 		return json({ error: 'Internal server error' }, { status: 500 });
 	}
 }
