@@ -6,8 +6,14 @@ import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 
-// Create service role client instance for database operations
-const supabaseServiceRole = createServiceRoleClient();
+// Lazy service role client creation
+let supabaseServiceRole = null;
+function getServiceRoleClient() {
+	if (!supabaseServiceRole) {
+		supabaseServiceRole = createServiceRoleClient();
+	}
+	return supabaseServiceRole;
+}
 
 // Create regular client for JWT validation
 const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
@@ -84,7 +90,7 @@ async function authenticateUser(request) {
 
 		// Get the internal user record from the auth user ID
 		console.log('🔐 Looking up internal user record...');
-		const { data: userData, error: userError } = await supabaseServiceRole
+		const { data: userData, error: userError } = await getServiceRoleClient()
 			.from('users')
 			.select('id, auth_user_id, username')
 			.eq('auth_user_id', user.id)
@@ -120,7 +126,7 @@ export async function GET({ params, request }) {
 		}
 
 		// Verify user is a participant in the conversation
-		const { data: userParticipant, error: participantError } = await supabaseServiceRole
+		const { data: userParticipant, error: participantError } = await getServiceRoleClient()
 			.from('conversation_participants')
 			.select('user_id')
 			.eq('conversation_id', conversationId)
@@ -133,7 +139,7 @@ export async function GET({ params, request }) {
 		}
 
 		// Get all participants in the conversation
-		const { data: participants, error } = await supabaseServiceRole
+		const { data: participants, error } = await getServiceRoleClient()
 			.from('conversation_participants')
 			.select(`
 				user_id,

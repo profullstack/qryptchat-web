@@ -1,7 +1,14 @@
 import { json } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 
-const supabase = createServiceRoleClient();
+// Lazy service role client creation
+let supabase = null;
+function getServiceRoleClient() {
+	if (!supabase) {
+		supabase = createServiceRoleClient();
+	}
+	return supabase;
+}
 
 /** @type {import('./$types').RequestHandler} */
 export async function GET({ request }) {
@@ -66,7 +73,7 @@ export async function PUT({ request }) {
 		}
 
 		// Update user's disappearing messages setting
-		const { error: updateError } = await supabase
+		const { error: updateError } = await getServiceRoleClient()
 			.from('users')
 			.update({
 				default_message_retention_days,

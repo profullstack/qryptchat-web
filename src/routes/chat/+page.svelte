@@ -73,16 +73,24 @@
 		}
 
 		// Initialize WebSocket connection when authenticated
-		const storedSession = localStorage.getItem('qrypt_session');
-		if (storedSession && !$isConnected) {
+		// Use the same token source as frontend auth system (localStorage) to avoid token mismatch
+		if (!$isConnected) {
 			try {
-				const session = JSON.parse(storedSession);
-				if (session.access_token) {
-					console.log('Initializing WebSocket connection...');
-					wsChat.connect(session.access_token);
+				// Get token from localStorage (same as frontend auth system)
+				const storedSession = localStorage.getItem('qrypt_session');
+				if (storedSession) {
+					const session = JSON.parse(storedSession);
+					if (session.access_token) {
+						console.log('Initializing WebSocket connection with localStorage token...');
+						wsChat.connect(session.access_token);
+					} else {
+						console.error('No access token found in stored session for WebSocket');
+					}
+				} else {
+					console.error('No authentication session found in localStorage for WebSocket');
 				}
 			} catch (error) {
-				console.error('Failed to parse session for WebSocket:', error);
+				console.error('Failed to get token from localStorage for WebSocket:', error);
 			}
 		}
 	});

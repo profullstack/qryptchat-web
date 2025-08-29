@@ -4,7 +4,7 @@
  * This system is fully quantum-resistant according to FIPS 203 standards
  */
 
-import { MlKem512, MlKem768, MlKem1024 } from 'mlkem';
+import { MlKem768 } from 'mlkem';
 import { Base64, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
 
 /**
@@ -221,52 +221,77 @@ export class PostQuantumEncryptionService {
 				throw new Error('Post-quantum encryption service not initialized');
 			}
 
-			console.log(`🔐 Decrypting message using ${this.kemName}...`);
+			console.log(`🔐 [DEBUG] Starting decryption with ${this.kemName}...`);
+			console.log(`🔐 [DEBUG] Encrypted content type:`, typeof encryptedContent);
+			console.log(`🔐 [DEBUG] Encrypted content length:`, encryptedContent?.length || 0);
+			console.log(`🔐 [DEBUG] Encrypted content preview:`, encryptedContent?.substring(0, 100) || 'N/A');
 
 			// Parse encrypted message
 			let messageData;
 			try {
 				messageData = JSON.parse(encryptedContent);
+				console.log(`🔐 [DEBUG] Successfully parsed JSON, algorithm:`, messageData.alg);
 			} catch (parseError) {
-				// If it's not JSON, it might be plain text or legacy format
-				console.log('🔐 Content is not post-quantum encrypted format, returning as is');
+				console.log('🔐 [DEBUG] Content is not JSON, parse error:', parseError.message);
 				return encryptedContent;
 			}
 
 			// Check if it's our post-quantum encrypted format
 			if (!messageData.v || messageData.v !== 3 || !messageData.alg || !messageData.kem || !messageData.n || !messageData.c) {
-				console.log('🔐 Content is not post-quantum encrypted format, returning as is');
+				console.log('🔐 [DEBUG] Content is not post-quantum encrypted format, missing fields:', {
+					v: messageData.v,
+					alg: messageData.alg,
+					hasKem: !!messageData.kem,
+					hasNonce: !!messageData.n,
+					hasCiphertext: !!messageData.c
+				});
 				return encryptedContent;
 			}
 
 			// Verify algorithm compatibility
 			if (messageData.alg !== this.kemName) {
+				console.log(`🔐 [DEBUG] Algorithm mismatch: message uses ${messageData.alg}, but we use ${this.kemName}`);
 				throw new Error(`Algorithm mismatch: message uses ${messageData.alg}, but we use ${this.kemName}`);
 			}
 
 			const userKeys = await this.getUserKeys();
+			console.log(`🔐 [DEBUG] Got user keys, public key length:`, userKeys.publicKey?.length || 0);
 
 			// Decode our private key and KEM ciphertext
 			const privateKeyBytes = Base64.decode(userKeys.privateKey);
 			const kemCiphertext = Base64.decode(messageData.kem);
+			console.log(`🔐 [DEBUG] Decoded private key length:`, privateKeyBytes.length);
+			console.log(`🔐 [DEBUG] Decoded KEM ciphertext length:`, kemCiphertext.length);
 
 			// Decapsulate the shared secret using ML-KEM
+			console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation...`);
 			const sharedSecret = await this.kemAlgorithm.decap(kemCiphertext, privateKeyBytes);
+			console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
+			console.log(`🔐 [DEBUG] Shared secret (first 16 bytes):`, Array.from(sharedSecret.slice(0, 16)));
 
 			// Use the shared secret as ChaCha20-Poly1305 key (first 32 bytes)
 			const chachaKey = sharedSecret.slice(0, 32);
+			console.log(`🔐 [DEBUG] ChaCha key (first 16 bytes):`, Array.from(chachaKey.slice(0, 16)));
 
 			// Decrypt message with ChaCha20-Poly1305
 			const nonce = Base64.decode(messageData.n);
 			const messageCiphertext = Base64.decode(messageData.c);
+			console.log(`🔐 [DEBUG] Nonce length:`, nonce.length);
+			console.log(`🔐 [DEBUG] Message ciphertext length:`, messageCiphertext.length);
 			
+			console.log(`🔐 [DEBUG] Starting ChaCha20-Poly1305 decryption...`);
 			const plaintext = await ChaCha20Poly1305.decrypt(
 				chachaKey,
 				nonce,
 				messageCiphertext
 			);
+			console.log(`🔐 [DEBUG] ChaCha20-Poly1305 decryption successful, plaintext length:`, plaintext.length);
+			console.log(`🔐 [DEBUG] Plaintext bytes (first 20):`, Array.from(plaintext.slice(0, 20)));
 
-			const messageText = new TextDecoder().decode(plaintext);
+			const messageText = new TextDecoder('utf-8').decode(plaintext);
+			console.log(`🔐 [DEBUG] TextDecoder result:`, messageText);
+			console.log(`🔐 [DEBUG] TextDecoder result length:`, messageText.length);
+			console.log(`🔐 [DEBUG] TextDecoder result char codes (first 10):`, Array.from(messageText.slice(0, 10)).map(c => c.charCodeAt(0)));
 			
 			// Clear sensitive data
 			CryptoUtils.secureClear(chachaKey);
@@ -277,6 +302,7 @@ export class PostQuantumEncryptionService {
 
 		} catch (error) {
 			console.error(`🔐 ❌ Failed to decrypt message with ${this.kemName}:`, error);
+			console.error(`🔐 ❌ Error stack:`, error.stack);
 			return '[Encrypted message - decryption failed]';
 		}
 	}

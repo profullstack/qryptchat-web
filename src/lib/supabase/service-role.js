@@ -4,19 +4,41 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+
+// Lazy-loaded service role client instance
+let serviceRoleClient = null;
 
 /**
  * Create Supabase service role client
  * This client has elevated permissions and bypasses RLS policies
+ * Uses Node.js environment variables for compatibility with WebSocket server
  * @returns {import('@supabase/supabase-js').SupabaseClient}
  */
 export function createServiceRoleClient() {
-	return createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+	const supabaseUrl = process.env.PUBLIC_SUPABASE_URL;
+	const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+	
+	if (!supabaseUrl || !serviceRoleKey) {
+		throw new Error('Missing required environment variables: PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+	}
+	
+	return createClient(supabaseUrl, serviceRoleKey, {
 		auth: {
 			autoRefreshToken: false,
 			persistSession: false
 		}
 	});
+}
+
+/**
+ * Get or create Supabase service role client (lazy initialization)
+ * This client has elevated permissions and bypasses RLS policies
+ * Uses lazy loading to avoid environment variable issues during module import
+ * @returns {import('@supabase/supabase-js').SupabaseClient}
+ */
+export function getServiceRoleClient() {
+	if (!serviceRoleClient) {
+		serviceRoleClient = createServiceRoleClient();
+	}
+	return serviceRoleClient;
 }

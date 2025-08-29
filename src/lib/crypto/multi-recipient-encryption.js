@@ -42,9 +42,22 @@ export class MultiRecipientEncryptionService {
 			}
 
 			console.log(`🔐 [MULTI] Encrypting message for conversation: ${conversationId}`);
+			console.log(`🔐 [MULTI] Message content:`, {
+				type: typeof messageContent,
+				length: messageContent?.length || 0,
+				preview: messageContent?.substring(0, 50) || 'N/A'
+			});
 
 			// Get all participant public keys for this conversation
+			console.log(`🔐 [MULTI] Getting participant keys for conversation: ${conversationId}`);
 			const participantKeys = await publicKeyService.getConversationParticipantKeys(conversationId);
+			
+			console.log(`🔐 [MULTI] Participant keys result:`, {
+				type: typeof participantKeys,
+				isMap: participantKeys instanceof Map,
+				size: participantKeys?.size || 0,
+				keys: participantKeys instanceof Map ? Array.from(participantKeys.keys()) : 'Not a Map'
+			});
 			
 			if (participantKeys.size === 0) {
 				console.warn(`🔐 [MULTI] No participant keys found for conversation ${conversationId}`);

@@ -1,6 +1,15 @@
 import { error } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 
+// Lazy service role client creation
+let supabase = null;
+function getServiceRoleClient() {
+	if (!supabase) {
+		supabase = createServiceRoleClient();
+	}
+	return supabase;
+}
+
 /** @type {import('./$types').PageServerLoad} */
 export async function load({ params }) {
 	const { username } = params;
@@ -9,7 +18,7 @@ export async function load({ params }) {
 		throw error(404, 'Username not provided');
 	}
 
-	const supabase = createServiceRoleClient();
+	const supabase = getServiceRoleClient();
 
 	try {
 		// Fetch user profile by username

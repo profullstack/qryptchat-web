@@ -235,7 +235,7 @@ function createWebSocketChatStore() {
 			switch (message.type) {
 				case MESSAGE_TYPES.MESSAGE_RECEIVED:
 					// Await the async handleNewMessage to ensure decryption completes before DOM update
-					handleNewMessage(message.payload.message).catch(error => {
+					handleNewMessage(message.payload).catch(error => {
 						console.error('Error handling new message:', error);
 					});
 					break;
@@ -462,6 +462,7 @@ function createWebSocketChatStore() {
 							sentMessage.encrypted_content,
 							myPublicKey
 						);
+						
 						sentMessage.content = decryptedContent;
 						console.log(`🔐 [SENT] ✅ Decrypted sent message ${sentMessage.id}: "${decryptedContent}"`);
 					} catch (error) {
@@ -527,10 +528,35 @@ function createWebSocketChatStore() {
 
 	/**
 	 * Handle new message from broadcast
-	 * @param {Object} message - New message
+	 * @param {Object} messagePayload - Message payload from broadcast
 	 */
-	async function handleNewMessage(message) {
+	async function handleNewMessage(messagePayload) {
+		const message = messagePayload.message;
+		const shouldReloadMessages = messagePayload.shouldReloadMessages;
+		
 		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
+		
+		// If shouldReloadMessages is true, reload all messages to get proper encrypted content
+		if (shouldReloadMessages) {
+			console.log(`🔐 [NEW] Message ${message.id} requires message reload for proper encrypted content`);
+			
+			// Get current state to check if this is the active conversation
+			const currentState = await new Promise(resolve => {
+				const unsubscribe = subscribe(state => {
+					resolve(state);
+					unsubscribe();
+				});
+			});
+			
+			if (currentState.activeConversation === message.conversation_id) {
+				console.log(`🔐 [NEW] Reloading messages for active conversation ${message.conversation_id}`);
+				await loadMessages(message.conversation_id);
+				return; // loadMessages will handle adding the message with proper decryption
+			} else {
+				console.log(`🔐 [NEW] Message ${message.id} is for inactive conversation, skipping reload`);
+				return; // Don't add messages for inactive conversations
+			}
+		}
 		
 		// Decrypt the message content using multi-recipient encryption
 		if (message.encrypted_content) {

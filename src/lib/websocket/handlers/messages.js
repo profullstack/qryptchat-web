@@ -7,6 +7,7 @@ import { MESSAGE_TYPES, createSuccessResponse, createErrorResponse } from '../ut
 import { roomManager } from '../utils/rooms.js';
 import { isAuthenticated, getAuthenticatedUser, getSupabaseClient } from './auth.js';
 import { createSMSNotificationService } from '../../services/sms-notification-service.js';
+import { getServiceRoleClient } from '../../supabase/service-role.js';
 
 /**
  * Handle send message request
@@ -101,12 +102,44 @@ export async function handleSendMessage(ws, message, context) {
 			return;
 		}
 
-		// Create per-participant encrypted message copies
+		// Create per-participant encrypted message copies using service role client
 		try {
-			const { error: recipientsError } = await supabase
+			// Convert JSON encrypted content to base64 for database storage
+			// The post-quantum encryption returns JSON strings, but the database function expects base64
+			const base64EncryptedContents = {};
+			for (const [userId, jsonEncryptedContent] of Object.entries(encryptedContents)) {
+				console.log('🔐 [SEND] Converting JSON to base64 for storage:', {
+					userId,
+					jsonType: typeof jsonEncryptedContent,
+					jsonLength: jsonEncryptedContent?.length || 0,
+					jsonPreview: jsonEncryptedContent?.substring(0, 100) || 'N/A',
+					isValidJSON: (() => {
+						try {
+							JSON.parse(jsonEncryptedContent);
+							return true;
+						} catch {
+							return false;
+						}
+					})()
+				});
+				
+				// Convert JSON string to base64
+				const base64Content = Buffer.from(jsonEncryptedContent, 'utf8').toString('base64');
+				console.log('🔐 [SEND] Converted to base64:', {
+					userId,
+					base64Length: base64Content?.length || 0,
+					base64Preview: base64Content?.substring(0, 100) || 'N/A',
+					isValidBase64: /^[A-Za-z0-9+/]*={0,2}$/.test(base64Content || '')
+				});
+				
+				base64EncryptedContents[userId] = base64Content;
+			}
+
+			const serviceRoleClient = getServiceRoleClient();
+			const { error: recipientsError } = await serviceRoleClient
 				.rpc('fn_create_message_recipients', {
 					p_message_id: newMessage.id,
-					p_encrypted_contents: encryptedContents
+					p_encrypted_contents: base64EncryptedContents
 				});
 
 			if (recipientsError) {
@@ -163,11 +196,15 @@ export async function handleSendMessage(ws, message, context) {
 		// Server passes through encrypted content exactly as stored in database
 		// No server-side decoding - clients handle all encryption/decryption
 
-		// Broadcast message to all participants in the conversation
+		// For broadcasting, we need to send the message with proper encrypted content for each participant
+		// Since we can't send different content to each user in a single broadcast, we'll reload messages
+		// This ensures each client gets the proper encrypted content for their user
 		const broadcastMessage = {
 			type: MESSAGE_TYPES.MESSAGE_RECEIVED,
 			payload: {
-				message: newMessage
+				message: newMessage,
+				// Signal that clients should reload messages to get proper encrypted content
+				shouldReloadMessages: true
 			},
 			requestId: null,
 			timestamp: new Date().toISOString()
@@ -180,7 +217,7 @@ export async function handleSendMessage(ws, message, context) {
 			totalConnections: roomManager.getTotalConnections()
 		});
 
-		// Broadcast to ALL participants, including the sender (they'll filter it out on client side if needed)
+		// Broadcast to ALL participants - they'll reload messages to get proper encrypted content
 		roomManager.broadcastToRoom(conversationId, broadcastMessage);
 		
 		console.log('📨 [SEND] Room stats after broadcast:', {
@@ -397,8 +434,39 @@ export async function handleLoadMessages(ws, message, context) {
 		// Add user-specific encrypted content to each message
 		messagesWithReplies.forEach(msg => {
 			if (msg.message_recipients && msg.message_recipients.length > 0) {
-				// Use the user-specific encrypted content
-				msg.encrypted_content = msg.message_recipients[0].encrypted_content;
+				// Convert base64 back to JSON for client-side decryption
+				// The database stores base64, but the client expects JSON format
+				const base64Content = msg.message_recipients[0].encrypted_content;
+				console.log('🔐 [DEBUG] Raw base64 from database:', {
+					messageId: msg.id,
+					base64Length: base64Content?.length || 0,
+					base64Preview: base64Content?.substring(0, 100) || 'N/A',
+					isValidBase64: /^[A-Za-z0-9+/]*={0,2}$/.test(base64Content || '')
+				});
+				
+				try {
+					// Convert base64 back to JSON string
+					const decodedContent = Buffer.from(base64Content, 'base64').toString('utf8');
+					console.log('🔐 [DEBUG] Decoded content:', {
+						messageId: msg.id,
+						decodedLength: decodedContent?.length || 0,
+						decodedPreview: decodedContent?.substring(0, 100) || 'N/A',
+						isValidJSON: (() => {
+							try {
+								JSON.parse(decodedContent);
+								return true;
+							} catch {
+								return false;
+							}
+						})()
+					});
+					msg.encrypted_content = decodedContent;
+				} catch (error) {
+					console.error('🔐 [DEBUG] Failed to decode base64 encrypted content:', error);
+					console.error('🔐 [DEBUG] Raw base64 that failed:', base64Content);
+					// Fallback to original content if decoding fails
+					msg.encrypted_content = base64Content;
+				}
 			}
 			// Remove the message_recipients array as it's no longer needed
 			delete msg.message_recipients;
@@ -434,10 +502,20 @@ export async function handleLoadMessages(ws, message, context) {
 						if (msg.reply_to_id) {
 							const replyMsg = replyData.find(reply => reply.id === msg.reply_to_id);
 							if (replyMsg && replyMsg.message_recipients && replyMsg.message_recipients.length > 0) {
+								// Convert base64 back to JSON for reply content too
+								const base64ReplyContent = replyMsg.message_recipients[0].encrypted_content;
+								let replyEncryptedContent;
+								try {
+									replyEncryptedContent = Buffer.from(base64ReplyContent, 'base64').toString('utf8');
+								} catch (error) {
+									console.error('Failed to decode base64 reply content:', error);
+									replyEncryptedContent = base64ReplyContent;
+								}
+								
 								msg.reply_to = {
 									id: replyMsg.id,
 									sender_id: replyMsg.sender_id,
-									encrypted_content: replyMsg.message_recipients[0].encrypted_content
+									encrypted_content: replyEncryptedContent
 								};
 							}
 						}
@@ -591,8 +669,17 @@ export async function handleLoadMoreMessages(ws, message, context) {
 		let messagesWithReplies = messages || [];
 		messagesWithReplies.forEach(msg => {
 			if (msg.message_recipients && msg.message_recipients.length > 0) {
-				// Use the user-specific encrypted content
-				msg.encrypted_content = msg.message_recipients[0].encrypted_content;
+				// Convert base64 back to JSON for client-side decryption
+				// The database stores base64, but the client expects JSON format
+				const base64Content = msg.message_recipients[0].encrypted_content;
+				try {
+					// Convert base64 back to JSON string
+					msg.encrypted_content = Buffer.from(base64Content, 'base64').toString('utf8');
+				} catch (error) {
+					console.error('Failed to decode base64 encrypted content:', error);
+					// Fallback to original content if decoding fails
+					msg.encrypted_content = base64Content;
+				}
 			}
 			// Remove the message_recipients array as it's no longer needed
 			delete msg.message_recipients;
@@ -620,10 +707,20 @@ export async function handleLoadMoreMessages(ws, message, context) {
 						if (msg.reply_to_id) {
 							const replyMsg = replyData.find(reply => reply.id === msg.reply_to_id);
 							if (replyMsg && replyMsg.message_recipients && replyMsg.message_recipients.length > 0) {
+								// Convert base64 back to JSON for reply content too
+								const base64ReplyContent = replyMsg.message_recipients[0].encrypted_content;
+								let replyEncryptedContent;
+								try {
+									replyEncryptedContent = Buffer.from(base64ReplyContent, 'base64').toString('utf8');
+								} catch (error) {
+									console.error('Failed to decode base64 reply content:', error);
+									replyEncryptedContent = base64ReplyContent;
+								}
+								
 								msg.reply_to = {
 									id: replyMsg.id,
 									sender_id: replyMsg.sender_id,
-									encrypted_content: replyMsg.message_recipients[0].encrypted_content
+									encrypted_content: replyEncryptedContent
 								};
 							}
 						}

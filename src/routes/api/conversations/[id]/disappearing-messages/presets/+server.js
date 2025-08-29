@@ -2,17 +2,80 @@
 // Provides common timer presets for UI
 
 import { json } from '@sveltejs/kit';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+
+// Create regular Supabase client for authentication
+const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+
+/**
+ * Authenticate user from request cookies
+ * @param {Request} request - The request object
+ * @returns {Promise<{user: Object|null, error: string|null}>}
+ */
+async function authenticateUser(request) {
+	try {
+		// Parse cookies to get JWT token
+		const cookieHeader = request.headers.get('cookie');
+		if (!cookieHeader) {
+			console.log('🔐 [API] ❌ No cookies found in request');
+			return { user: null, error: 'No authentication cookies found' };
+		}
+
+		// Extract access token from cookies
+		const cookies = Object.fromEntries(
+			cookieHeader.split('; ').map(cookie => {
+				const [name, ...rest] = cookie.split('=');
+				return [name, rest.join('=')];
+			})
+		);
+
+		const accessToken = cookies['sb-access-token'] || cookies['sb-refresh-token'];
+		if (!accessToken) {
+			console.log('🔐 [API] ❌ No Supabase auth tokens found in cookies');
+			return { user: null, error: 'No authentication tokens found' };
+		}
+
+		console.log('🔐 [API] 🔍 Found auth token, verifying with Supabase...');
+
+		// Verify the JWT token with regular Supabase client (not service role)
+		const { data: { user }, error } = await supabaseClient.auth.getUser(accessToken);
+
+		if (error) {
+			console.log('🔐 [API] ❌ Token verification failed:', error.message);
+			return { user: null, error: `Authentication failed: ${error.message}` };
+		}
+
+		if (!user) {
+			console.log('🔐 [API] ❌ No user returned from token verification');
+			return { user: null, error: 'Invalid authentication token' };
+		}
+
+		console.log('🔐 [API] ✅ User authenticated successfully:', user.id);
+		return { user, error: null };
+
+	} catch (error) {
+		console.error('🔐 [API] ❌ Authentication error:', error);
+		return { user: null, error: 'Authentication system error' };
+	}
+}
 
 /**
  * GET /api/conversations/:id/disappearing-messages/presets
  * Get common timer presets for UI
  */
-export async function GET({ params, locals }) {
+export async function GET({ params, request }) {
   try {
-    // Verify user is authenticated
-    if (!locals.user?.id) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    console.log('🔐 [API] GET /api/conversations/:id/disappearing-messages/presets - Starting authentication');
+
+    // Authenticate user
+    const { user, error: authError } = await authenticateUser(request);
+    if (authError || !user) {
+      console.log('🔐 [API] ❌ Authentication failed:', authError);
+      return json({ error: authError || 'Authentication failed' }, { status: 401 });
     }
+
+    console.log('🔐 [API] ✅ User authenticated:', user.id);
 
     const presets = [
       { label: 'Off', seconds: 0, description: 'Messages never disappear' },

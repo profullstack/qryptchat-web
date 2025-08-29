@@ -1,6 +1,15 @@
 import { json } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 
+// Lazy service role client creation
+let supabase = null;
+function getServiceRoleClient() {
+	if (!supabase) {
+		supabase = createServiceRoleClient();
+	}
+	return supabase;
+}
+
 /**
  * POST /api/webhooks/telnyx/sms
  * Webhook endpoint for receiving inbound SMS messages from Telnyx
@@ -47,7 +56,7 @@ export async function POST({ request }) {
 		}
 
 		// Use Supabase service role client to verify the OTP
-		const supabase = createServiceRoleClient();
+		const supabase = getServiceRoleClient();
 
 		try {
 			// Attempt to verify the OTP with Supabase Auth

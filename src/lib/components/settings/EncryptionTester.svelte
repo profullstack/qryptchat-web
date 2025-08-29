@@ -1,6 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
-	import { clientEncryption } from '$lib/crypto/client-encryption.js';
+	import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 
 	let testText = $state('Hello, this is a test message! 🔐');
 	let conversationId = $state('test-conversation-' + Date.now());
@@ -12,7 +12,7 @@
 	let encryptionStatus = $state({
 		isInitialized: false,
 		keyCount: 0,
-		storageKeys: []
+		storageKeys: /** @type {Array<{key: string, count: number, conversations?: string[], error?: string}>} */ ([])
 	});
 
 	onMount(async () => {
@@ -21,14 +21,13 @@
 
 	async function updateEncryptionStatus() {
 		try {
-			// Check if encryption service is initialized
-			const isInitialized = clientEncryption.isInitialized;
+			// Check if post-quantum encryption service is initialized
+			const isInitialized = postQuantumEncryption.isInitialized;
 			
 			// Check localStorage keys
 			const storageKeys = [];
 			const keysToCheck = [
-				'qryptchat_conversation_keys',
-				'qryptchat_keys',
+				'qryptchat_pq_keypair',
 				'qrypt_encryption_keys'
 			];
 			
@@ -36,12 +35,21 @@
 				const value = localStorage.getItem(key);
 				if (value) {
 					try {
-						const parsed = JSON.parse(value);
-						storageKeys.push({
-							key,
-							count: Object.keys(parsed).length,
-							conversations: Object.keys(parsed)
-						});
+						if (key === 'qrypt_encryption_keys') {
+							const parsed = JSON.parse(value);
+							storageKeys.push({
+								key,
+								count: Object.keys(parsed).length,
+								conversations: Object.keys(parsed)
+							});
+						} else {
+							const parsed = JSON.parse(value);
+							storageKeys.push({
+								key,
+								count: 1,
+								conversations: [`${parsed.algorithm || 'Post-Quantum'} Key`]
+							});
+						}
 					} catch {
 						storageKeys.push({
 							key,
@@ -52,8 +60,8 @@
 				}
 			}
 
-			// Get in-memory key count
-			const keyCount = clientEncryption.conversationKeys?.size || 0;
+			// Get key count (post-quantum uses per-user keys, not per-conversation)
+			const keyCount = isInitialized && postQuantumEncryption.userKeys ? 1 : 0;
 
 			encryptionStatus = {
 				isInitialized,
@@ -77,20 +85,26 @@
 		encryptedResult = '';
 
 		try {
-			// Initialize encryption service if not already done
-			if (!clientEncryption.isInitialized) {
-				await clientEncryption.initialize();
+			// Initialize post-quantum encryption service if not already done
+			if (!postQuantumEncryption.isInitialized) {
+				await postQuantumEncryption.initialize();
 			}
 
-			// Encrypt the message
-			const encrypted = await clientEncryption.encryptMessage(conversationId, testText);
+			// Get our own public key for testing
+			const publicKey = await postQuantumEncryption.getPublicKey();
+			if (!publicKey) {
+				throw new Error('No public key available');
+			}
+
+			// Encrypt the message using post-quantum encryption
+			const encrypted = await postQuantumEncryption.encryptForRecipient(testText, publicKey);
 			encryptedResult = encrypted;
 			success = '✅ Encryption successful!';
 			
 			// Update status
 			await updateEncryptionStatus();
 		} catch (err) {
-			error = `❌ Encryption failed: ${err.message}`;
+			error = `❌ Encryption failed: ${err instanceof Error ? err.message : String(err)}`;
 			console.error('Encryption error:', err);
 		} finally {
 			isLoading = false;
@@ -109,13 +123,13 @@
 		decryptedResult = '';
 
 		try {
-			// Initialize encryption service if not already done
-			if (!clientEncryption.isInitialized) {
-				await clientEncryption.initialize();
+			// Initialize post-quantum encryption service if not already done
+			if (!postQuantumEncryption.isInitialized) {
+				await postQuantumEncryption.initialize();
 			}
 
-			// Decrypt the message
-			const decrypted = await clientEncryption.decryptMessage(conversationId, encryptedResult);
+			// Decrypt the message using post-quantum encryption
+			const decrypted = await postQuantumEncryption.decryptFromSender(encryptedResult, '');
 			decryptedResult = decrypted;
 			
 			// Check if decryption was successful
@@ -127,7 +141,7 @@
 				success = '⚠️ Decryption completed, but result differs from original text';
 			}
 		} catch (err) {
-			error = `❌ Decryption failed: ${err.message}`;
+			error = `❌ Decryption failed: ${err instanceof Error ? err.message : String(err)}`;
 			console.error('Decryption error:', err);
 		} finally {
 			isLoading = false;
@@ -144,13 +158,25 @@
 		success = '';
 
 		try {
-			await clientEncryption.clearAllKeys();
+			// Clear post-quantum encryption keys
+			await postQuantumEncryption.clearUserKeys();
+			
+			// Clear any remaining localStorage keys
+			const keysToRemove = [
+				'qryptchat_pq_keypair',
+				'qrypt_encryption_keys'
+			];
+			
+			for (const key of keysToRemove) {
+				localStorage.removeItem(key);
+			}
+			
 			success = '✅ All encryption keys cleared successfully!';
 			encryptedResult = '';
 			decryptedResult = '';
 			await updateEncryptionStatus();
 		} catch (err) {
-			error = `❌ Failed to clear keys: ${err.message}`;
+			error = `❌ Failed to clear keys: ${err instanceof Error ? err.message : String(err)}`;
 			console.error('Clear keys error:', err);
 		} finally {
 			isLoading = false;
@@ -198,7 +224,7 @@
 							<span class="error">{storageKey.error}</span>
 						{:else}
 							<span>{storageKey.count} conversations</span>
-							{#if storageKey.conversations.length > 0}
+							{#if storageKey.conversations && storageKey.conversations.length > 0}
 								<div class="conversation-list">
 									{#each storageKey.conversations.slice(0, 3) as conv}
 										<code>{conv}</code>

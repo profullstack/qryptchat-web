@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import { handler } from './build/handler.js';
 import { WebSocketServer } from 'ws';
 import { ChatWebSocketServer } from './src/lib/websocket/server.js';
+import { messageCleanupService } from './src/lib/services/message-cleanup-service.js';
 
 // Create HTTP server that delegates all non-WS requests to SvelteKit
 const server = createServer((req, res) => {
@@ -42,6 +43,9 @@ server.on('upgrade', (request, socket, head) => {
 const shutdown = () => {
 	console.log('Shutting down server...');
 	
+	// Stop message cleanup service
+	messageCleanupService.stop();
+	
 	// Close WebSocket server
 	wss.close(() => {
 		console.log('WebSocket server closed');
@@ -62,4 +66,9 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
 	console.log(`🚀 QryptChat server running on http://localhost:${PORT}`);
 	console.log(`📡 WebSocket endpoint available at ws://localhost:${PORT}/ws`);
+	
+	// Start message cleanup service after server is running
+	setTimeout(() => {
+		messageCleanupService.start();
+	}, 2000);
 });

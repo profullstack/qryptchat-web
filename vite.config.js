@@ -11,6 +11,19 @@ export default defineConfig(({ mode }) => {
 			port: env.PORT ? parseInt(env.PORT) : 5173,
 			host: true
 		},
+		build: {
+			rollupOptions: {
+				onwarn(warning, warn) {
+					// Suppress warnings from mlkem library about comment annotations
+					if (warning.code === 'COMMENT_ANNOTATION' && warning.id?.includes('mlkem')) {
+						return;
+					}
+					// Use default for everything else
+					warn(warning);
+				}
+			}
+		},
+		logLevel: 'warn', // Reduce log verbosity to suppress transformation messages
 	plugins: [
 		sveltekit(),
 		websocketDev(),
@@ -116,8 +129,11 @@ export default defineConfig(({ mode }) => {
 					'**/server/**',
 					'server/**',
 					'server/sw.js',
-					'server/workbox-*.js'
+					'server/workbox-*.js',
+					'prerendered/**/*'
 				],
+				// Explicitly disable prerendered file inclusion since we use SSR
+				additionalManifestEntries: [],
 				dontCacheBustURLsMatching: /\.\w{8}\./,
 				skipWaiting: true,
 				clientsClaim: true,

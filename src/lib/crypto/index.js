@@ -50,7 +50,12 @@ export const Base64 = {
 	 * @returns {string}
 	 */
 	encode(bytes) {
-		return btoa(String.fromCharCode(...bytes));
+		// Use proper binary-safe base64 encoding
+		let binary = '';
+		for (let i = 0; i < bytes.length; i++) {
+			binary += String.fromCharCode(bytes[i]);
+		}
+		return btoa(binary);
 	},
 
 	/**
@@ -59,7 +64,13 @@ export const Base64 = {
 	 * @returns {Uint8Array}
 	 */
 	decode(base64) {
-		return new Uint8Array(atob(base64).split('').map(c => c.charCodeAt(0)));
+		// Use proper binary-safe base64 decoding
+		const binary = atob(base64);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) {
+			bytes[i] = binary.charCodeAt(i);
+		}
+		return bytes;
 	}
 };
 

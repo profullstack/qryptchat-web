@@ -6,8 +6,14 @@ import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 
-// Create service role client instance for database operations
-const supabaseServiceRole = createServiceRoleClient();
+// Lazy service role client creation
+let supabaseServiceRole = null;
+function getServiceRoleClient() {
+	if (!supabaseServiceRole) {
+		supabaseServiceRole = createServiceRoleClient();
+	}
+	return supabaseServiceRole;
+}
 
 // Create regular client for JWT validation
 const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
@@ -71,7 +77,7 @@ async function authenticateUser(request) {
 		}
 
 		// Get the internal user record from the auth user ID
-		const { data: userData, error: userError } = await supabaseServiceRole
+		const { data: userData, error: userError } = await getServiceRoleClient()
 			.from('users')
 			.select('id, auth_user_id, username')
 			.eq('auth_user_id', user.id)
@@ -105,7 +111,7 @@ export async function GET({ url, request }) {
 		}
 
 		// Get the user's auth_user_id from the internal user ID
-		const { data: userData, error: userError } = await supabaseServiceRole
+		const { data: userData, error: userError } = await getServiceRoleClient()
 			.from('users')
 			.select('auth_user_id')
 			.eq('id', userId)
@@ -117,7 +123,7 @@ export async function GET({ url, request }) {
 		}
 
 		// Fetch public key using auth_user_id
-		const { data: publicKey, error } = await supabaseServiceRole
+		const { data: publicKey, error } = await getServiceRoleClient()
 			.rpc('get_user_public_key', {
 				target_user_id: userData.auth_user_id,
 				key_type_param: 'ML-KEM-768'
@@ -164,7 +170,7 @@ export async function POST({ request }) {
 		for (const userId of user_ids) {
 			try {
 				// Get the user's auth_user_id from the internal user ID
-				const { data: userData, error: userError } = await supabaseServiceRole
+				const { data: userData, error: userError } = await getServiceRoleClient()
 					.from('users')
 					.select('auth_user_id')
 					.eq('id', userId)
@@ -177,7 +183,7 @@ export async function POST({ request }) {
 				}
 
 				// Fetch public key using auth_user_id
-				const { data: publicKey, error } = await supabaseServiceRole
+				const { data: publicKey, error } = await getServiceRoleClient()
 					.rpc('get_user_public_key', {
 						target_user_id: userData.auth_user_id,
 						key_type_param: 'ML-KEM-768'

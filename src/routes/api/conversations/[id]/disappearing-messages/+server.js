@@ -3,20 +3,104 @@
 
 import { json } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 
-// Create service role client instance
-const supabaseServiceRole = createServiceRoleClient();
+// Lazy service role client creation
+let supabaseServiceRole = null;
+function getServiceRoleClient() {
+	if (!supabaseServiceRole) {
+		supabaseServiceRole = createServiceRoleClient();
+	}
+	return supabaseServiceRole;
+}
+
+// Create regular Supabase client for authentication
+const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+
+/**
+ * Authenticate user from request cookies
+ * @param {Request} request - The request object
+ * @returns {Promise<{user: Object|null, error: string|null}>}
+ */
+async function authenticateUser(request) {
+	try {
+		// Parse cookies to get JWT token
+		const cookieHeader = request.headers.get('cookie');
+		if (!cookieHeader) {
+			console.log('🔐 [API] ❌ No cookies found in request');
+			return { user: null, error: 'No authentication cookies found' };
+		}
+
+		// Extract access token from cookies
+		const cookies = Object.fromEntries(
+			cookieHeader.split('; ').map(cookie => {
+				const [name, ...rest] = cookie.split('=');
+				return [name, rest.join('=')];
+			})
+		);
+
+		const accessToken = cookies['sb-access-token'] || cookies['sb-refresh-token'];
+		if (!accessToken) {
+			console.log('🔐 [API] ❌ No Supabase auth tokens found in cookies');
+			return { user: null, error: 'No authentication tokens found' };
+		}
+
+		console.log('🔐 [API] 🔍 Found auth token, verifying with Supabase...');
+
+		// Verify the JWT token with regular Supabase client (not service role)
+		const { data: { user }, error } = await supabaseClient.auth.getUser(accessToken);
+
+		if (error) {
+			console.log('🔐 [API] ❌ Token verification failed:', error.message);
+			return { user: null, error: `Authentication failed: ${error.message}` };
+		}
+
+		if (!user) {
+			console.log('🔐 [API] ❌ No user returned from token verification');
+			return { user: null, error: 'Invalid authentication token' };
+		}
+
+		console.log('🔐 [API] ✅ User authenticated successfully:', user.id);
+		return { user, error: null };
+
+	} catch (error) {
+		console.error('🔐 [API] ❌ Authentication error:', error);
+		return { user: null, error: 'Authentication system error' };
+	}
+}
 
 /**
  * GET /api/conversations/:id/disappearing-messages
  * Get current user's disappearing message settings for a conversation
  */
-export async function GET({ params, locals }) {
+export async function GET({ params, request }) {
   try {
-    // Verify user is authenticated
-    if (!locals.user?.id) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    console.log('🔐 [API] GET /api/conversations/:id/disappearing-messages - Starting authentication');
+
+    // Authenticate user
+    const { user, error: authError } = await authenticateUser(request);
+    if (authError || !user) {
+      console.log('🔐 [API] ❌ Authentication failed:', authError);
+      return json({ error: authError || 'Authentication failed' }, { status: 401 });
     }
+
+    console.log('🔐 [API] ✅ User authenticated:', user.id);
+
+    // Get internal user ID from auth_user_id
+    const { data: userData, error: userError } = await getServiceRoleClient()
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (userError || !userData) {
+      console.log('🔐 [API] ❌ Failed to get internal user ID:', userError?.message);
+      return json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = userData.id;
+    console.log('🔐 [API] ✅ Internal user ID:', userId);
 
     const conversationId = params.id;
     if (!conversationId) {
@@ -24,11 +108,11 @@ export async function GET({ params, locals }) {
     }
 
     // Get user's current settings for this conversation
-    const { data: participant, error } = await supabaseServiceRole
+    const { data: participant, error } = await getServiceRoleClient()
       .from('conversation_participants')
       .select('disappear_seconds, start_on')
       .eq('conversation_id', conversationId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', userId)
       .is('left_at', null)
       .single();
 
@@ -59,12 +143,33 @@ export async function GET({ params, locals }) {
  * PUT /api/conversations/:id/disappearing-messages
  * Update current user's disappearing message settings for a conversation
  */
-export async function PUT({ params, request, locals }) {
+export async function PUT({ params, request }) {
   try {
-    // Verify user is authenticated
-    if (!locals.user?.id) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    console.log('🔐 [API] PUT /api/conversations/:id/disappearing-messages - Starting authentication');
+
+    // Authenticate user
+    const { user, error: authError } = await authenticateUser(request);
+    if (authError || !user) {
+      console.log('🔐 [API] ❌ Authentication failed:', authError);
+      return json({ error: authError || 'Authentication failed' }, { status: 401 });
     }
+
+    console.log('🔐 [API] ✅ User authenticated:', user.id);
+
+    // Get internal user ID from auth_user_id
+    const { data: userData, error: userError } = await getServiceRoleClient()
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (userError || !userData) {
+      console.log('🔐 [API] ❌ Failed to get internal user ID:', userError?.message);
+      return json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const userId = userData.id;
+    console.log('🔐 [API] ✅ Internal user ID:', userId);
 
     const conversationId = params.id;
     if (!conversationId) {
@@ -83,27 +188,30 @@ export async function PUT({ params, request, locals }) {
     }
 
     // Verify user is a participant in the conversation
-    const { data: existingParticipant, error: checkError } = await supabaseServiceRole
+    const { data: existingParticipant, error: checkError } = await getServiceRoleClient()
       .from('conversation_participants')
       .select('user_id')
       .eq('conversation_id', conversationId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', userId)
       .is('left_at', null)
       .single();
 
     if (checkError || !existingParticipant) {
+      console.log('🔐 [API] ❌ User not authorized for conversation:', checkError?.message);
       return json({ error: 'Not a participant in this conversation' }, { status: 403 });
     }
 
+    console.log('🔐 [API] ✅ User is participant in conversation');
+
     // Update user's settings
-    const { data: updatedParticipant, error: updateError } = await supabaseServiceRole
+    const { data: updatedParticipant, error: updateError } = await getServiceRoleClient()
       .from('conversation_participants')
       .update({
         disappear_seconds,
         start_on: start_on || 'delivered'
       })
       .eq('conversation_id', conversationId)
-      .eq('user_id', locals.user.id)
+      .eq('user_id', userId)
       .select('disappear_seconds, start_on')
       .single();
 
