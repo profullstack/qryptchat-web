@@ -341,27 +341,54 @@ export async function GET({ url, request }) {
     }
 
     // Transform messages for client consumption
-    const transformedMessages = messages?.map(message => ({
-      id: message.id,
-      conversation_id: message.conversation_id,
-      sender_id: message.sender_id,
-      encrypted_content: message.message_recipients[0]?.encrypted_content ?
-        Buffer.from(message.message_recipients[0].encrypted_content).toString('base64') : null,
-      content_type: message.content_type,
-      has_attachments: message.has_attachments,
-      created_at: message.created_at,
-      reply_to_id: message.reply_to_id,
-      delivery_info: {
-        delivered_ts: message.deliveries[0]?.delivered_ts,
-        read_ts: message.deliveries[0]?.read_ts,
-        expires_at: message.deliveries[0]?.expires_at
-      },
-      disappearing_info: {
-        expires_at: message.message_recipients[0]?.expires_at,
-        start_on: message.message_recipients[0]?.start_on,
-        read_at: message.message_recipients[0]?.read_at
+    const transformedMessages = messages?.map(message => {
+      // The encrypted_content from database is already base64, convert back to JSON string
+      let encryptedContent = null;
+      if (message.message_recipients[0]?.encrypted_content) {
+        try {
+          // Convert base64 back to JSON string (reverse of what we did in POST)
+          encryptedContent = Buffer.from(message.message_recipients[0].encrypted_content, 'base64').toString('utf8');
+          console.log('🔐 [API GET] Converted base64 to JSON:', {
+            messageId: message.id,
+            base64Length: message.message_recipients[0].encrypted_content.length,
+            jsonLength: encryptedContent.length,
+            jsonPreview: encryptedContent.substring(0, 100),
+            isValidJSON: (() => {
+              try {
+                JSON.parse(encryptedContent);
+                return true;
+              } catch {
+                return false;
+              }
+            })()
+          });
+        } catch (error) {
+          console.error('🔐 [API GET] ❌ Failed to convert base64 to JSON:', error);
+          encryptedContent = null;
+        }
       }
-    })) || [];
+
+      return {
+        id: message.id,
+        conversation_id: message.conversation_id,
+        sender_id: message.sender_id,
+        encrypted_content: encryptedContent,
+        content_type: message.content_type,
+        has_attachments: message.has_attachments,
+        created_at: message.created_at,
+        reply_to_id: message.reply_to_id,
+        delivery_info: {
+          delivered_ts: message.deliveries[0]?.delivered_ts,
+          read_ts: message.deliveries[0]?.read_ts,
+          expires_at: message.deliveries[0]?.expires_at
+        },
+        disappearing_info: {
+          expires_at: message.message_recipients[0]?.expires_at,
+          start_on: message.message_recipients[0]?.start_on,
+          read_at: message.message_recipients[0]?.read_at
+        }
+      };
+    }) || [];
 
     return json({
       success: true,

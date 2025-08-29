@@ -541,12 +541,11 @@ function createWebSocketChatStore() {
 			console.log(`🔐 [NEW] Message ${message.id} requires message reload for proper encrypted content`);
 			
 			// Get current state to check if this is the active conversation
-			const currentState = await new Promise(resolve => {
-				const unsubscribe = subscribe(state => {
-					resolve(state);
-					unsubscribe();
-				});
+			let currentState;
+			const unsubscribe = subscribe(state => {
+				currentState = state;
 			});
+			unsubscribe(); // Immediately unsubscribe after getting the state
 			
 			if (currentState.activeConversation === message.conversation_id) {
 				console.log(`🔐 [NEW] Reloading messages for active conversation ${message.conversation_id}`);

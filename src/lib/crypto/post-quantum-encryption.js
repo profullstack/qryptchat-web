@@ -233,7 +233,7 @@ export class PostQuantumEncryptionService {
 				console.log(`🔐 [DEBUG] Successfully parsed JSON, algorithm:`, messageData.alg);
 			} catch (parseError) {
 				console.log('🔐 [DEBUG] Content is not JSON, parse error:', parseError.message);
-				return encryptedContent;
+				throw new Error(`Invalid encrypted content format: ${parseError.message}`);
 			}
 
 			// Check if it's our post-quantum encrypted format
@@ -245,7 +245,7 @@ export class PostQuantumEncryptionService {
 					hasNonce: !!messageData.n,
 					hasCiphertext: !!messageData.c
 				});
-				return encryptedContent;
+				throw new Error('Invalid post-quantum encrypted format - missing required fields');
 			}
 
 			// Verify algorithm compatibility
