@@ -342,28 +342,58 @@ export async function GET({ url, request }) {
 
     // Transform messages for client consumption
     const transformedMessages = messages?.map(message => {
-      // The encrypted_content from database is already base64, convert back to JSON string
+      // Handle encrypted content - could be base64 string or serialized Buffer object
       let encryptedContent = null;
       if (message.message_recipients[0]?.encrypted_content) {
         try {
-          // Convert base64 back to JSON string (reverse of what we did in POST)
-          encryptedContent = Buffer.from(message.message_recipients[0].encrypted_content, 'base64').toString('utf8');
-          console.log('🔐 [API GET] Converted base64 to JSON:', {
-            messageId: message.id,
-            base64Length: message.message_recipients[0].encrypted_content.length,
-            jsonLength: encryptedContent.length,
-            jsonPreview: encryptedContent.substring(0, 100),
-            isValidJSON: (() => {
-              try {
-                JSON.parse(encryptedContent);
-                return true;
-              } catch {
-                return false;
-              }
-            })()
-          });
+          const rawContent = message.message_recipients[0].encrypted_content;
+          
+          // Check if it's a serialized Buffer object (JSON string containing {"type":"Buffer","data":[...]})
+          if (typeof rawContent === 'string' && rawContent.includes('"type":"Buffer"')) {
+            console.log('🔐 [API GET] Detected serialized Buffer format');
+            const bufferObj = JSON.parse(rawContent);
+            if (bufferObj.type === 'Buffer' && Array.isArray(bufferObj.data)) {
+              // Convert Buffer object back to actual Buffer, then to JSON string
+              const buffer = Buffer.from(bufferObj.data);
+              encryptedContent = buffer.toString('utf8');
+              console.log('🔐 [API GET] Converted serialized Buffer to JSON:', {
+                messageId: message.id,
+                bufferDataLength: bufferObj.data.length,
+                jsonLength: encryptedContent.length,
+                jsonPreview: encryptedContent.substring(0, 100),
+                isValidJSON: (() => {
+                  try {
+                    JSON.parse(encryptedContent);
+                    return true;
+                  } catch {
+                    return false;
+                  }
+                })()
+              });
+            }
+          } else {
+            // Assume it's base64 encoded (legacy format)
+            console.log('🔐 [API GET] Detected base64 format');
+            encryptedContent = Buffer.from(rawContent, 'base64').toString('utf8');
+            console.log('🔐 [API GET] Converted base64 to JSON:', {
+              messageId: message.id,
+              base64Length: rawContent.length,
+              jsonLength: encryptedContent.length,
+              jsonPreview: encryptedContent.substring(0, 100),
+              isValidJSON: (() => {
+                try {
+                  JSON.parse(encryptedContent);
+                  return true;
+                } catch {
+                  return false;
+                }
+              })()
+            });
+          }
         } catch (error) {
-          console.error('🔐 [API GET] ❌ Failed to convert base64 to JSON:', error);
+          console.error('🔐 [API GET] ❌ Failed to process encrypted content:', error);
+          console.error('🔐 [API GET] Raw content type:', typeof message.message_recipients[0].encrypted_content);
+          console.error('🔐 [API GET] Raw content preview:', message.message_recipients[0].encrypted_content?.substring(0, 200));
           encryptedContent = null;
         }
       }

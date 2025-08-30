@@ -385,10 +385,17 @@ function createWebSocketChatStore() {
 							// Get sender's public key for verification (optional)
 							const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id) || '';
 							
+							// Get sender's public key for decryption
+							const messageSenderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
+							if (!messageSenderPublicKey) {
+								console.error(`🔐 [LOAD] ❌ No public key found for sender ${message.sender_id}`);
+								throw new Error(`No public key found for sender ${message.sender_id}`);
+							}
+	
 							// Decrypt using multi-recipient encryption
 							const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
 								message.encrypted_content,
-								senderPublicKey
+								messageSenderPublicKey
 							);
 							
 							message.content = decryptedContent;
@@ -565,10 +572,17 @@ function createWebSocketChatStore() {
 				// Get sender's public key for verification (optional)
 				const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id) || '';
 				
+				// Get sender's public key for decryption
+				const newMessageSenderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
+				if (!newMessageSenderPublicKey) {
+					console.error(`🔐 [NEW] ❌ No public key found for sender ${message.sender_id}`);
+					throw new Error(`No public key found for sender ${message.sender_id}`);
+				}
+	
 				// Decrypt using multi-recipient encryption
 				const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
 					message.encrypted_content,
-					senderPublicKey
+					newMessageSenderPublicKey
 				);
 				
 				message.content = decryptedContent;

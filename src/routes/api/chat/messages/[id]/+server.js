@@ -86,14 +86,30 @@ export async function GET({ params, request }) {
 			return json({ error: 'Message not found or no encrypted content available' }, { status: 404 });
 		}
 		
-		// Convert base64 back to JSON for client-side decryption
-		const base64Content = message.message_recipients[0].encrypted_content;
+		// Handle encrypted content - could be base64 string or serialized Buffer object
+		const rawContent = message.message_recipients[0].encrypted_content;
 		try {
-			const decodedContent = Buffer.from(base64Content, 'base64').toString('utf8');
-			message.encrypted_content = decodedContent;
+			// Check if it's a serialized Buffer object (JSON string containing {"type":"Buffer","data":[...]})
+			if (typeof rawContent === 'string' && rawContent.includes('"type":"Buffer"')) {
+				console.log('🔐 [API GET] Detected serialized Buffer format for message:', message.id);
+				const bufferObj = JSON.parse(rawContent);
+				if (bufferObj.type === 'Buffer' && Array.isArray(bufferObj.data)) {
+					// Convert Buffer object back to actual Buffer, then to JSON string
+					const buffer = Buffer.from(bufferObj.data);
+					message.encrypted_content = buffer.toString('utf8');
+				} else {
+					message.encrypted_content = rawContent;
+				}
+			} else {
+				// Assume it's base64 encoded (legacy format)
+				console.log('🔐 [API GET] Detected base64 format for message:', message.id);
+				message.encrypted_content = Buffer.from(rawContent, 'base64').toString('utf8');
+			}
 		} catch (error) {
-			console.error('Failed to decode base64 encrypted content:', error);
-			message.encrypted_content = base64Content;
+			console.error('🔐 [API GET] ❌ Failed to process encrypted content for message:', message.id, error);
+			console.error('🔐 [API GET] Raw content type:', typeof rawContent);
+			console.error('🔐 [API GET] Raw content preview:', rawContent?.substring(0, 200));
+			message.encrypted_content = rawContent;
 		}
 		
 		// Remove the message_recipients array as it's no longer needed
