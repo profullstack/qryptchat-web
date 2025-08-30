@@ -3,7 +3,7 @@
  * Handles per-user message expiration based on individual settings
  */
 
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createServiceRoleClient } from '../supabase/service-role.js';
 
 // Lazy service role client creation
 let supabaseServiceRole = null;
