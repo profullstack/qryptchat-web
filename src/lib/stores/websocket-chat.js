@@ -12,6 +12,7 @@ import {
 	serializeMessage
 } from '$lib/websocket/utils/protocol.js';
 import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
+import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 /**
@@ -380,22 +381,13 @@ function createWebSocketChatStore() {
 				for (const message of messages) {
 					if (message.encrypted_content) {
 						try {
-							console.log(`🔐 [LOAD] Decrypting message ${message.id} from sender ${message.sender_id}`);
+							console.log(`🔐 [LOAD] Decrypting message ${message.id} (your encrypted copy)`);
 							
-							// Get sender's public key for verification (optional)
-							const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id) || '';
-							
-							// Get sender's public key for decryption
-							const messageSenderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
-							if (!messageSenderPublicKey) {
-								console.error(`🔐 [LOAD] ❌ No public key found for sender ${message.sender_id}`);
-								throw new Error(`No public key found for sender ${message.sender_id}`);
-							}
-	
-							// Decrypt using multi-recipient encryption
-							const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
+							// Decrypt YOUR encrypted copy using YOUR private key (ML-KEM approach)
+							// The server already provided only YOUR encrypted copy in message.encrypted_content
+							const decryptedContent = await postQuantumEncryption.decryptFromSender(
 								message.encrypted_content,
-								messageSenderPublicKey
+								'' // Sender public key not needed for ML-KEM decryption
 							);
 							
 							message.content = decryptedContent;
@@ -461,13 +453,11 @@ function createWebSocketChatStore() {
 					try {
 						console.log(`🔐 [SENT] Decrypting sent message ${sentMessage.id} for immediate display`);
 						
-						// Get our own public key for verification
-						const myPublicKey = await multiRecipientEncryption.getUserPublicKey();
-						
-						// Decrypt using multi-recipient encryption
-						const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
+						// Decrypt YOUR encrypted copy using YOUR private key (ML-KEM approach)
+						// The server returned YOUR encrypted copy in sentMessage.encrypted_content
+						const decryptedContent = await postQuantumEncryption.decryptFromSender(
 							sentMessage.encrypted_content,
-							myPublicKey
+							'' // Sender public key not needed for ML-KEM decryption
 						);
 						
 						sentMessage.content = decryptedContent;
@@ -564,25 +554,16 @@ function createWebSocketChatStore() {
 			}
 		}
 		
-		// Decrypt the message content using multi-recipient encryption
+		// Decrypt YOUR encrypted copy using YOUR private key (ML-KEM approach)
 		if (message.encrypted_content) {
 			try {
-				console.log(`🔐 [NEW] Decrypting new message ${message.id} from sender ${message.sender_id}`);
+				console.log(`🔐 [NEW] Decrypting new message ${message.id} (your encrypted copy)`);
 				
-				// Get sender's public key for verification (optional)
-				const senderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id) || '';
-				
-				// Get sender's public key for decryption
-				const newMessageSenderPublicKey = await publicKeyService.getUserPublicKey(message.sender_id);
-				if (!newMessageSenderPublicKey) {
-					console.error(`🔐 [NEW] ❌ No public key found for sender ${message.sender_id}`);
-					throw new Error(`No public key found for sender ${message.sender_id}`);
-				}
-	
-				// Decrypt using multi-recipient encryption
-				const decryptedContent = await multiRecipientEncryption.decryptForCurrentUser(
+				// Decrypt YOUR encrypted copy using YOUR private key (ML-KEM approach)
+				// The server/WebSocket already provided only YOUR encrypted copy in message.encrypted_content
+				const decryptedContent = await postQuantumEncryption.decryptFromSender(
 					message.encrypted_content,
-					newMessageSenderPublicKey
+					'' // Sender public key not needed for ML-KEM decryption
 				);
 				
 				message.content = decryptedContent;
