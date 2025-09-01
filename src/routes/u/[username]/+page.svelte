@@ -805,6 +805,8 @@
 		cursor: pointer;
 		transition: all 0.2s ease;
 		white-space: nowrap;
+		min-width: 100px;
+		text-align: center;
 	}
 
 	.copy-btn:hover {
