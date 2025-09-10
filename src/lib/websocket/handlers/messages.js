@@ -104,11 +104,11 @@ export async function handleSendMessage(ws, message, context) {
 
 		// Create per-participant encrypted message copies using service role client
 		try {
-			// Convert JSON encrypted content to base64 for database storage
-			// The post-quantum encryption returns JSON strings, but the database function expects base64
+			// Store JSON encrypted content directly as base64 in database
+			// The post-quantum encryption returns JSON strings, and we'll store them as base64
 			const base64EncryptedContents = {};
 			for (const [userId, jsonEncryptedContent] of Object.entries(encryptedContents)) {
-				console.log('🔐 [SEND] Converting JSON to base64 for storage:', {
+				console.log('🔐 [SEND] Processing encrypted content for storage:', {
 					userId,
 					jsonType: typeof jsonEncryptedContent,
 					jsonLength: jsonEncryptedContent?.length || 0,
@@ -123,9 +123,9 @@ export async function handleSendMessage(ws, message, context) {
 					})()
 				});
 				
-				// Convert JSON string to base64
+				// Convert JSON string to base64 for database storage
 				const base64Content = Buffer.from(jsonEncryptedContent, 'utf8').toString('base64');
-				console.log('🔐 [SEND] Converted to base64:', {
+				console.log('🔐 [SEND] Converted to base64 for database:', {
 					userId,
 					base64Length: base64Content?.length || 0,
 					base64Preview: base64Content?.substring(0, 100) || 'N/A',
@@ -384,12 +384,18 @@ export async function handleLoadMessages(ws, message, context) {
 
 		// Load messages for the conversation with user-specific encrypted content
 		console.log('📨 [MESSAGES] Loading messages from database...');
+		console.log('📨 [MESSAGES] Filtering for recipient_user_id:', user.id);
+		console.log('📨 [MESSAGES] User details:', {
+			id: user.id,
+			username: user.username,
+			auth_user_id: user.auth_user_id
+		});
 		const { data: messages, error: messagesError } = await supabase
 			.from('messages')
 			.select(`
 				*,
 				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
-				message_recipients!inner(encrypted_content)
+				message_recipients!inner(encrypted_content, recipient_user_id)
 			`)
 			.eq('conversation_id', conversationId)
 			.eq('message_recipients.recipient_user_id', user.id)
@@ -434,10 +440,9 @@ export async function handleLoadMessages(ws, message, context) {
 		// Add user-specific encrypted content to each message
 		messagesWithReplies.forEach(msg => {
 			if (msg.message_recipients && msg.message_recipients.length > 0) {
-				// Convert base64 back to JSON for client-side decryption
-				// The database stores base64, but the client expects JSON format
+				// Database now stores base64 as TEXT, convert back to JSON for client-side decryption
 				const base64Content = msg.message_recipients[0].encrypted_content;
-				console.log('🔐 [DEBUG] Raw base64 from database:', {
+				console.log('🔐 [LOAD] Raw base64 from database:', {
 					messageId: msg.id,
 					base64Length: base64Content?.length || 0,
 					base64Preview: base64Content?.substring(0, 100) || 'N/A',
@@ -445,9 +450,9 @@ export async function handleLoadMessages(ws, message, context) {
 				});
 				
 				try {
-					// Convert base64 back to JSON string
+					// Convert base64 back to JSON string for client-side decryption
 					const decodedContent = Buffer.from(base64Content, 'base64').toString('utf8');
-					console.log('🔐 [DEBUG] Decoded content:', {
+					console.log('🔐 [LOAD] Decoded JSON content:', {
 						messageId: msg.id,
 						decodedLength: decodedContent?.length || 0,
 						decodedPreview: decodedContent?.substring(0, 100) || 'N/A',
@@ -462,8 +467,8 @@ export async function handleLoadMessages(ws, message, context) {
 					});
 					msg.encrypted_content = decodedContent;
 				} catch (error) {
-					console.error('🔐 [DEBUG] Failed to decode base64 encrypted content:', error);
-					console.error('🔐 [DEBUG] Raw base64 that failed:', base64Content);
+					console.error('🔐 [LOAD] Failed to decode base64 encrypted content:', error);
+					console.error('🔐 [LOAD] Raw base64 that failed:', base64Content);
 					// Fallback to original content if decoding fails
 					msg.encrypted_content = base64Content;
 				}
@@ -502,13 +507,13 @@ export async function handleLoadMessages(ws, message, context) {
 						if (msg.reply_to_id) {
 							const replyMsg = replyData.find(reply => reply.id === msg.reply_to_id);
 							if (replyMsg && replyMsg.message_recipients && replyMsg.message_recipients.length > 0) {
-								// Convert base64 back to JSON for reply content too
+								// Database now stores base64 as TEXT, convert back to JSON for reply content
 								const base64ReplyContent = replyMsg.message_recipients[0].encrypted_content;
 								let replyEncryptedContent;
 								try {
 									replyEncryptedContent = Buffer.from(base64ReplyContent, 'base64').toString('utf8');
 								} catch (error) {
-									console.error('Failed to decode base64 reply content:', error);
+									console.error('🔐 [LOAD] Failed to decode base64 reply content:', error);
 									replyEncryptedContent = base64ReplyContent;
 								}
 								
@@ -669,14 +674,13 @@ export async function handleLoadMoreMessages(ws, message, context) {
 		let messagesWithReplies = messages || [];
 		messagesWithReplies.forEach(msg => {
 			if (msg.message_recipients && msg.message_recipients.length > 0) {
-				// Convert base64 back to JSON for client-side decryption
-				// The database stores base64, but the client expects JSON format
+				// Database now stores base64 as TEXT, convert back to JSON for client-side decryption
 				const base64Content = msg.message_recipients[0].encrypted_content;
 				try {
-					// Convert base64 back to JSON string
+					// Convert base64 back to JSON string for client-side decryption
 					msg.encrypted_content = Buffer.from(base64Content, 'base64').toString('utf8');
 				} catch (error) {
-					console.error('Failed to decode base64 encrypted content:', error);
+					console.error('🔐 [LOAD_MORE] Failed to decode base64 encrypted content:', error);
 					// Fallback to original content if decoding fails
 					msg.encrypted_content = base64Content;
 				}
@@ -707,13 +711,13 @@ export async function handleLoadMoreMessages(ws, message, context) {
 						if (msg.reply_to_id) {
 							const replyMsg = replyData.find(reply => reply.id === msg.reply_to_id);
 							if (replyMsg && replyMsg.message_recipients && replyMsg.message_recipients.length > 0) {
-								// Convert base64 back to JSON for reply content too
+								// Database now stores base64 as TEXT, convert back to JSON for reply content
 								const base64ReplyContent = replyMsg.message_recipients[0].encrypted_content;
 								let replyEncryptedContent;
 								try {
 									replyEncryptedContent = Buffer.from(base64ReplyContent, 'base64').toString('utf8');
 								} catch (error) {
-									console.error('Failed to decode base64 reply content:', error);
+									console.error('🔐 [LOAD_MORE] Failed to decode base64 reply content:', error);
 									replyEncryptedContent = base64ReplyContent;
 								}
 								

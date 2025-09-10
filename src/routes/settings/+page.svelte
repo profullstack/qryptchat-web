@@ -7,6 +7,9 @@
 	import EncryptionSettings from '$lib/components/settings/EncryptionSettings.svelte';
 	import PrivateKeyManager from '$lib/components/settings/PrivateKeyManager.svelte';
 	import EncryptionTester from '$lib/components/settings/EncryptionTester.svelte';
+	import KeyDiagnostic from '$lib/components/settings/KeyDiagnostic.svelte';
+	import KeyMigrationFix from '$lib/components/settings/KeyMigrationFix.svelte';
+	import AdvancedKeyDiagnostic from '$lib/components/settings/AdvancedKeyDiagnostic.svelte';
 	
 	const supabase = createSupabaseClient();
 	
@@ -160,6 +163,18 @@
 				
 				<section class="settings-section">
 					<EncryptionTester />
+				</section>
+				
+				<section class="settings-section">
+					<KeyDiagnostic />
+				</section>
+				
+				<section class="settings-section">
+					<KeyMigrationFix />
+				</section>
+				
+				<section class="settings-section">
+					<AdvancedKeyDiagnostic />
 				</section>
 			</div>
 		{/if}

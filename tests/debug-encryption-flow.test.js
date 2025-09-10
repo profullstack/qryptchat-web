@@ -27,11 +27,13 @@ describe('Debug Encryption Flow', () => {
 		expect(encryptedContent).to.be.a('string');
 		expect(encryptedContent).to.not.equal(originalMessage);
 		
-		// Verify it's valid JSON
+		// Verify it's post-quantum JSON format
 		const encryptedData = JSON.parse(encryptedContent);
-		expect(encryptedData).to.have.property('v', 1);
-		expect(encryptedData).to.have.property('n');
-		expect(encryptedData).to.have.property('c');
+		expect(encryptedData).to.have.property('v', 3); // Version 3 for post-quantum
+		expect(encryptedData).to.have.property('alg', 'ML-KEM-768'); // Post-quantum algorithm
+		expect(encryptedData).to.have.property('kem'); // KEM ciphertext
+		expect(encryptedData).to.have.property('n'); // Nonce
+		expect(encryptedData).to.have.property('c'); // Message ciphertext
 
 		// Decrypt the message
 		const decryptedContent = await clientEncryption.decryptMessage(conversationId, encryptedContent);
@@ -95,16 +97,18 @@ describe('Debug Encryption Flow', () => {
 		
 		console.log('🔐 Testing key generation and reuse...');
 
-		// Get key first time (should generate)
-		const key1 = await clientEncryption.getConversationKey(conversationId);
-		console.log('First key generated, length:', key1.length);
-		expect(key1).to.be.instanceOf(Uint8Array);
-		expect(key1.length).to.equal(32);
+		// Get key first time (should generate) - now returns key pair object
+		const keys1 = await clientEncryption.getConversationKey(conversationId);
+		console.log('First key generated, public key length:', keys1.publicKey?.length || 0);
+		expect(keys1).to.have.property('publicKey');
+		expect(keys1).to.have.property('privateKey');
+		expect(typeof keys1.publicKey).to.equal('string');
+		expect(typeof keys1.privateKey).to.equal('string');
 
 		// Get key second time (should reuse)
-		const key2 = await clientEncryption.getConversationKey(conversationId);
-		console.log('Second key retrieved, length:', key2.length);
-		expect(key2).to.deep.equal(key1);
+		const keys2 = await clientEncryption.getConversationKey(conversationId);
+		console.log('Second key retrieved, public key length:', keys2.publicKey?.length || 0);
+		expect(keys2).to.deep.equal(keys1);
 
 		// Verify encryption works with reused key
 		const message = 'Test message with reused key';

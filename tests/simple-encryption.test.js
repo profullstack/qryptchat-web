@@ -30,11 +30,13 @@ describe('Simple Encryption Test', () => {
 		expect(encryptedContent).toBeTruthy();
 		expect(encryptedContent).not.toEqual(testMessage);
 
-		// Verify it's JSON format
+		// Verify it's post-quantum JSON format
 		const encryptedData = JSON.parse(encryptedContent);
-		expect(encryptedData.v).toBe(1);
-		expect(encryptedData.n).toBeTruthy();
-		expect(encryptedData.c).toBeTruthy();
+		expect(encryptedData.v).toBe(3); // Version 3 for post-quantum
+		expect(encryptedData.alg).toBe('ML-KEM-768'); // Post-quantum algorithm
+		expect(encryptedData.kem).toBeTruthy(); // KEM ciphertext
+		expect(encryptedData.n).toBeTruthy(); // Nonce
+		expect(encryptedData.c).toBeTruthy(); // Message ciphertext
 
 		// Decrypt message
 		const decryptedContent = await encryptionService.decryptMessage(conversationId, encryptedContent);
@@ -48,7 +50,7 @@ describe('Simple Encryption Test', () => {
 	});
 
 	it('should handle decryption failure gracefully', async () => {
-		const invalidEncrypted = '{"v":1,"n":"invalid","c":"invalid"}';
+		const invalidEncrypted = '{"v":3,"alg":"ML-KEM-768","kem":"invalid","n":"invalid","c":"invalid"}';
 		const result = await encryptionService.decryptMessage(conversationId, invalidEncrypted);
 		expect(result).toBe('[Encrypted message - decryption failed]');
 	});
