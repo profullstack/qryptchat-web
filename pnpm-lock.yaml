@@ -20,6 +20,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.56.0
         version: 2.56.0
+      dilithium-crystals:
+        specifier: ^1.0.6
+        version: 1.0.6
       dotenv:
         specifier: ^17.2.2
         version: 17.2.2
@@ -1635,6 +1638,9 @@ packages:
   diff@7.0.0:
     resolution: {integrity: sha512-PJWHUb1RFevKCwaFA9RlG5tCd+FO5iRh9A8HEtkmBH2Li03iJriB6m6JIN4rGz3K3JLawI7/veA1xzRKP6ISBw==}
     engines: {node: '>=0.3.1'}
+
+  dilithium-crystals@1.0.6:
+    resolution: {integrity: sha512-zPMHDmr2l2A6ZU574cbwNn1AX1UkIIYcJTcN4DEycrKXtgqGp7kPYSpatzcEthTLEKwwYBWYyV6mO5HcBlZwyg==}
 
   dom-accessibility-api@0.5.16:
     resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
@@ -4869,6 +4875,8 @@ snapshots:
   devalue@5.1.1: {}
 
   diff@7.0.0: {}
+
+  dilithium-crystals@1.0.6: {}
 
   dom-accessibility-api@0.5.16: {}
 

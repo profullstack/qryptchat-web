@@ -4,8 +4,9 @@
  * This system is fully quantum-resistant according to FIPS 203 standards
  */
 
-import { MlKem768 } from 'mlkem';
-import { Base64, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
+import { MlKem1024 } from 'mlkem';
+import { Base64, ChaCha20Poly1305, SecureRandom, CryptoUtils, HKDF } from './index.js';
+import { indexedDBManager } from './indexed-db-manager.js';
 
 /**
  * Post-quantum encryption service using ML-KEM + ChaCha20-Poly1305
@@ -22,8 +23,8 @@ export class PostQuantumEncryptionService {
 		// ML-KEM-512: Faster, smaller keys (NIST Level 1)
 		// ML-KEM-768: Balanced (NIST Level 3) - RECOMMENDED
 		// ML-KEM-1024: Maximum security (NIST Level 5)
-		this.kemAlgorithm = new MlKem768();
-		this.kemName = 'ML-KEM-768';
+		this.kemAlgorithm = new MlKem1024();
+		this.kemName = 'ML-KEM-1024';
 	}
 
 	/**
@@ -74,7 +75,7 @@ export class PostQuantumEncryptionService {
 
 			this.userKeys = { publicKey, privateKey };
 
-			// Store in localStorage
+			// Store in IndexedDB
 			if (typeof window !== 'undefined') {
 				const keyData = {
 					publicKey,
@@ -83,7 +84,7 @@ export class PostQuantumEncryptionService {
 					timestamp: Date.now(),
 					version: '3.0' // Post-quantum version
 				};
-				localStorage.setItem(this.storageKey, JSON.stringify(keyData));
+				await indexedDBManager.set(this.storageKey, keyData);
 			}
 
 			console.log(`🔐 Generated new ${this.kemName} key pair`);
@@ -103,10 +104,8 @@ export class PostQuantumEncryptionService {
 		try {
 			if (typeof window === 'undefined') return;
 
-			const stored = localStorage.getItem(this.storageKey);
-			if (!stored) return;
-
-			const keyData = JSON.parse(stored);
+			const keyData = await indexedDBManager.get(this.storageKey);
+			if (!keyData) return;
 			
 			// Validate key data and algorithm compatibility
 			if (keyData.publicKey && keyData.privateKey && keyData.algorithm === this.kemName) {
@@ -171,8 +170,9 @@ export class PostQuantumEncryptionService {
 			// Encapsulate a shared secret using ML-KEM
 			const [kemCiphertext, sharedSecret] = await this.kemAlgorithm.encap(recipientPubKeyBytes);
 
-			// Use the shared secret as ChaCha20-Poly1305 key (first 32 bytes)
-			const chachaKey = sharedSecret.slice(0, 32);
+			// Use HKDF to derive a key from the shared secret
+			const salt = SecureRandom.generateSalt();
+			const chachaKey = await HKDF.derive(sharedSecret, salt, 'ChaCha20-Poly1305', 32);
 
 			// Generate nonce for ChaCha20-Poly1305
 			const nonce = SecureRandom.generateNonce();
@@ -190,6 +190,7 @@ export class PostQuantumEncryptionService {
 				v: 3, // Version 3 for post-quantum encryption
 				alg: this.kemName, // Algorithm identifier
 				kem: Base64.encode(kemCiphertext), // KEM ciphertext
+				s: Base64.encode(salt), // HKDF salt
 				n: Base64.encode(nonce), // Nonce
 				c: Base64.encode(messageCiphertext), // Message ciphertext
 				t: Date.now() // Timestamp
@@ -237,7 +238,7 @@ export class PostQuantumEncryptionService {
 			}
 
 			// Check if it's our post-quantum encrypted format
-			if (!messageData.v || messageData.v !== 3 || !messageData.alg || !messageData.kem || !messageData.n || !messageData.c) {
+			if (!messageData.v || messageData.v !== 3 || !messageData.alg || !messageData.kem || !messageData.s || !messageData.n || !messageData.c) {
 				console.log('🔐 [DEBUG] Content is not post-quantum encrypted format, missing fields:', {
 					v: messageData.v,
 					alg: messageData.alg,
@@ -269,8 +270,9 @@ export class PostQuantumEncryptionService {
 			console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
 			console.log(`🔐 [DEBUG] Shared secret (first 16 bytes):`, Array.from(sharedSecret.slice(0, 16)));
 
-			// Use the shared secret as ChaCha20-Poly1305 key (first 32 bytes)
-			const chachaKey = sharedSecret.slice(0, 32);
+			// Use HKDF to derive a key from the shared secret
+			const salt = Base64.decode(messageData.s);
+			const chachaKey = await HKDF.derive(sharedSecret, salt, 'ChaCha20-Poly1305', 32);
 			console.log(`🔐 [DEBUG] ChaCha key (first 16 bytes):`, Array.from(chachaKey.slice(0, 16)));
 
 			// Decrypt message with ChaCha20-Poly1305
@@ -317,7 +319,7 @@ export class PostQuantumEncryptionService {
 
 		// Clear localStorage
 		if (typeof window !== 'undefined') {
-			localStorage.removeItem(this.storageKey);
+			await indexedDBManager.delete(this.storageKey);
 		}
 
 		console.log(`🔐 Cleared all ${this.kemName} keys`);
@@ -349,7 +351,7 @@ export class PostQuantumEncryptionService {
 
 		this.userKeys = { publicKey, privateKey };
 
-		// Store in localStorage
+		// Store in IndexedDB
 		if (typeof window !== 'undefined') {
 			const keyData = {
 				publicKey,
@@ -358,7 +360,7 @@ export class PostQuantumEncryptionService {
 				timestamp: Date.now(),
 				version: '3.0'
 			};
-			localStorage.setItem(this.storageKey, JSON.stringify(keyData));
+			await indexedDBManager.set(this.storageKey, keyData);
 		}
 
 		console.log(`🔐 Imported ${algorithm} keys`);
