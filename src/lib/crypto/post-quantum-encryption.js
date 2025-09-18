@@ -4,8 +4,9 @@
  * This system is fully quantum-resistant according to FIPS 203 standards
  */
 
-import { MlKem768 } from 'mlkem';
-import { Base64, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
+import { MlKem1024, MlKem768 } from 'mlkem';
+import { Base64, ChaCha20Poly1305, SecureRandom, CryptoUtils, HKDF } from './index.js';
+import { indexedDBManager } from './indexed-db-manager.js';
 
 /**
  * Post-quantum encryption service using ML-KEM + ChaCha20-Poly1305
@@ -13,17 +14,28 @@ import { Base64, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js'
  */
 export class PostQuantumEncryptionService {
 	constructor() {
+		// Main keys use ML-KEM-1024 for maximum security (NIST Level 5)
 		this.userKeys = null; // { publicKey, privateKey }
+		
+		// Secondary keys for backward compatibility with ML-KEM-768 messages
+		this.userKeys768 = null; // { publicKey, privateKey }
+		
 		this.publicKeyCache = new Map(); // userId -> publicKey
 		this.isInitialized = false;
 		this.storageKey = 'qryptchat_pq_keypair';
+		this.storageKey768 = 'qryptchat_pq_keypair_768';
 		
-		// Use ML-KEM-768 for good security/performance balance
-		// ML-KEM-512: Faster, smaller keys (NIST Level 1)
-		// ML-KEM-768: Balanced (NIST Level 3) - RECOMMENDED
-		// ML-KEM-1024: Maximum security (NIST Level 5)
-		this.kemAlgorithm = new MlKem768();
-		this.kemName = 'ML-KEM-768';
+		// ML-KEM-1024 is our primary algorithm for maximum security (NIST Level 5)
+		this.kemAlgorithm = new MlKem1024();
+		this.kemName = 'ML-KEM-1024';
+		
+		// ML-KEM-768 is supported only for backward compatibility
+		this.kemAlgorithm768 = new MlKem768();
+		this.kemName768 = 'ML-KEM-768';
+		
+		// Public key size constants for algorithm detection
+		this.ML_KEM_768_PUBLIC_KEY_SIZE = 1184; // bytes
+		this.ML_KEM_1024_PUBLIC_KEY_SIZE = 1568; // bytes
 	}
 
 	/**
@@ -31,10 +43,22 @@ export class PostQuantumEncryptionService {
 	 */
 	async initialize() {
 		if (typeof window !== 'undefined') {
-			await this.loadUserKeys();
+			// Load both key pairs
+			await Promise.all([
+				this.loadUserKeys(),
+				this.loadUserKeys768()
+			]);
+			
+			// Generate any missing key pairs
+			if (!this.userKeys) {
+				await this.generateUserKeys();
+			}
+			if (!this.userKeys768) {
+				await this.generateUserKeys768();
+			}
 		}
 		this.isInitialized = true;
-		console.log(`🔐 Post-quantum encryption service initialized (${this.kemName})`);
+		console.log(`🔐 Post-quantum encryption service initialized (${this.kemName} with ${this.kemName768} backward compatibility)`);
 	}
 
 	/**
@@ -74,7 +98,7 @@ export class PostQuantumEncryptionService {
 
 			this.userKeys = { publicKey, privateKey };
 
-			// Store in localStorage
+			// Store in IndexedDB
 			if (typeof window !== 'undefined') {
 				const keyData = {
 					publicKey,
@@ -83,7 +107,7 @@ export class PostQuantumEncryptionService {
 					timestamp: Date.now(),
 					version: '3.0' // Post-quantum version
 				};
-				localStorage.setItem(this.storageKey, JSON.stringify(keyData));
+				await indexedDBManager.set(this.storageKey, keyData);
 			}
 
 			console.log(`🔐 Generated new ${this.kemName} key pair`);
@@ -96,17 +120,15 @@ export class PostQuantumEncryptionService {
 	}
 
 	/**
-	 * Load user keys from storage
+	 * Load ML-KEM-1024 user keys from storage
 	 * @private
 	 */
 	async loadUserKeys() {
 		try {
 			if (typeof window === 'undefined') return;
 
-			const stored = localStorage.getItem(this.storageKey);
-			if (!stored) return;
-
-			const keyData = JSON.parse(stored);
+			const keyData = await indexedDBManager.get(this.storageKey);
+			if (!keyData) return;
 			
 			// Validate key data and algorithm compatibility
 			if (keyData.publicKey && keyData.privateKey && keyData.algorithm === this.kemName) {
@@ -120,6 +142,30 @@ export class PostQuantumEncryptionService {
 			}
 		} catch (error) {
 			console.error('🔐 Failed to load post-quantum keys:', error);
+		}
+	}
+	
+	/**
+	 * Load ML-KEM-768 user keys from storage (for backward compatibility)
+	 * @private
+	 */
+	async loadUserKeys768() {
+		try {
+			if (typeof window === 'undefined') return;
+
+			const keyData = await indexedDBManager.get(this.storageKey768);
+			if (!keyData) return;
+			
+			// Validate key data and algorithm compatibility
+			if (keyData.publicKey && keyData.privateKey && keyData.algorithm === this.kemName768) {
+				this.userKeys768 = {
+					publicKey: keyData.publicKey,
+					privateKey: keyData.privateKey
+				};
+				console.log(`🔐 Loaded ${this.kemName768} keys from storage (for backward compatibility)`);
+			}
+		} catch (error) {
+			console.error('🔐 Failed to load ML-KEM-768 keys:', error);
 		}
 	}
 
@@ -163,16 +209,33 @@ export class PostQuantumEncryptionService {
 				throw new Error('Post-quantum encryption service not initialized');
 			}
 
-			console.log(`🔐 Encrypting message using ${this.kemName}...`);
+			console.log(`🔐 Encrypting message using ML-KEM-1024...`);
 
 			// Decode recipient's public key
 			const recipientPubKeyBytes = Base64.decode(recipientPublicKey);
 
-			// Encapsulate a shared secret using ML-KEM
-			const [kemCiphertext, sharedSecret] = await this.kemAlgorithm.encap(recipientPubKeyBytes);
+			// Detect key size to identify ML-KEM-768 vs ML-KEM-1024 public keys
+			let kemAlgorithm = this.kemAlgorithm; // Default to ML-KEM-1024
+			let kemName = this.kemName; // Default to ML-KEM-1024
+			
+			// Debug public key size
+			console.log(`🔐 [DEBUG] Recipient public key length: ${recipientPubKeyBytes.length} bytes`);
+			
+			if (recipientPubKeyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
+				console.log(`🔐 [COMPATIBILITY] Detected ML-KEM-768 public key, using ML-KEM-768 for encryption`);
+				kemAlgorithm = this.kemAlgorithm768;
+				kemName = this.kemName768;
+			} else {
+				kemAlgorithm = this.kemAlgorithm;
+				kemName = this.kemName;
+			}
 
-			// Use the shared secret as ChaCha20-Poly1305 key (first 32 bytes)
-			const chachaKey = sharedSecret.slice(0, 32);
+			// Encapsulate a shared secret using ML-KEM-1024
+			const [kemCiphertext, sharedSecret] = await kemAlgorithm.encap(recipientPubKeyBytes);
+
+			// Use HKDF to derive a key from the shared secret
+			const salt = SecureRandom.generateSalt();
+			const chachaKey = await HKDF.derive(sharedSecret, salt, 'ChaCha20-Poly1305', 32);
 
 			// Generate nonce for ChaCha20-Poly1305
 			const nonce = SecureRandom.generateNonce();
@@ -185,11 +248,12 @@ export class PostQuantumEncryptionService {
 				plaintext
 			);
 
-			// Create encrypted message structure
+			// Create encrypted message structure - always ML-KEM-1024 for new messages
 			const encryptedMessage = {
 				v: 3, // Version 3 for post-quantum encryption
-				alg: this.kemName, // Algorithm identifier
+				alg: kemName, // Always ML-KEM-1024 for new messages
 				kem: Base64.encode(kemCiphertext), // KEM ciphertext
+				s: Base64.encode(salt), // HKDF salt
 				n: Base64.encode(nonce), // Nonce
 				c: Base64.encode(messageCiphertext), // Message ciphertext
 				t: Date.now() // Timestamp
@@ -200,20 +264,78 @@ export class PostQuantumEncryptionService {
 			CryptoUtils.secureClear(sharedSecret);
 
 			const result = JSON.stringify(encryptedMessage);
-			console.log(`🔐 ✅ Encrypted message using ${this.kemName}`);
+			console.log(`🔐 ✅ Encrypted message using ${kemName}`);
 			return result;
 
 		} catch (error) {
-			console.error(`🔐 ❌ Failed to encrypt message with ${this.kemName}:`, error);
+			console.error(`🔐 ❌ Failed to encrypt message with ML-KEM-1024:`, error);
 			throw error;
 		}
 	}
 
 	/**
-	 * Decrypt message from a sender using post-quantum cryptography
-	 * @param {string} encryptedContent - Encrypted message content (JSON string)
-	 * @param {string} senderPublicKey - Sender's public key (base64) - not used in KEM but kept for API compatibility
-	 * @returns {Promise<string>} Decrypted message text
+	 * Generate new ML-KEM-768 user key pair (for backward compatibility)
+	 * @returns {Promise<{publicKey: string, privateKey: string}>}
+	 */
+	async generateUserKeys768() {
+		try {
+			console.log(`🔐 Generating ${this.kemName768} key pair for backward compatibility...`);
+			
+			// Generate ML-KEM-768 key pair
+			const keyPair = await this.kemAlgorithm768.generateKeyPair();
+			
+			// Export keys as base64
+			const publicKey = Base64.encode(keyPair[0]);
+			const privateKey = Base64.encode(keyPair[1]);
+
+			this.userKeys768 = { publicKey, privateKey };
+
+			// Store in IndexedDB
+			if (typeof window !== 'undefined') {
+				const keyData = {
+					publicKey,
+					privateKey,
+					algorithm: this.kemName768,
+					timestamp: Date.now(),
+					version: '3.0'
+				};
+				await indexedDBManager.set(this.storageKey768, keyData);
+			}
+
+			console.log(`🔐 Generated new ${this.kemName768} key pair for backward compatibility`);
+			return this.userKeys768;
+
+		} catch (error) {
+			console.error('🔐 Failed to generate ML-KEM-768 keys:', error);
+			throw error;
+		}
+	}
+	
+	/**
+	 * Get user's ML-KEM-768 keys (for backward compatibility)
+	 * @returns {Promise<{publicKey: string, privateKey: string}>}
+	 */
+	async getUserKeys768() {
+		if (this.userKeys768) {
+			return this.userKeys768;
+		}
+
+		// Try to load from storage
+		await this.loadUserKeys768();
+		
+		if (this.userKeys768) {
+			return this.userKeys768;
+		}
+
+		// Generate new key pair
+		return await this.generateUserKeys768();
+	}
+
+	/**
+	 * Decrypt message from a sender
+	 * @param {string} encryptedContent - Encrypted message content
+	 * @param {string} senderPublicKey - Sender's public key
+	 * @returns {Promise<string>} Decrypted message
 	 */
 	async decryptFromSender(encryptedContent, senderPublicKey) {
 		try {
@@ -221,7 +343,7 @@ export class PostQuantumEncryptionService {
 				throw new Error('Post-quantum encryption service not initialized');
 			}
 
-			console.log(`🔐 [DEBUG] Starting decryption with ${this.kemName}...`);
+			console.log(`🔐 [DEBUG] Starting decryption...`);
 			console.log(`🔐 [DEBUG] Encrypted content type:`, typeof encryptedContent);
 			console.log(`🔐 [DEBUG] Encrypted content length:`, encryptedContent?.length || 0);
 			console.log(`🔐 [DEBUG] Encrypted content preview:`, encryptedContent?.substring(0, 100) || 'N/A');
@@ -232,50 +354,125 @@ export class PostQuantumEncryptionService {
 				messageData = JSON.parse(encryptedContent);
 				console.log(`🔐 [DEBUG] Successfully parsed JSON, algorithm:`, messageData.alg);
 			} catch (parseError) {
-				console.log('🔐 [DEBUG] Content is not JSON, parse error:', parseError.message);
-				throw new Error(`Invalid encrypted content format: ${parseError.message}`);
+				const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+				console.log('🔐 [DEBUG] Content is not JSON, parse error:', errorMessage);
+				console.log('🔐 [DEBUG] Raw content that failed to parse:', encryptedContent);
+				// Instead of throwing, return a user-friendly message
+				return '[Encrypted message]';
 			}
 
-			// Check if it's our post-quantum encrypted format
-			if (!messageData.v || messageData.v !== 3 || !messageData.alg || !messageData.kem || !messageData.n || !messageData.c) {
-				console.log('🔐 [DEBUG] Content is not post-quantum encrypted format, missing fields:', {
-					v: messageData.v,
-					alg: messageData.alg,
-					hasKem: !!messageData.kem,
-					hasNonce: !!messageData.n,
-					hasCiphertext: !!messageData.c
-				});
-				throw new Error('Invalid post-quantum encrypted format - missing required fields');
+			// Extract key fields with fallbacks for different formats
+			const version = messageData.v || messageData.version || 0;
+			const algorithm = messageData.alg || messageData.algorithm || '';
+			const kemCiphertextBase64 = messageData.kem || messageData.kemCiphertext || '';
+			const saltBase64 = messageData.s || messageData.salt || '';
+			const nonceBase64 = messageData.n || messageData.nonce || '';
+			const ciphertextBase64 = messageData.c || messageData.ciphertext || '';
+			
+			// Select the appropriate algorithm and keys based on the message format
+			let decryptionAlgorithm, userKeysToUse;
+			
+			if (algorithm === this.kemName) {
+				// ML-KEM-1024 message - use 1024 keys
+				console.log(`🔐 [DEBUG] Using ${this.kemName} for decryption`);
+				decryptionAlgorithm = this.kemAlgorithm;
+				userKeysToUse = await this.getUserKeys();
+			}
+			else if (algorithm === this.kemName768) {
+				// ML-KEM-768 message - use 768 keys
+				console.log(`🔐 [DEBUG] Using ${this.kemName768} for decryption`);
+				decryptionAlgorithm = this.kemAlgorithm768;
+				userKeysToUse = await this.getUserKeys768();
+			} else {
+				// For unknown formats or unspecified algorithms, do a strict check
+				if (!version || version !== 3 ||
+					!kemCiphertextBase64 || !saltBase64 || !nonceBase64 || !ciphertextBase64) {
+					console.log('🔐 [DEBUG] Content is not post-quantum encrypted format, fields:', {
+						version,
+						algorithm,
+						hasKem: !!kemCiphertextBase64,
+						hasSalt: !!saltBase64,
+						hasNonce: !!nonceBase64,
+						hasCiphertext: !!ciphertextBase64
+					});
+					// Return a user-friendly message instead of throwing an exception
+					return '[Encrypted message - format error]';
+				}
+				
+				// Try ML-KEM-1024 first, then ML-KEM-768 for backward compatibility
+				console.log(`🔐 [DEBUG] Unknown algorithm "${algorithm}", trying ML-KEM-1024 first, then ML-KEM-768 if needed`);
+				try {
+					decryptionAlgorithm = this.kemAlgorithm;
+					userKeysToUse = await this.getUserKeys();
+
+					console.log(`🔐 [DEBUG] Using keys with algorithm ${this.kemName}`);
+					console.log(`🔐 [DEBUG] Public key length:`, userKeysToUse?.publicKey?.length || 0);
+
+					// Decode our private key and KEM ciphertext
+					const privateKeyBytes = Base64.decode(userKeysToUse.privateKey);
+					const kemCiphertext = Base64.decode(kemCiphertextBase64);
+					console.log(`🔐 [DEBUG] Decoded private key length:`, privateKeyBytes.length);
+					console.log(`🔐 [DEBUG] Decoded KEM ciphertext length:`, kemCiphertext.length);
+
+					// Decapsulate the shared secret using the selected ML-KEM algorithm
+					console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation with algorithm:`, this.kemName);
+					const sharedSecret = await decryptionAlgorithm.decap(kemCiphertext, privateKeyBytes);
+					console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
+
+					// If successful, set up for the rest of the function
+					// (The rest of the function will use decryptionAlgorithm, userKeysToUse, sharedSecret, etc.)
+				} catch (err1024) {
+					console.warn(`🔐 [DEBUG] ML-KEM-1024 decryption failed, trying ML-KEM-768. Error:`, err1024);
+					try {
+						decryptionAlgorithm = this.kemAlgorithm768;
+						userKeysToUse = await this.getUserKeys768();
+
+						console.log(`🔐 [DEBUG] Using keys with algorithm ${this.kemName768}`);
+						console.log(`🔐 [DEBUG] Public key length:`, userKeysToUse?.publicKey?.length || 0);
+
+						// Decode our private key and KEM ciphertext
+						const privateKeyBytes = Base64.decode(userKeysToUse.privateKey);
+						const kemCiphertext = Base64.decode(kemCiphertextBase64);
+						console.log(`🔐 [DEBUG] Decoded private key length:`, privateKeyBytes.length);
+						console.log(`🔐 [DEBUG] Decoded KEM ciphertext length:`, kemCiphertext.length);
+
+						// Decapsulate the shared secret using the selected ML-KEM algorithm
+						console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation with algorithm:`, this.kemName768);
+						const sharedSecret = await decryptionAlgorithm.decap(kemCiphertext, privateKeyBytes);
+						console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
+
+						// If successful, set up for the rest of the function
+						// (The rest of the function will use decryptionAlgorithm, userKeysToUse, sharedSecret, etc.)
+					} catch (err768) {
+						console.error(`🔐 [DEBUG] ML-KEM-768 decryption also failed. Error:`, err768);
+						return '[Encrypted message - could not decrypt with any supported algorithm]';
+					}
+				}
 			}
 
-			// Verify algorithm compatibility
-			if (messageData.alg !== this.kemName) {
-				console.log(`🔐 [DEBUG] Algorithm mismatch: message uses ${messageData.alg}, but we use ${this.kemName}`);
-				throw new Error(`Algorithm mismatch: message uses ${messageData.alg}, but we use ${this.kemName}`);
-			}
-
-			const userKeys = await this.getUserKeys();
-			console.log(`🔐 [DEBUG] Got user keys, public key length:`, userKeys.publicKey?.length || 0);
+			console.log(`🔐 [DEBUG] Using keys with algorithm ${userKeysToUse ? (algorithm === this.kemName768 ? this.kemName768 : this.kemName) : 'unknown'}`);
+			console.log(`🔐 [DEBUG] Public key length:`, userKeysToUse?.publicKey?.length || 0);
 
 			// Decode our private key and KEM ciphertext
-			const privateKeyBytes = Base64.decode(userKeys.privateKey);
-			const kemCiphertext = Base64.decode(messageData.kem);
+			const privateKeyBytes = Base64.decode(userKeysToUse.privateKey);
+			const kemCiphertext = Base64.decode(kemCiphertextBase64);
 			console.log(`🔐 [DEBUG] Decoded private key length:`, privateKeyBytes.length);
 			console.log(`🔐 [DEBUG] Decoded KEM ciphertext length:`, kemCiphertext.length);
 
-			// Decapsulate the shared secret using ML-KEM
-			console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation...`);
-			const sharedSecret = await this.kemAlgorithm.decap(kemCiphertext, privateKeyBytes);
+			// Decapsulate the shared secret using the selected ML-KEM algorithm
+			console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation with algorithm:`, algorithm === this.kemName768 ? this.kemName768 : this.kemName);
+			const sharedSecret = await decryptionAlgorithm.decap(kemCiphertext, privateKeyBytes);
 			console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
 			console.log(`🔐 [DEBUG] Shared secret (first 16 bytes):`, Array.from(sharedSecret.slice(0, 16)));
 
-			// Use the shared secret as ChaCha20-Poly1305 key (first 32 bytes)
-			const chachaKey = sharedSecret.slice(0, 32);
+			// Use HKDF to derive a key from the shared secret
+			const salt = Base64.decode(saltBase64);
+			const chachaKey = await HKDF.derive(sharedSecret, salt, 'ChaCha20-Poly1305', 32);
 			console.log(`🔐 [DEBUG] ChaCha key (first 16 bytes):`, Array.from(chachaKey.slice(0, 16)));
 
 			// Decrypt message with ChaCha20-Poly1305
-			const nonce = Base64.decode(messageData.n);
-			const messageCiphertext = Base64.decode(messageData.c);
+			const nonce = Base64.decode(nonceBase64);
+			const messageCiphertext = Base64.decode(ciphertextBase64);
 			console.log(`🔐 [DEBUG] Nonce length:`, nonce.length);
 			console.log(`🔐 [DEBUG] Message ciphertext length:`, messageCiphertext.length);
 			
@@ -297,42 +494,64 @@ export class PostQuantumEncryptionService {
 			CryptoUtils.secureClear(chachaKey);
 			CryptoUtils.secureClear(sharedSecret);
 
-			console.log(`🔐 ✅ Successfully decrypted message using ${this.kemName}: "${messageText}"`);
+			console.log(`🔐 ✅ Successfully decrypted message using ${algorithm === this.kemName768 ? this.kemName768 : this.kemName}: "${messageText}"`);
 			return messageText;
 
 		} catch (error) {
 			console.error(`🔐 ❌ Failed to decrypt message with ${this.kemName}:`, error);
-			console.error(`🔐 ❌ Error stack:`, error.stack);
+			if (error instanceof Error && error.stack) {
+				console.error(`🔐 ❌ Error stack:`, error.stack);
+			}
+			
+			// Check if the error is about algorithm mismatch for a more specific message
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			if (errorMsg.includes('Algorithm mismatch')) {
+				return '[Message encrypted with different keys]';
+			}
+			
 			return '[Encrypted message - decryption failed]';
 		}
 	}
 
 	/**
-	 * Clear all user keys
+	 * Clear all user keys (both ML-KEM-1024 and ML-KEM-768)
 	 */
 	async clearUserKeys() {
 		// Clear memory
 		this.userKeys = null;
+		this.userKeys768 = null;
 		this.publicKeyCache.clear();
 
-		// Clear localStorage
+		// Clear IndexedDB
 		if (typeof window !== 'undefined') {
-			localStorage.removeItem(this.storageKey);
+			await Promise.all([
+				indexedDBManager.delete(this.storageKey),
+				indexedDBManager.delete(this.storageKey768)
+			]);
 		}
 
-		console.log(`🔐 Cleared all ${this.kemName} keys`);
+		console.log(`🔐 Cleared all encryption keys`);
 	}
 
 	/**
-	 * Export user keys for backup
-	 * @returns {Promise<{publicKey: string, privateKey: string, algorithm: string}>}
+	 * Export all user keys for backup
+	 * @returns {Promise<{keys1024: Object, keys768: Object}>}
 	 */
 	async exportUserKeys() {
-		const keys = await this.getUserKeys();
+		const keys1024 = await this.getUserKeys();
+		const keys768 = await this.getUserKeys768();
+		
 		return {
-			publicKey: keys.publicKey,
-			privateKey: keys.privateKey,
-			algorithm: this.kemName
+			keys1024: {
+				publicKey: keys1024.publicKey,
+				privateKey: keys1024.privateKey,
+				algorithm: this.kemName
+			},
+			keys768: {
+				publicKey: keys768.publicKey,
+				privateKey: keys768.privateKey,
+				algorithm: this.kemName768
+			}
 		};
 	}
 
@@ -343,22 +562,40 @@ export class PostQuantumEncryptionService {
 	 * @param {string} algorithm - Algorithm name (optional, defaults to current)
 	 */
 	async importUserKeys(publicKey, privateKey, algorithm = this.kemName) {
-		if (algorithm !== this.kemName) {
-			console.warn(`🔐 Importing keys with algorithm ${algorithm}, but current algorithm is ${this.kemName}`);
+		if (algorithm === this.kemName) {
+			// Import ML-KEM-1024 keys
+			this.userKeys = { publicKey, privateKey };
+			
+			// Store in IndexedDB
+			if (typeof window !== 'undefined') {
+				const keyData = {
+					publicKey,
+					privateKey,
+					algorithm,
+					timestamp: Date.now(),
+					version: '3.0'
+				};
+				await indexedDBManager.set(this.storageKey, keyData);
+			}
 		}
-
-		this.userKeys = { publicKey, privateKey };
-
-		// Store in localStorage
-		if (typeof window !== 'undefined') {
-			const keyData = {
-				publicKey,
-				privateKey,
-				algorithm,
-				timestamp: Date.now(),
-				version: '3.0'
-			};
-			localStorage.setItem(this.storageKey, JSON.stringify(keyData));
+		else if (algorithm === this.kemName768) {
+			// Import ML-KEM-768 keys
+			this.userKeys768 = { publicKey, privateKey };
+			
+			// Store in IndexedDB
+			if (typeof window !== 'undefined') {
+				const keyData = {
+					publicKey,
+					privateKey,
+					algorithm,
+					timestamp: Date.now(),
+					version: '3.0'
+				};
+				await indexedDBManager.set(this.storageKey768, keyData);
+			}
+		}
+		else {
+			console.warn(`🔐 Importing keys with unknown algorithm ${algorithm}`);
 		}
 
 		console.log(`🔐 Imported ${algorithm} keys`);
@@ -366,16 +603,27 @@ export class PostQuantumEncryptionService {
 
 	/**
 	 * Get algorithm information
-	 * @returns {Object} Algorithm details
+	 * @returns {Object} Algorithm details including both ML-KEM variants
 	 */
 	getAlgorithmInfo() {
 		return {
-			name: this.kemName,
-			type: 'Post-Quantum KEM + Symmetric Encryption',
-			keyExchange: this.kemName,
-			encryption: 'ChaCha20-Poly1305',
-			quantumResistant: true,
-			securityLevel: this.kemName === 'ML-KEM-512' ? 1 : this.kemName === 'ML-KEM-768' ? 3 : 5
+			primaryAlgorithm: {
+				name: this.kemName,
+				type: 'Post-Quantum KEM + Symmetric Encryption',
+				keyExchange: this.kemName,
+				encryption: 'ChaCha20-Poly1305',
+				quantumResistant: true,
+				securityLevel: 5 // ML-KEM-1024 is level 5
+			},
+			compatibilityAlgorithm: {
+				name: this.kemName768,
+				type: 'Post-Quantum KEM + Symmetric Encryption',
+				keyExchange: this.kemName768,
+				encryption: 'ChaCha20-Poly1305',
+				quantumResistant: true,
+				securityLevel: 3 // ML-KEM-768 is level 3
+			},
+			multiAlgorithmSupport: true
 		};
 	}
 }

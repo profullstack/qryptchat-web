@@ -1,7 +1,7 @@
 /**
  * @fileoverview Post-Quantum Private Key Import/Export Manager for QryptChat
  * Handles secure import and export of user post-quantum private keys with password protection
- * Uses ML-KEM-768 for quantum-resistant key management
+ * Uses ML-KEM-1024 for quantum-resistant key management
  */
 
 import { browser } from '$app/environment';
@@ -37,17 +37,16 @@ export class PrivateKeyManager {
 			// Initialize post-quantum encryption service
 			await postQuantumEncryption.initialize();
 
-			// Get user post-quantum keys
-			const userKeys = await postQuantumEncryption.exportUserKeys();
-			if (!userKeys) {
+			// Get user post-quantum keys (both ML-KEM-1024 and ML-KEM-768)
+			const allKeys = await postQuantumEncryption.exportUserKeys();
+			if (!allKeys) {
 				throw new Error('No post-quantum keys found to export');
 			}
 
-			// Prepare keys for encryption
+			// Prepare both key sets for encryption
 			const keysToExport = {
-				publicKey: userKeys.publicKey,
-				privateKey: userKeys.privateKey,
-				algorithm: userKeys.algorithm,
+				keys1024: allKeys.keys1024,
+				keys768: allKeys.keys768,
 				timestamp: Date.now(),
 				version: EXPORT_VERSION
 			};
@@ -71,7 +70,7 @@ export class PrivateKeyManager {
 			// Create export data structure
 			const exportData = {
 				version: EXPORT_VERSION,
-				algorithm: 'ML-KEM-768',
+				algorithm: 'ML-KEM-1024',
 				timestamp: Date.now(),
 				encryptedKeys: encryptedKeys,
 				salt: Base64.encode(salt),
@@ -166,12 +165,30 @@ export class PrivateKeyManager {
 			// Clear existing keys and import new ones
 			await postQuantumEncryption.clearUserKeys();
 			
-			// Import the post-quantum keys
-			await postQuantumEncryption.importUserKeys(
-				importedKeys.publicKey,
-				importedKeys.privateKey,
-				importedKeys.algorithm
-			);
+			// Import the ML-KEM-1024 keys
+			if (importedKeys.keys1024) {
+				await postQuantumEncryption.importUserKeys(
+					importedKeys.keys1024.publicKey,
+					importedKeys.keys1024.privateKey,
+					importedKeys.keys1024.algorithm
+				);
+			} else if (importedKeys.publicKey) {
+				// Handle legacy format (single key set)
+				await postQuantumEncryption.importUserKeys(
+					importedKeys.publicKey,
+					importedKeys.privateKey,
+					importedKeys.algorithm || 'ML-KEM-1024'
+				);
+			}
+			
+			// Import the ML-KEM-768 keys if available
+			if (importedKeys.keys768) {
+				await postQuantumEncryption.importUserKeys(
+					importedKeys.keys768.publicKey,
+					importedKeys.keys768.privateKey,
+					importedKeys.keys768.algorithm
+				);
+			}
 
 			// Clear sensitive data from memory
 			CryptoUtils.secureClear(decryptionKey);
@@ -261,36 +278,60 @@ export class PrivateKeyManager {
 	 * @private
 	 */
 	_validateImportedKeys(keys) {
+		// Support both new format (keys1024/keys768) and legacy format (publicKey/privateKey)
+		if (keys.keys1024 || keys.keys768) {
+			// New format with separate key sets
+			if (keys.keys1024) {
+				this._validateSingleKeySet(keys.keys1024);
+			}
+			if (keys.keys768) {
+				this._validateSingleKeySet(keys.keys768);
+			}
+		} else if (keys.publicKey) {
+			// Legacy format with single key set
+			this._validateSingleKeySet(keys);
+		} else {
+			throw new Error('Invalid keys format: no valid key sets found');
+		}
+	}
+	
+	/**
+	 * Validate a single key set
+	 * @param {Object} keySet - Single key set object
+	 * @throws {Error} If key set is invalid
+	 * @private
+	 */
+	_validateSingleKeySet(keySet) {
 		const requiredFields = ['publicKey', 'privateKey', 'algorithm'];
 		
 		for (const field of requiredFields) {
-			if (!keys.hasOwnProperty(field)) {
-				throw new Error(`Invalid keys format: missing ${field}`);
+			if (!keySet.hasOwnProperty(field)) {
+				throw new Error(`Invalid key set format: missing ${field}`);
 			}
 		}
 
 		// Validate field types
-		if (typeof keys.publicKey !== 'string') {
-			throw new Error('Invalid keys format: publicKey must be a string');
+		if (typeof keySet.publicKey !== 'string') {
+			throw new Error('Invalid key set format: publicKey must be a string');
 		}
-		if (typeof keys.privateKey !== 'string') {
-			throw new Error('Invalid keys format: privateKey must be a string');
+		if (typeof keySet.privateKey !== 'string') {
+			throw new Error('Invalid key set format: privateKey must be a string');
 		}
-		if (typeof keys.algorithm !== 'string') {
-			throw new Error('Invalid keys format: algorithm must be a string');
+		if (typeof keySet.algorithm !== 'string') {
+			throw new Error('Invalid key set format: algorithm must be a string');
 		}
 
 		// Validate algorithm
-		if (keys.algorithm !== 'ML-KEM-768') {
-			throw new Error(`Unsupported algorithm: ${keys.algorithm}`);
+		if (keySet.algorithm !== 'ML-KEM-1024' && keySet.algorithm !== 'ML-KEM-768') {
+			throw new Error(`Unsupported algorithm: ${keySet.algorithm}`);
 		}
 
 		// Validate base64 format by attempting to decode
 		try {
-			Base64.decode(keys.publicKey);
-			Base64.decode(keys.privateKey);
+			Base64.decode(keySet.publicKey);
+			Base64.decode(keySet.privateKey);
 		} catch (decodeError) {
-			throw new Error('Invalid keys format: keys must be valid base64');
+			throw new Error('Invalid key set format: keys must be valid base64');
 		}
 	}
 
