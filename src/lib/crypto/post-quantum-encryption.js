@@ -222,14 +222,13 @@ export class PostQuantumEncryptionService {
 			console.log(`🔐 [DEBUG] Recipient public key length: ${recipientPubKeyBytes.length} bytes`);
 			
 			if (recipientPubKeyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
-				console.log(`🔐 [COMPATIBILITY] Detected ML-KEM-768 public key, but using ML-KEM-1024 for all new messages`);
-				// For maximum compatibility, convert ML-KEM-768 keys to ML-KEM-1024
-				// But for now, we'll always use ML-KEM-1024 for encryption
+				console.log(`🔐 [COMPATIBILITY] Detected ML-KEM-768 public key, using ML-KEM-768 for encryption`);
+				kemAlgorithm = this.kemAlgorithm768;
+				kemName = this.kemName768;
+			} else {
+				kemAlgorithm = this.kemAlgorithm;
+				kemName = this.kemName;
 			}
-			
-			// Always use ML-KEM-1024 for new messages
-			kemAlgorithm = this.kemAlgorithm;
-			kemName = this.kemName;
 
 			// Encapsulate a shared secret using ML-KEM-1024
 			const [kemCiphertext, sharedSecret] = await kemAlgorithm.encap(recipientPubKeyBytes);
