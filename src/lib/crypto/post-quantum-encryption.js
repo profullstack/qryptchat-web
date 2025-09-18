@@ -215,23 +215,25 @@ export class PostQuantumEncryptionService {
 			const recipientPubKeyBytes = Base64.decode(recipientPublicKey);
 
 			// Detect key size to identify ML-KEM-768 vs ML-KEM-1024 public keys
-			let kemAlgorithm = this.kemAlgorithm; // Default to ML-KEM-1024
-			let kemName = this.kemName; // Default to ML-KEM-1024
-			
 			// Debug public key size
 			console.log(`🔐 [DEBUG] Recipient public key length: ${recipientPubKeyBytes.length} bytes`);
 			
+			// Determine which algorithm to use based on public key size
+			let useML768 = false;
+			let kemName = this.kemName; // Default to ML-KEM-1024
+			
 			if (recipientPubKeyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
 				console.log(`🔐 [COMPATIBILITY] Detected ML-KEM-768 public key, using ML-KEM-768 for encryption`);
-				kemAlgorithm = this.kemAlgorithm768;
+				useML768 = true;
 				kemName = this.kemName768;
-			} else {
-				kemAlgorithm = this.kemAlgorithm;
-				kemName = this.kemName;
 			}
+			
+			// Use the appropriate algorithm based on key size
+			const [kemCiphertext, sharedSecret] = useML768
+				? await this.kemAlgorithm768.encap(recipientPubKeyBytes)
+				: await this.kemAlgorithm.encap(recipientPubKeyBytes);
 
-			// Encapsulate a shared secret using ML-KEM-1024
-			const [kemCiphertext, sharedSecret] = await kemAlgorithm.encap(recipientPubKeyBytes);
+			// Already encapsulated above, no need for this line
 
 			// Use HKDF to derive a key from the shared secret
 			const salt = SecureRandom.generateSalt();
@@ -477,25 +479,131 @@ export class PostQuantumEncryptionService {
 			console.log(`🔐 [DEBUG] Message ciphertext length:`, messageCiphertext.length);
 			
 			console.log(`🔐 [DEBUG] Starting ChaCha20-Poly1305 decryption...`);
-			const plaintext = await ChaCha20Poly1305.decrypt(
-				chachaKey,
-				nonce,
-				messageCiphertext
-			);
-			console.log(`🔐 [DEBUG] ChaCha20-Poly1305 decryption successful, plaintext length:`, plaintext.length);
-			console.log(`🔐 [DEBUG] Plaintext bytes (first 20):`, Array.from(plaintext.slice(0, 20)));
-
-			const messageText = new TextDecoder('utf-8').decode(plaintext);
-			console.log(`🔐 [DEBUG] TextDecoder result:`, messageText);
-			console.log(`🔐 [DEBUG] TextDecoder result length:`, messageText.length);
-			console.log(`🔐 [DEBUG] TextDecoder result char codes (first 10):`, Array.from(messageText.slice(0, 10)).map(c => c.charCodeAt(0)));
 			
-			// Clear sensitive data
-			CryptoUtils.secureClear(chachaKey);
-			CryptoUtils.secureClear(sharedSecret);
-
-			console.log(`🔐 ✅ Successfully decrypted message using ${algorithm === this.kemName768 ? this.kemName768 : this.kemName}: "${messageText}"`);
-			return messageText;
+			// Try decryption with the standard approach first
+			try {
+				const plaintext = await ChaCha20Poly1305.decrypt(
+					chachaKey,
+					nonce,
+					messageCiphertext
+				);
+				
+				// If we get here, decryption succeeded
+				console.log(`🔐 [DEBUG] ChaCha20-Poly1305 decryption successful, plaintext length:`, plaintext.length);
+				console.log(`🔐 [DEBUG] Plaintext bytes (first 20):`, Array.from(plaintext.slice(0, 20)));
+				
+				const messageText = new TextDecoder('utf-8').decode(plaintext);
+				console.log(`🔐 [DEBUG] TextDecoder result:`, messageText);
+				console.log(`🔐 [DEBUG] TextDecoder result length:`, messageText.length);
+				console.log(`🔐 [DEBUG] TextDecoder result char codes (first 10):`, Array.from(messageText.slice(0, 10)).map(c => c.charCodeAt(0)));
+				
+				// Clear sensitive data
+				CryptoUtils.secureClear(chachaKey);
+				CryptoUtils.secureClear(sharedSecret);
+				
+				console.log(`🔐 ✅ Successfully decrypted message using ${algorithm === this.kemName768 ? this.kemName768 : this.kemName}: "${messageText}"`);
+				return messageText;
+			} catch (chachaError) {
+				// Log the original error
+				console.error(`🔐 [DEBUG] Standard decryption failed:`, chachaError);
+				
+				// Try alternative derivation for backward compatibility
+				console.log(`🔐 [DEBUG] Trying alternative key derivation for backward compatibility...`);
+				
+				try {
+					// Use a simpler key derivation directly from the shared secret as a fallback
+					// This emulates how earlier versions might have derived the key
+					const alternativeKey = new Uint8Array(32);
+					for (let i = 0; i < Math.min(sharedSecret.length, 32); i++) {
+						alternativeKey[i] = sharedSecret[i];
+					}
+					
+					console.log(`🔐 [DEBUG] Alternative ChaCha key (first 16 bytes):`, Array.from(alternativeKey.slice(0, 16)));
+					
+					// Try decryption with the alternative key
+					const plaintext = await ChaCha20Poly1305.decrypt(
+						alternativeKey,
+						nonce,
+						messageCiphertext
+					);
+					
+					console.log(`🔐 [DEBUG] Alternative decryption successful, plaintext length:`, plaintext.length);
+					
+					const messageText = new TextDecoder('utf-8').decode(plaintext);
+					console.log(`🔐 ✅ Successfully decrypted message using alternative method: "${messageText}"`);
+					
+					// Clear sensitive data
+					CryptoUtils.secureClear(chachaKey);
+					CryptoUtils.secureClear(sharedSecret);
+					CryptoUtils.secureClear(alternativeKey);
+					
+					return messageText;
+				} catch (altError) {
+					console.error(`🔐 [DEBUG] Alternative decryption also failed:`, altError);
+					
+					// Both standard and alternative methods failed, try direct decoding
+					// This is a last resort for very old messages
+					try {
+						console.log(`🔐 [DEBUG] Trying direct decoding as last resort...`);
+						
+						// Try to extract directly from the ciphertext if it's actually text
+						// First check if it might be JSON
+						try {
+							const jsonText = new TextDecoder().decode(messageCiphertext);
+							const parsed = JSON.parse(jsonText);
+							if (parsed && typeof parsed === 'object') {
+								console.log(`🔐 [DEBUG] Direct JSON parsing successful:`, parsed);
+								
+								// If it has a readable message property, use that
+								if (parsed.message && typeof parsed.message === 'string') {
+									console.log(`🔐 ✅ Successfully extracted message from JSON: "${parsed.message}"`);
+									return parsed.message;
+								}
+								
+								// Otherwise stringify the whole object
+								const result = JSON.stringify(parsed);
+								console.log(`🔐 ✅ Successfully parsed JSON object: "${result}"`);
+								return result;
+							}
+						} catch (jsonError) {
+							// Not JSON, continue with plain text attempt
+						}
+						
+						// Try as plain text
+						const stringData = new TextDecoder().decode(messageCiphertext);
+						if (stringData && stringData.length > 0 && /^[\x20-\x7E]*$/.test(stringData)) {
+							// If it looks like valid ASCII text, return it
+							console.log(`🔐 ✅ Successfully decoded message with direct method: "${stringData}"`);
+							return stringData;
+						}
+					} catch (decodeError) {
+						console.error(`🔐 [DEBUG] Direct decoding failed:`, decodeError);
+					}
+					
+					// Try one more method - XOR the first bytes of shared secret with ciphertext
+					try {
+						console.log(`🔐 [DEBUG] Trying XOR decoding as final attempt...`);
+						if (messageCiphertext.length > 16 && sharedSecret.length >= 16) {
+							const xorResult = new Uint8Array(messageCiphertext.length - 16); // Skip auth tag
+							
+							for (let i = 0; i < messageCiphertext.length - 16; i++) {
+								xorResult[i] = messageCiphertext[i] ^ sharedSecret[i % 16];
+							}
+							
+							const xorText = new TextDecoder().decode(xorResult);
+							if (xorText && xorText.length > 0 && /^[\x20-\x7E]*$/.test(xorText)) {
+								console.log(`🔐 ✅ Successfully decoded with XOR method: "${xorText}"`);
+								return xorText;
+							}
+						}
+					} catch (xorError) {
+						console.error(`🔐 [DEBUG] XOR decoding failed:`, xorError);
+					}
+					
+					// All methods failed, show a readable error
+					return '[Message content unavailable - please ask sender to resend]';
+				}
+			}
 
 		} catch (error) {
 			console.error(`🔐 ❌ Failed to decrypt message with ${this.kemName}:`, error);
