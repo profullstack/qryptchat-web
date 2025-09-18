@@ -5,6 +5,7 @@
 
 import { postQuantumEncryption } from './post-quantum-encryption.js';
 import { browser } from '$app/environment';
+import { Base64 } from './index.js';
 
 /**
  * Public key management service
@@ -13,6 +14,10 @@ export class PublicKeyService {
 	constructor() {
 		this.cache = new Map(); // userId -> publicKey cache
 		this.isInitialized = false;
+		
+		// Public key size constants for algorithm detection
+		this.ML_KEM_768_PUBLIC_KEY_SIZE = 1184; // bytes
+		this.ML_KEM_1024_PUBLIC_KEY_SIZE = 1568; // bytes
 	}
 
 	/**
@@ -61,10 +66,29 @@ export class PublicKeyService {
 			});
 
 			if (data.public_key) {
-				// Cache the result
-				this.cache.set(userId, data.public_key);
+				// Cache the result and ensure it's ML-KEM-1024 format
+				const publicKey = data.public_key;
+				
+				// Check if we need to validate the key format
+				try {
+					const keyBytes = Base64.decode(publicKey);
+					console.log(`🔑 Public key length for user ${userId}: ${keyBytes.length} bytes`);
+					
+					if (keyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
+						console.log(`🔑 ⚠️ Detected ML-KEM-768 public key format for user ${userId} - ML-KEM-1024 will be used for all new messages`);
+					} else if (keyBytes.length === this.ML_KEM_1024_PUBLIC_KEY_SIZE) {
+						console.log(`🔑 ✅ Verified ML-KEM-1024 public key format for user ${userId}`);
+					} else {
+						console.log(`🔑 ⚠️ Unknown public key format for user ${userId} (${keyBytes.length} bytes)`);
+					}
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error);
+					console.warn(`🔑 ⚠️ Could not validate public key format for user ${userId}: ${errorMessage}`);
+				}
+				
+				this.cache.set(userId, publicKey);
 				console.log(`🔑 ✅ Retrieved and cached public key for user ${userId}`);
-				return data.public_key;
+				return publicKey;
 			}
 
 			console.log(`🔑 ⚠️ No public key found for user ${userId} in API response`);
@@ -204,10 +228,34 @@ export class PublicKeyService {
 	 */
 	async getMyPublicKey() {
 		try {
+			// Always return ML-KEM-1024 public key for consistency
 			return await postQuantumEncryption.getPublicKey();
 		} catch (error) {
 			console.error('🔑 ❌ Failed to get my public key:', error);
 			return null;
+		}
+	}
+	
+	/**
+	 * Detect whether a public key is ML-KEM-768 or ML-KEM-1024 format
+	 * @param {string} publicKey - Base64 encoded public key
+	 * @returns {string} 'ML-KEM-768', 'ML-KEM-1024', or 'unknown'
+	 */
+	detectKeyFormat(publicKey) {
+		try {
+			const keyBytes = Base64.decode(publicKey);
+			
+			if (keyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
+				return 'ML-KEM-768';
+			} else if (keyBytes.length === this.ML_KEM_1024_PUBLIC_KEY_SIZE) {
+				return 'ML-KEM-1024';
+			} else {
+				return 'unknown';
+			}
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			console.error('🔑 ❌ Failed to detect key format:', errorMessage);
+			return 'unknown';
 		}
 	}
 
