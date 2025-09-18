@@ -400,10 +400,55 @@ export class PostQuantumEncryptionService {
 					return '[Encrypted message - format error]';
 				}
 				
-				// Try ML-KEM-1024 by default
-				console.log(`🔐 [DEBUG] Unknown algorithm "${algorithm}", trying ML-KEM-1024 first`);
-				decryptionAlgorithm = this.kemAlgorithm;
-				userKeysToUse = await this.getUserKeys();
+				// Try ML-KEM-1024 first, then ML-KEM-768 for backward compatibility
+				console.log(`🔐 [DEBUG] Unknown algorithm "${algorithm}", trying ML-KEM-1024 first, then ML-KEM-768 if needed`);
+				try {
+					decryptionAlgorithm = this.kemAlgorithm;
+					userKeysToUse = await this.getUserKeys();
+
+					console.log(`🔐 [DEBUG] Using keys with algorithm ${this.kemName}`);
+					console.log(`🔐 [DEBUG] Public key length:`, userKeysToUse?.publicKey?.length || 0);
+
+					// Decode our private key and KEM ciphertext
+					const privateKeyBytes = Base64.decode(userKeysToUse.privateKey);
+					const kemCiphertext = Base64.decode(kemCiphertextBase64);
+					console.log(`🔐 [DEBUG] Decoded private key length:`, privateKeyBytes.length);
+					console.log(`🔐 [DEBUG] Decoded KEM ciphertext length:`, kemCiphertext.length);
+
+					// Decapsulate the shared secret using the selected ML-KEM algorithm
+					console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation with algorithm:`, this.kemName);
+					const sharedSecret = await decryptionAlgorithm.decap(kemCiphertext, privateKeyBytes);
+					console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
+
+					// If successful, set up for the rest of the function
+					// (The rest of the function will use decryptionAlgorithm, userKeysToUse, sharedSecret, etc.)
+				} catch (err1024) {
+					console.warn(`🔐 [DEBUG] ML-KEM-1024 decryption failed, trying ML-KEM-768. Error:`, err1024);
+					try {
+						decryptionAlgorithm = this.kemAlgorithm768;
+						userKeysToUse = await this.getUserKeys768();
+
+						console.log(`🔐 [DEBUG] Using keys with algorithm ${this.kemName768}`);
+						console.log(`🔐 [DEBUG] Public key length:`, userKeysToUse?.publicKey?.length || 0);
+
+						// Decode our private key and KEM ciphertext
+						const privateKeyBytes = Base64.decode(userKeysToUse.privateKey);
+						const kemCiphertext = Base64.decode(kemCiphertextBase64);
+						console.log(`🔐 [DEBUG] Decoded private key length:`, privateKeyBytes.length);
+						console.log(`🔐 [DEBUG] Decoded KEM ciphertext length:`, kemCiphertext.length);
+
+						// Decapsulate the shared secret using the selected ML-KEM algorithm
+						console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation with algorithm:`, this.kemName768);
+						const sharedSecret = await decryptionAlgorithm.decap(kemCiphertext, privateKeyBytes);
+						console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
+
+						// If successful, set up for the rest of the function
+						// (The rest of the function will use decryptionAlgorithm, userKeysToUse, sharedSecret, etc.)
+					} catch (err768) {
+						console.error(`🔐 [DEBUG] ML-KEM-768 decryption also failed. Error:`, err768);
+						return '[Encrypted message - could not decrypt with any supported algorithm]';
+					}
+				}
 			}
 
 			console.log(`🔐 [DEBUG] Using keys with algorithm ${userKeysToUse ? (algorithm === this.kemName768 ? this.kemName768 : this.kemName) : 'unknown'}`);
