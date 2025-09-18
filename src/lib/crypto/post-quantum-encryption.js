@@ -214,24 +214,19 @@ export class PostQuantumEncryptionService {
 			// Decode recipient's public key
 			const recipientPubKeyBytes = Base64.decode(recipientPublicKey);
 
-			// Detect key size to identify ML-KEM-768 vs ML-KEM-1024 public keys
 			// Debug public key size
 			console.log(`🔐 [DEBUG] Recipient public key length: ${recipientPubKeyBytes.length} bytes`);
 			
-			// Determine which algorithm to use based on public key size
-			let useML768 = false;
-			let kemName = this.kemName; // Default to ML-KEM-1024
+			// Always use ML-KEM-1024 for encryption regardless of recipient's key size
+			const kemName = this.kemName; // Always ML-KEM-1024
 			
+			// Log a warning if recipient is using ML-KEM-768
 			if (recipientPubKeyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
-				console.log(`🔐 [COMPATIBILITY] Detected ML-KEM-768 public key, using ML-KEM-768 for encryption`);
-				useML768 = true;
-				kemName = this.kemName768;
+				console.log(`🔐 [COMPATIBILITY] Detected ML-KEM-768 public key, but still using ML-KEM-1024 for encryption as required`);
 			}
 			
-			// Use the appropriate algorithm based on key size
-			const [kemCiphertext, sharedSecret] = useML768
-				? await this.kemAlgorithm768.encap(recipientPubKeyBytes)
-				: await this.kemAlgorithm.encap(recipientPubKeyBytes);
+			// Always use ML-KEM-1024 for encryption
+			const [kemCiphertext, sharedSecret] = await this.kemAlgorithm.encap(recipientPubKeyBytes);
 
 			// Already encapsulated above, no need for this line
 
@@ -250,10 +245,10 @@ export class PostQuantumEncryptionService {
 				plaintext
 			);
 
-			// Create encrypted message structure - always ML-KEM-1024 for new messages
+			// Create encrypted message structure
 			const encryptedMessage = {
 				v: 3, // Version 3 for post-quantum encryption
-				alg: kemName, // Always ML-KEM-1024 for new messages
+				alg: kemName, // Using ML-KEM-1024 for all new messages
 				kem: Base64.encode(kemCiphertext), // KEM ciphertext
 				s: Base64.encode(salt), // HKDF salt
 				n: Base64.encode(nonce), // Nonce
@@ -336,7 +331,7 @@ export class PostQuantumEncryptionService {
 	/**
 	 * Decrypt message from a sender
 	 * @param {string} encryptedContent - Encrypted message content
-	 * @param {string} senderPublicKey - Sender's public key
+	 * @param {string} senderPublicKey - Sender's public key (optional for ML-KEM)
 	 * @returns {Promise<string>} Decrypted message
 	 */
 	async decryptFromSender(encryptedContent, senderPublicKey) {
@@ -360,7 +355,7 @@ export class PostQuantumEncryptionService {
 				console.log('🔐 [DEBUG] Content is not JSON, parse error:', errorMessage);
 				console.log('🔐 [DEBUG] Raw content that failed to parse:', encryptedContent);
 				// Instead of throwing, return a user-friendly message
-				return '[Encrypted message]';
+				return '[Message content unavailable - please ask sender to resend]';
 			}
 
 			// Extract key fields with fallbacks for different formats
@@ -467,10 +462,16 @@ export class PostQuantumEncryptionService {
 			console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
 			console.log(`🔐 [DEBUG] Shared secret (first 16 bytes):`, Array.from(sharedSecret.slice(0, 16)));
 
-			// Use HKDF to derive a key from the shared secret
+			// DEBUGGING: Log all the inputs to ChaCha20-Poly1305 key derivation
+			console.log(`🔐 [DEBUG] Salt: ${Array.from(Base64.decode(saltBase64))}`);
+			console.log(`🔐 [DEBUG] Raw ciphertext: ${Array.from(Base64.decode(ciphertextBase64).slice(0, 16))}`);
+			
+			// Try multiple methods for key derivation to address possible incompatibilities
+			
+			// Method 1: Standard HKDF derivation as used in the latest version
 			const salt = Base64.decode(saltBase64);
-			const chachaKey = await HKDF.derive(sharedSecret, salt, 'ChaCha20-Poly1305', 32);
-			console.log(`🔐 [DEBUG] ChaCha key (first 16 bytes):`, Array.from(chachaKey.slice(0, 16)));
+			let chachaKey = await HKDF.derive(sharedSecret, salt, 'ChaCha20-Poly1305', 32);
+			console.log(`🔐 [DEBUG] Method 1 - HKDF ChaCha key (first 16 bytes):`, Array.from(chachaKey.slice(0, 16)));
 
 			// Decrypt message with ChaCha20-Poly1305
 			const nonce = Base64.decode(nonceBase64);
@@ -497,8 +498,32 @@ export class PostQuantumEncryptionService {
 				console.log(`🔐 [DEBUG] TextDecoder result length:`, messageText.length);
 				console.log(`🔐 [DEBUG] TextDecoder result char codes (first 10):`, Array.from(messageText.slice(0, 10)).map(c => c.charCodeAt(0)));
 				
-				// Clear sensitive data
+				// Method 2: Try direct use of shared secret (no HKDF)
+				// Some early implementations may have used shared secret directly
+				const directKey = new Uint8Array(32);
+				for (let i = 0; i < Math.min(sharedSecret.length, 32); i++) {
+					directKey[i] = sharedSecret[i];
+				}
+				console.log(`🔐 [DEBUG] Method 2 - Direct ChaCha key (first 16 bytes):`, Array.from(directKey.slice(0, 16)));
+				
+				// Method 3: Try simple SHA-256 hash of shared secret
+				const hashBuffer = await crypto.subtle.digest('SHA-256', sharedSecret);
+				const hashKey = new Uint8Array(hashBuffer);
+				console.log(`🔐 [DEBUG] Method 3 - SHA-256 ChaCha key (first 16 bytes):`, Array.from(hashKey.slice(0, 16)));
+				
+				// Method 4: XOR salt with shared secret
+				const xorKey = new Uint8Array(32);
+				for (let i = 0; i < 32; i++) {
+					xorKey[i] = sharedSecret[i % sharedSecret.length] ^
+						(i < salt.length ? salt[i] : 0);
+				}
+				console.log(`🔐 [DEBUG] Method 4 - XOR ChaCha key (first 16 bytes):`, Array.from(xorKey.slice(0, 16)));
+				
+				// Clear sensitive data when done
 				CryptoUtils.secureClear(chachaKey);
+				CryptoUtils.secureClear(directKey);
+				CryptoUtils.secureClear(hashKey);
+				CryptoUtils.secureClear(xorKey);
 				CryptoUtils.secureClear(sharedSecret);
 				
 				console.log(`🔐 ✅ Successfully decrypted message using ${algorithm === this.kemName768 ? this.kemName768 : this.kemName}: "${messageText}"`);
@@ -611,13 +636,18 @@ export class PostQuantumEncryptionService {
 				console.error(`🔐 ❌ Error stack:`, error.stack);
 			}
 			
-			// Check if the error is about algorithm mismatch for a more specific message
+			// Check for specific error types to provide more helpful messages
 			const errorMsg = error instanceof Error ? error.message : String(error);
-			if (errorMsg.includes('Algorithm mismatch')) {
-				return '[Message encrypted with different keys]';
+			
+			if (errorMsg.includes('Algorithm mismatch') || errorMsg.includes('invalid encapsulation key')) {
+				return '[Message encrypted with incompatible keys - please ask sender to resend]';
+			} else if (errorMsg.includes('tag')) {
+				return '[Message integrity check failed - please ask sender to resend]';
+			} else if (errorMsg.includes('ML-KEM')) {
+				return '[Message encrypted with different ML-KEM algorithm - please ask sender to resend]';
 			}
 			
-			return '[Encrypted message - decryption failed]';
+			return '[Message content unavailable - please ask sender to resend]';
 		}
 	}
 

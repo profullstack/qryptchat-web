@@ -75,11 +75,16 @@ export class PublicKeyService {
 					console.log(`🔑 Public key length for user ${userId}: ${keyBytes.length} bytes`);
 					
 					if (keyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
-						console.log(`🔑 ⚠️ Detected ML-KEM-768 public key format for user ${userId} - ML-KEM-1024 will be used for all new messages`);
+						console.warn(`🔑 ⚠️ Detected ML-KEM-768 public key format for user ${userId} - ML-KEM-1024 will be used for all new messages`);
+						console.warn(`🔑 ⚠️ This user needs to regenerate their keys to ML-KEM-1024 format for optimal compatibility`);
+						
+						// We still cache the key because we need it for encryption
+						// The encryption service will handle using ML-KEM-1024 regardless
 					} else if (keyBytes.length === this.ML_KEM_1024_PUBLIC_KEY_SIZE) {
 						console.log(`🔑 ✅ Verified ML-KEM-1024 public key format for user ${userId}`);
 					} else {
-						console.log(`🔑 ⚠️ Unknown public key format for user ${userId} (${keyBytes.length} bytes)`);
+						console.warn(`🔑 ⚠️ Unknown public key format for user ${userId} (${keyBytes.length} bytes)`);
+						console.warn(`🔑 ⚠️ This may cause encryption/decryption issues`);
 					}
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error);
@@ -265,18 +270,39 @@ export class PublicKeyService {
 	 * @returns {Promise<boolean>} Success status
 	 */
 	async initializeUserEncryption() {
-		try {
-			console.log('🔑 Initializing user post-quantum encryption...');
+	 try {
+	 	console.log('🔑 Initializing user post-quantum encryption...');
 
-			// Initialize post-quantum encryption (generates keys if needed)
-			await postQuantumEncryption.initialize();
+	 	// Initialize post-quantum encryption (generates keys if needed)
+	 	await postQuantumEncryption.initialize();
 
-			// Ensure we have user keys
-			await postQuantumEncryption.getUserKeys();
+	 	// Ensure we have ML-KEM-1024 user keys
+	 	const userKeys = await postQuantumEncryption.getUserKeys();
+	 	
+	 	// Validate that we're using ML-KEM-1024 keys
+	 	try {
+	 		const keyBytes = Base64.decode(userKeys.publicKey);
+	 		
+	 		if (keyBytes.length === this.ML_KEM_1024_PUBLIC_KEY_SIZE) {
+	 			console.log('🔑 ✅ Confirmed user has ML-KEM-1024 keys as required');
+	 		} else if (keyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
+	 			console.warn('🔑 ⚠️ User has ML-KEM-768 keys but ML-KEM-1024 is required');
+	 			console.warn('🔑 ⚠️ Regenerating keys to ML-KEM-1024 format for compatibility');
+	 			
+	 			// Regenerate keys to ensure ML-KEM-1024 format
+	 			await postQuantumEncryption.clearUserKeys();
+	 			await postQuantumEncryption.generateUserKeys();
+	 			console.log('🔑 ✅ Successfully regenerated ML-KEM-1024 keys');
+	 		} else {
+	 			console.warn(`🔑 ⚠️ Unknown key format detected (${keyBytes.length} bytes)`);
+	 		}
+	 	} catch (keyError) {
+	 		console.error('🔑 ❌ Failed to validate key format:', keyError);
+	 	}
 
-			console.log('🔑 ✅ User post-quantum encryption initialized successfully');
-			console.log('🔑 ℹ️ Public key should already exist in database from account creation');
-			return true;
+	 	console.log('🔑 ✅ User post-quantum encryption initialized successfully');
+	 	console.log('🔑 ℹ️ Public key should already exist in database from account creation');
+	 	return true;
 
 		} catch (error) {
 			console.error('🔑 ❌ Failed to initialize user post-quantum encryption:', error);
