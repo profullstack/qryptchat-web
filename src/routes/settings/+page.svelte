@@ -10,6 +10,8 @@
 	import KeyDiagnostic from '$lib/components/settings/KeyDiagnostic.svelte';
 	import KeyMigrationFix from '$lib/components/settings/KeyMigrationFix.svelte';
 	import AdvancedKeyDiagnostic from '$lib/components/settings/AdvancedKeyDiagnostic.svelte';
+	import CompleteKeyReset from '$lib/components/settings/CompleteKeyReset.svelte';
+	import KeyResetStatus from '$lib/components/settings/KeyResetStatus.svelte';
 	
 	const supabase = createSupabaseClient();
 	
@@ -175,6 +177,14 @@
 				
 				<section class="settings-section">
 					<AdvancedKeyDiagnostic />
+				</section>
+				
+				<section class="settings-section">
+					<KeyResetStatus />
+				</section>
+				
+				<section class="settings-section">
+					<CompleteKeyReset />
 				</section>
 			</div>
 		{/if}
