@@ -91,6 +91,35 @@ body {
 	color-scheme: dark;
 }
 
+/* Global Link Styles - Theme Aware */
+a {
+	color: var(--color-text-primary);
+	text-decoration: underline;
+	text-decoration-color: var(--color-text-tertiary);
+	text-underline-offset: 2px;
+	transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+a:hover {
+	color: var(--color-brand-primary);
+	text-decoration-color: var(--color-brand-primary);
+}
+
+a:focus {
+	outline: 2px solid var(--color-brand-primary);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+/* Visited links - slightly muted but still theme-aware */
+a:visited {
+	color: var(--color-text-secondary);
+}
+
+a:visited:hover {
+	color: var(--color-brand-primary);
+}
+
 /* Utility Classes */
 .container {
 	max-width: 1200px;

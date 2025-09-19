@@ -196,14 +196,9 @@
 		margin-bottom: 0.5rem;
 	}
 
+	/* Links will inherit global theme-aware styling */
 	.terms-section a {
-		color: #6366f1;
-		text-decoration: none;
 		font-weight: 500;
-	}
-
-	.terms-section a:hover {
-		text-decoration: underline;
 	}
 
 	@media (max-width: 768px) {

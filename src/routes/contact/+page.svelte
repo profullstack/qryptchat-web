@@ -207,13 +207,9 @@
 		font-weight: 600;
 	}
 
+	/* Links will inherit global theme-aware styling */
 	.contact-info a {
-		color: #6366f1;
-		text-decoration: none;
-	}
-
-	.contact-info a:hover {
-		text-decoration: underline;
+		font-weight: 500;
 	}
 
 	.social-section {
