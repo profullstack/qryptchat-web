@@ -240,8 +240,8 @@
 				throw new Error(result.error || 'Failed to create conversation');
 			}
 
-			// Navigate to the chat with this conversation
-			goto(`/chat?conversation=${result.conversation_id}`);
+			// Navigate to the chat with this conversation using clean URL
+			goto(`/chats/${result.conversation_id}`);
 
 		} catch (err) {
 			console.error('Failed to create conversation:', err);
