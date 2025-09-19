@@ -1,332 +1,145 @@
 <script>
 	import { onMount } from 'svelte';
 	import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
+	import { clientEncryption } from '$lib/crypto/client-encryption.js';
 
-	let testText = $state('Hello, this is a test message! 🔐');
-	let conversationId = $state('test-conversation-' + Date.now());
-	let encryptedResult = $state('');
-	let decryptedResult = $state('');
-	let isLoading = $state(false);
-	let error = $state('');
-	let success = $state('');
-	let encryptionStatus = $state({
-		isInitialized: false,
-		keyCount: 0,
-		storageKeys: /** @type {Array<{key: string, count: number, conversations?: string[], error?: string}>} */ ([])
-	});
+	let testText = '';
+	let encryptedResult = '';
+	let decryptedResult = '';
+	let conversationId = generateConversationId();
+	let status = '';
+	let encryptionInProgress = false;
+	let decryptionInProgress = false;
 
 	onMount(async () => {
-		await updateEncryptionStatus();
+		// Initialize encryption services
+		await postQuantumEncryption.initialize();
+		await clientEncryption.initialize();
 	});
 
-	async function updateEncryptionStatus() {
-		try {
-			// Check if post-quantum encryption service is initialized
-			const isInitialized = postQuantumEncryption.isInitialized;
-			
-			// Check localStorage keys
-			const storageKeys = [];
-			const keysToCheck = [
-				'qryptchat_pq_keypair',
-				'qrypt_encryption_keys'
-			];
-			
-			for (const key of keysToCheck) {
-				const value = localStorage.getItem(key);
-				if (value) {
-					try {
-						if (key === 'qrypt_encryption_keys') {
-							const parsed = JSON.parse(value);
-							storageKeys.push({
-								key,
-								count: Object.keys(parsed).length,
-								conversations: Object.keys(parsed)
-							});
-						} else {
-							const parsed = JSON.parse(value);
-							storageKeys.push({
-								key,
-								count: 1,
-								conversations: [`${parsed.algorithm || 'Post-Quantum'} Key`]
-							});
-						}
-					} catch {
-						storageKeys.push({
-							key,
-							count: 0,
-							error: 'Invalid JSON'
-						});
-					}
-				}
-			}
-
-			// Get key count (post-quantum uses per-user keys, not per-conversation)
-			const keyCount = isInitialized && postQuantumEncryption.userKeys ? 1 : 0;
-
-			encryptionStatus = {
-				isInitialized,
-				keyCount,
-				storageKeys
-			};
-		} catch (err) {
-			console.error('Failed to get encryption status:', err);
-		}
+	function generateConversationId() {
+		return 'test-' + Math.random().toString(36).substring(2, 15);
 	}
 
-	async function testEncrypt() {
-		if (!testText.trim()) {
-			error = 'Please enter some text to encrypt';
-			return;
-		}
-
-		isLoading = true;
-		error = '';
-		success = '';
-		encryptedResult = '';
-
+	async function encrypt() {
 		try {
-			// Initialize post-quantum encryption service if not already done
-			if (!postQuantumEncryption.isInitialized) {
-				await postQuantumEncryption.initialize();
+			status = '';
+			encryptionInProgress = true;
+			
+			if (!testText) {
+				status = 'Please enter some text to encrypt';
+				return;
 			}
-
-			// Get our own public key for testing
+			
+			// Get user's own public key for encryption test
 			const publicKey = await postQuantumEncryption.getPublicKey();
-			if (!publicKey) {
-				throw new Error('No public key available');
-			}
-
-			// Encrypt the message using post-quantum encryption
-			const encrypted = await postQuantumEncryption.encryptForRecipient(testText, publicKey);
-			encryptedResult = encrypted;
-			success = '✅ Encryption successful!';
+			console.log(`🔐 [TEST] Using ML-KEM-1024 public key for encryption test`);
 			
-			// Update status
-			await updateEncryptionStatus();
-		} catch (err) {
-			error = `❌ Encryption failed: ${err instanceof Error ? err.message : String(err)}`;
-			console.error('Encryption error:', err);
+			// Encrypt using post-quantum encryption
+			encryptedResult = await postQuantumEncryption.encryptForRecipient(testText, publicKey);
+			
+			console.log(`🔐 [TEST] Encryption successful`);
+			console.log(`🔐 [TEST] Result:`, encryptedResult);
+		} catch (error) {
+			console.error(`🔐 [TEST] Encryption failed:`, error);
+			status = `Encryption error: ${error instanceof Error ? error.message : String(error)}`;
 		} finally {
-			isLoading = false;
+			encryptionInProgress = false;
 		}
 	}
 
-	async function testDecrypt() {
-		if (!encryptedResult.trim()) {
-			error = 'Please encrypt some text first, or paste encrypted content';
-			return;
-		}
-
-		isLoading = true;
-		error = '';
-		success = '';
-		decryptedResult = '';
-
+	async function decrypt() {
 		try {
-			// Initialize post-quantum encryption service if not already done
-			if (!postQuantumEncryption.isInitialized) {
-				await postQuantumEncryption.initialize();
-			}
-
-			// Decrypt the message using post-quantum encryption
-			const decrypted = await postQuantumEncryption.decryptFromSender(encryptedResult, '');
-			decryptedResult = decrypted;
+			status = '';
+			decryptionInProgress = true;
 			
-			// Check if decryption was successful
-			if (decrypted === testText) {
-				success = '✅ Decryption successful! Text matches original.';
-			} else if (decrypted === '[Encrypted message - decryption failed]') {
-				error = '❌ Decryption failed - unable to decrypt the message';
+			if (!encryptedResult) {
+				status = 'Please encrypt some text first';
+				return;
+			}
+			
+			// Decrypt using post-quantum encryption
+			decryptedResult = await postQuantumEncryption.decryptFromSender(encryptedResult, '');
+			
+			console.log(`🔐 [TEST] Decryption successful`);
+			console.log(`🔐 [TEST] Result:`, decryptedResult);
+			
+			// Verify result matches original text
+			if (decryptedResult === testText) {
+				status = '✅ Decryption successful! Text matches original.';
 			} else {
-				success = '⚠️ Decryption completed, but result differs from original text';
+				status = '⚠️ Decrypted text does not match original text.';
 			}
-		} catch (err) {
-			error = `❌ Decryption failed: ${err instanceof Error ? err.message : String(err)}`;
-			console.error('Decryption error:', err);
+		} catch (error) {
+			console.error(`🔐 [TEST] Decryption failed:`, error);
+			status = `Decryption error: ${error instanceof Error ? error.message : String(error)}`;
 		} finally {
-			isLoading = false;
+			decryptionInProgress = false;
 		}
 	}
 
-	async function clearAllKeys() {
-		if (!confirm('Are you sure you want to clear all encryption keys? This will require re-generating keys for all conversations.')) {
-			return;
-		}
-
-		isLoading = true;
-		error = '';
-		success = '';
-
-		try {
-			// Clear post-quantum encryption keys
-			await postQuantumEncryption.clearUserKeys();
-			
-			// Clear any remaining localStorage keys
-			const keysToRemove = [
-				'qryptchat_pq_keypair',
-				'qrypt_encryption_keys'
-			];
-			
-			for (const key of keysToRemove) {
-				localStorage.removeItem(key);
-			}
-			
-			success = '✅ All encryption keys cleared successfully!';
-			encryptedResult = '';
-			decryptedResult = '';
-			await updateEncryptionStatus();
-		} catch (err) {
-			error = `❌ Failed to clear keys: ${err instanceof Error ? err.message : String(err)}`;
-			console.error('Clear keys error:', err);
-		} finally {
-			isLoading = false;
-		}
-	}
-
-	function generateNewConversationId() {
-		conversationId = 'test-conversation-' + Date.now();
-		encryptedResult = '';
-		decryptedResult = '';
-		success = '';
-		error = '';
+	function clearKeys() {
+		postQuantumEncryption.clearUserKeys();
+		clientEncryption.clearAllKeys();
+		conversationId = generateConversationId();
+		status = 'All encryption keys cleared';
 	}
 </script>
 
 <div class="encryption-tester">
-	<h3>🔐 Encryption Tester</h3>
-	<p class="description">
-		Test the encryption and decryption functionality to debug any issues.
-	</p>
-
-	<!-- Encryption Status -->
-	<div class="status-section">
-		<h4>Encryption Status</h4>
-		<div class="status-grid">
-			<div class="status-item">
-				<span class="label">Service Initialized:</span>
-				<span class="value {encryptionStatus.isInitialized ? 'success' : 'error'}">
-					{encryptionStatus.isInitialized ? '✅ Yes' : '❌ No'}
-				</span>
-			</div>
-			<div class="status-item">
-				<span class="label">Keys in Memory:</span>
-				<span class="value">{encryptionStatus.keyCount}</span>
-			</div>
-		</div>
-
-		{#if encryptionStatus.storageKeys.length > 0}
-			<div class="storage-keys">
-				<h5>LocalStorage Keys:</h5>
-				{#each encryptionStatus.storageKeys as storageKey}
-					<div class="storage-key-item">
-						<strong>{storageKey.key}:</strong>
-						{#if storageKey.error}
-							<span class="error">{storageKey.error}</span>
-						{:else}
-							<span>{storageKey.count} conversations</span>
-							{#if storageKey.conversations && storageKey.conversations.length > 0}
-								<div class="conversation-list">
-									{#each storageKey.conversations.slice(0, 3) as conv}
-										<code>{conv}</code>
-									{/each}
-									{#if storageKey.conversations.length > 3}
-										<span>... and {storageKey.conversations.length - 3} more</span>
-									{/if}
-								</div>
-							{/if}
-						{/if}
-					</div>
-				{/each}
-			</div>
-		{:else}
-			<p class="no-keys">No encryption keys found in localStorage</p>
-		{/if}
+	<h2>Encryption Test</h2>
+	
+	<div class="test-input">
+		<label for="test-text">Test Text:</label>
+		<textarea id="test-text" bind:value={testText} rows="4" placeholder="Enter text to encrypt"></textarea>
 	</div>
-
-	<!-- Test Controls -->
-	<div class="test-section">
-		<h4>Encryption Test</h4>
+	
+	<div class="test-controls">
+		<div class="conversation-id">
+			<span>Conversation ID:</span>
+			<code>{conversationId}</code>
+			<button on:click={() => conversationId = generateConversationId()}>Generate New</button>
+		</div>
 		
-		<div class="input-group">
-			<label for="test-text">Test Text:</label>
-			<textarea
-				id="test-text"
-				bind:value={testText}
-				placeholder="Enter text to encrypt/decrypt..."
-				rows="3"
-			></textarea>
-		</div>
-
-		<div class="input-group">
-			<label for="conversation-id">Conversation ID:</label>
-			<div class="conversation-id-input">
-				<input
-					id="conversation-id"
-					type="text"
-					bind:value={conversationId}
-					placeholder="test-conversation-123"
-				/>
-				<button type="button" onclick={generateNewConversationId} class="secondary">
-					Generate New
-				</button>
-			</div>
-		</div>
-
-		<div class="button-group">
-			<button
-				type="button"
-				onclick={testEncrypt}
-				disabled={isLoading || !testText.trim()}
-				class="primary"
-			>
-				{isLoading ? 'Processing...' : '🔒 Encrypt'}
+		<div class="buttons">
+			<button on:click={encrypt} disabled={encryptionInProgress || !testText}>
+				{#if encryptionInProgress}
+					Encrypting...
+				{:else}
+					🔒 Encrypt
+				{/if}
 			</button>
 			
-			<button
-				type="button"
-				onclick={testDecrypt}
-				disabled={isLoading || !encryptedResult.trim()}
-				class="primary"
-			>
-				{isLoading ? 'Processing...' : '🔓 Decrypt'}
+			<button on:click={decrypt} disabled={decryptionInProgress || !encryptedResult}>
+				{#if decryptionInProgress}
+					Decrypting...
+				{:else}
+					🔓 Decrypt
+				{/if}
 			</button>
 			
-			<button
-				type="button"
-				onclick={clearAllKeys}
-				disabled={isLoading}
-				class="danger"
-			>
+			<button on:click={clearKeys} class="clear-keys">
 				🗑️ Clear All Keys
 			</button>
 		</div>
-
-		<!-- Results -->
-		{#if error}
-			<div class="result error">
-				{error}
-			</div>
-		{/if}
-
-		{#if success}
-			<div class="result success">
-				{success}
-			</div>
-		{/if}
-
-		{#if encryptedResult}
-			<div class="result-section">
-				<h5>Encrypted Result:</h5>
-				<textarea readonly value={encryptedResult} rows="4"></textarea>
-			</div>
-		{/if}
-
-		{#if decryptedResult}
-			<div class="result-section">
-				<h5>Decrypted Result:</h5>
-				<textarea readonly value={decryptedResult} rows="3"></textarea>
-			</div>
-		{/if}
+	</div>
+	
+	{#if status}
+		<div class="status" class:success={status.includes('✅')} class:error={status.includes('error')}>
+			{status}
+		</div>
+	{/if}
+	
+	<div class="results">
+		<div class="result-panel">
+			<h3>Encrypted Result:</h3>
+			<pre>{encryptedResult || 'No encrypted content yet'}</pre>
+		</div>
+		
+		<div class="result-panel">
+			<h3>Decrypted Result:</h3>
+			<pre>{decryptedResult || 'No decrypted content yet'}</pre>
+		</div>
 	</div>
 </div>
 
@@ -334,250 +147,143 @@
 	.encryption-tester {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 0.5rem;
+		border-radius: 8px;
 		padding: 1.5rem;
-		margin-top: 1rem;
+		margin: 1rem 0;
+		max-width: 800px;
 	}
-
-	.encryption-tester h3 {
-		margin: 0 0 0.5rem 0;
-		color: var(--color-text-primary);
+	
+	h2 {
+		margin-top: 0;
+		margin-bottom: 1rem;
+		font-size: 1.5rem;
 	}
-
-	.description {
-		color: var(--color-text-secondary);
-		margin-bottom: 1.5rem;
-		font-size: 0.875rem;
-	}
-
-	.status-section {
-		margin-bottom: 2rem;
-		padding: 1rem;
-		background: var(--color-background);
-		border-radius: 0.375rem;
-		border: 1px solid var(--color-border);
-	}
-
-	.status-section h4 {
-		margin: 0 0 1rem 0;
-		color: var(--color-text-primary);
-		font-size: 1rem;
-	}
-
-	.status-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 1rem;
+	
+	.test-input {
 		margin-bottom: 1rem;
 	}
-
-	.status-item {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0.5rem;
-		background: var(--color-surface);
-		border-radius: 0.25rem;
-		border: 1px solid var(--color-border);
-	}
-
-	.label {
-		font-weight: 500;
-		color: var(--color-text-primary);
-	}
-
-	.value {
-		font-family: monospace;
-		font-size: 0.875rem;
-	}
-
-	.value.success {
-		color: var(--color-success);
-	}
-
-	.value.error {
-		color: var(--color-error);
-	}
-
-	.storage-keys {
-		margin-top: 1rem;
-	}
-
-	.storage-keys h5 {
-		margin: 0 0 0.5rem 0;
-		font-size: 0.875rem;
-		color: var(--color-text-primary);
-	}
-
-	.storage-key-item {
-		margin-bottom: 0.5rem;
-		padding: 0.5rem;
-		background: var(--color-surface);
-		border-radius: 0.25rem;
-		font-size: 0.875rem;
-	}
-
-	.conversation-list {
-		margin-top: 0.25rem;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.25rem;
-	}
-
-	.conversation-list code {
-		background: var(--color-background);
-		padding: 0.125rem 0.25rem;
-		border-radius: 0.125rem;
-		font-size: 0.75rem;
-		border: 1px solid var(--color-border);
-	}
-
-	.no-keys {
-		color: var(--color-text-secondary);
-		font-style: italic;
-		margin: 0;
-	}
-
-	.test-section h4 {
-		margin: 0 0 1rem 0;
-		color: var(--color-text-primary);
-		font-size: 1rem;
-	}
-
-	.input-group {
-		margin-bottom: 1rem;
-	}
-
-	.input-group label {
+	
+	label {
 		display: block;
 		margin-bottom: 0.5rem;
 		font-weight: 500;
-		color: var(--color-text-primary);
 	}
-
-	.input-group textarea,
-	.input-group input {
+	
+	textarea {
 		width: 100%;
 		padding: 0.75rem;
 		border: 1px solid var(--color-border);
-		border-radius: 0.375rem;
-		background: var(--color-background);
-		color: var(--color-text-primary);
+		border-radius: 4px;
 		font-family: inherit;
+		font-size: 0.9rem;
 		resize: vertical;
 	}
-
-	.conversation-id-input {
+	
+	.test-controls {
 		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
+	}
+	
+	.conversation-id {
+		display: flex;
+		align-items: center;
 		gap: 0.5rem;
+		font-size: 0.9rem;
 	}
-
-	.conversation-id-input input {
-		flex: 1;
+	
+	code {
+		background: var(--color-surface-variant);
+		padding: 0.25rem 0.5rem;
+		border-radius: 4px;
+		font-family: monospace;
 	}
-
-	.button-group {
+	
+	.buttons {
 		display: flex;
 		gap: 0.75rem;
-		margin-bottom: 1.5rem;
 		flex-wrap: wrap;
 	}
-
+	
 	button {
-		padding: 0.75rem 1rem;
-		border: none;
-		border-radius: 0.375rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		font-size: 0.875rem;
-	}
-
-	button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	button.primary {
+		padding: 0.5rem 1rem;
 		background: var(--color-primary);
 		color: white;
+		border: none;
+		border-radius: 4px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.2s;
 	}
-
-	button.primary:hover:not(:disabled) {
+	
+	button:hover {
 		background: var(--color-primary-dark);
 	}
-
-	button.secondary {
-		background: var(--color-surface);
-		color: var(--color-text-primary);
-		border: 1px solid var(--color-border);
+	
+	button:disabled {
+		background: var(--color-disabled);
+		cursor: not-allowed;
 	}
-
-	button.secondary:hover:not(:disabled) {
-		background: var(--color-background);
+	
+	.clear-keys {
+		background: var(--color-danger);
 	}
-
-	button.danger {
-		background: var(--color-error);
-		color: white;
+	
+	.clear-keys:hover {
+		background: var(--color-danger-dark);
 	}
-
-	button.danger:hover:not(:disabled) {
-		background: var(--color-error-dark);
-	}
-
-	.result {
+	
+	.status {
+		margin: 1rem 0;
 		padding: 0.75rem;
-		border-radius: 0.375rem;
-		margin-bottom: 1rem;
-		font-weight: 500;
+		border-radius: 4px;
+		background: var(--color-info-bg);
+		color: var(--color-info-text);
 	}
-
-	.result.success {
-		background: var(--color-success-bg, #d4edda);
-		color: var(--color-success-text, #155724);
-		border: 1px solid var(--color-success, #28a745);
+	
+	.status.success {
+		background: var(--color-success-bg);
+		color: var(--color-success-text);
 	}
-
-	.result.error {
-		background: var(--color-error-bg, #f8d7da);
-		color: var(--color-error-text, #721c24);
-		border: 1px solid var(--color-error, #dc3545);
+	
+	.status.error {
+		background: var(--color-error-bg);
+		color: var(--color-error-text);
 	}
-
-	.result-section {
-		margin-bottom: 1rem;
+	
+	.results {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
 	}
-
-	.result-section h5 {
-		margin: 0 0 0.5rem 0;
-		font-size: 0.875rem;
-		color: var(--color-text-primary);
-	}
-
-	.result-section textarea {
-		width: 100%;
-		padding: 0.75rem;
+	
+	.result-panel {
 		border: 1px solid var(--color-border);
-		border-radius: 0.375rem;
-		background: var(--color-background);
-		color: var(--color-text-primary);
+		border-radius: 4px;
+		padding: 1rem;
+	}
+	
+	.result-panel h3 {
+		margin-top: 0;
+		margin-bottom: 0.75rem;
+		font-size: 1rem;
+	}
+	
+	pre {
+		background: var(--color-surface-variant);
+		padding: 0.75rem;
+		border-radius: 4px;
+		overflow: auto;
+		max-height: 200px;
 		font-family: monospace;
-		font-size: 0.8125rem;
-		resize: vertical;
+		font-size: 0.85rem;
+		white-space: pre-wrap;
+		word-break: break-all;
 	}
-
-	/* Responsive */
-	@media (max-width: 768px) {
-		.button-group {
-			flex-direction: column;
-		}
-
-		.conversation-id-input {
-			flex-direction: column;
-		}
-
-		.status-grid {
+	
+	@media (max-width: 600px) {
+		.results {
 			grid-template-columns: 1fr;
 		}
 	}

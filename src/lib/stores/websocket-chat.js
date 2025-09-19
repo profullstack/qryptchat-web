@@ -394,7 +394,21 @@ function createWebSocketChatStore() {
 							console.log(`🔐 [LOAD] ✅ Decrypted message ${message.id}: "${decryptedContent}"`);
 						} catch (error) {
 							console.error(`🔐 [LOAD] ❌ Failed to decrypt message ${message.id}:`, error);
-							message.content = '[Encrypted message - decryption failed]';
+							
+							// Handle specific error types
+							const errorMsg = error instanceof Error ? error.message : String(error);
+							if (errorMsg.includes('Algorithm mismatch') || errorMsg.includes('invalid encapsulation key')) {
+								message.content = '[Message encrypted with incompatible keys - please ask sender to resend]';
+							} else if (errorMsg.includes('tag')) {
+								message.content = '[Message integrity check failed - please ask sender to resend]';
+							} else if (errorMsg.includes('ML-KEM')) {
+								message.content = '[Message encrypted with different ML-KEM algorithm - please ask sender to resend]';
+							} else {
+								message.content = '[Message content unavailable - please ask sender to resend]';
+							}
+							
+							// Log the specific error message for troubleshooting
+							console.error(`🔐 [LOAD] Error details: ${errorMsg}`);
 						}
 					} else {
 						console.log(`🔐 [LOAD] ⚠️ Message ${message.id} has no encrypted_content`);
@@ -464,7 +478,14 @@ function createWebSocketChatStore() {
 						console.log(`🔐 [SENT] ✅ Decrypted sent message ${sentMessage.id}: "${decryptedContent}"`);
 					} catch (error) {
 						console.error(`🔐 [SENT] ❌ Failed to decrypt sent message ${sentMessage.id}:`, error);
-						sentMessage.content = '[Encrypted message - decryption failed]';
+						
+						// For sent messages, we should never see encryption errors since we just encrypted it
+						// But handle them gracefully just in case
+						const errorMsg = error instanceof Error ? error.message : String(error);
+						console.error(`🔐 [SENT] Error details: ${errorMsg}`);
+						
+						// Use the original content as fallback since this is our own sent message
+						sentMessage.content = content || '[Message content unavailable]';
 					}
 				} else {
 					console.log(`🔐 [SENT] ⚠️ Sent message ${sentMessage.id} has no encrypted_content`);
@@ -570,7 +591,21 @@ function createWebSocketChatStore() {
 				console.log(`🔐 [NEW] ✅ Decrypted new message ${message.id}: "${decryptedContent}"`);
 			} catch (error) {
 				console.error(`🔐 [NEW] ❌ Failed to decrypt received message ${message.id}:`, error);
-				message.content = '[Encrypted message - decryption failed]';
+				
+				// Handle specific error types
+				const errorMsg = error instanceof Error ? error.message : String(error);
+				if (errorMsg.includes('Algorithm mismatch') || errorMsg.includes('invalid encapsulation key')) {
+					message.content = '[Message encrypted with incompatible keys - please ask sender to resend]';
+				} else if (errorMsg.includes('tag')) {
+					message.content = '[Message integrity check failed - please ask sender to resend]';
+				} else if (errorMsg.includes('ML-KEM')) {
+					message.content = '[Message encrypted with different ML-KEM algorithm - please ask sender to resend]';
+				} else {
+					message.content = '[Message content unavailable - please ask sender to resend]';
+				}
+				
+				// Log the specific error message for troubleshooting
+				console.error(`🔐 [NEW] Error details: ${errorMsg}`);
 			}
 		} else if (message.content) {
 			// Message already has content (shouldn't happen with encryption enabled)
