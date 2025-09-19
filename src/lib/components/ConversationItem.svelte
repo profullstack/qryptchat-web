@@ -77,7 +77,7 @@
 					<span class="room-prefix">#</span>
 				{/if}
 				{conversation.name || 'Unknown'}
-				{#if conversation.unread_count && conversation.unread_count > 0}
+				{#if conversation.unread_count > 0}
 					<div class="unread-indicator" title="{conversation.unread_count} unread messages"></div>
 				{/if}
 			</div>
