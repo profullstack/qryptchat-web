@@ -75,16 +75,11 @@ export class PublicKeyService {
 					console.log(`🔑 Public key length for user ${userId}: ${keyBytes.length} bytes`);
 					
 					if (keyBytes.length === this.ML_KEM_768_PUBLIC_KEY_SIZE) {
-						console.warn(`🔑 ⚠️ Detected ML-KEM-768 public key format for user ${userId} - ML-KEM-1024 will be used for all new messages`);
-						console.warn(`🔑 ⚠️ This user needs to regenerate their keys to ML-KEM-1024 format for optimal compatibility`);
-						
-						// We still cache the key because we need it for encryption
-						// The encryption service will handle using ML-KEM-1024 regardless
+						console.log(`🔑 ⚠️ Detected ML-KEM-768 public key format for user ${userId} - ML-KEM-1024 will be used for all new messages`);
 					} else if (keyBytes.length === this.ML_KEM_1024_PUBLIC_KEY_SIZE) {
 						console.log(`🔑 ✅ Verified ML-KEM-1024 public key format for user ${userId}`);
 					} else {
-						console.warn(`🔑 ⚠️ Unknown public key format for user ${userId} (${keyBytes.length} bytes)`);
-						console.warn(`🔑 ⚠️ This may cause encryption/decryption issues`);
+						console.log(`🔑 ⚠️ Unknown public key format for user ${userId} (${keyBytes.length} bytes)`);
 					}
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error);
