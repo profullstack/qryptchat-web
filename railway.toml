@@ -1,0 +1,13 @@
+[build]
+buildCommand = "NODE_ENV=production pnpm run build"
+
+[deploy]
+startCommand = "NODE_ENV=production pnpm start"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[[deploy.variables]]
+name = "NODE_ENV"
+value = "production"
