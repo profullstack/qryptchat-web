@@ -77,6 +77,9 @@
 					<span class="room-prefix">#</span>
 				{/if}
 				{conversation.name || 'Unknown'}
+				{#if conversation.unread_count && conversation.unread_count > 0}
+					<div class="unread-indicator" title="{conversation.unread_count} unread messages"></div>
+				{/if}
 			</div>
 			
 			<div class="conversation-meta">
@@ -107,11 +110,6 @@
 				</div>
 			{/if}
 
-			{#if conversation.unread_count && conversation.unread_count > 0}
-				<div class="unread-badge">
-					{conversation.unread_count > 99 ? '99+' : conversation.unread_count}
-				</div>
-			{/if}
 		</div>
 	</div>
 </button>
@@ -284,16 +282,25 @@
 		font-style: italic;
 	}
 
-	.unread-badge {
-		background: var(--color-primary-500);
-		color: white;
-		font-size: 0.625rem;
-		font-weight: 600;
-		padding: 0.125rem 0.375rem;
-		border-radius: 0.75rem;
-		min-width: 1.25rem;
-		text-align: center;
+	.unread-indicator {
+		width: 8px;
+		height: 8px;
+		background: var(--color-error);
+		border-radius: 50%;
 		flex-shrink: 0;
+		margin-left: 0.375rem;
+		animation: pulse-unread 2s infinite;
+	}
+
+	@keyframes pulse-unread {
+		0%, 100% {
+			opacity: 1;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 0.7;
+			transform: scale(1.1);
+		}
 	}
 
 	/* Active state adjustments */
