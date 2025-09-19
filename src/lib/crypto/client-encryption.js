@@ -1,7 +1,7 @@
 /**
  * @fileoverview Unified post-quantum encryption service for QryptChat
  * This is a compatibility wrapper that provides a simple API while using
- * ML-KEM-768 post-quantum encryption underneath for all operations
+ * ML-KEM-1024 post-quantum encryption underneath for all operations
  */
 
 import { postQuantumEncryption } from './post-quantum-encryption.js';
@@ -9,7 +9,7 @@ import { Base64 } from './index.js';
 
 /**
  * Client-side post-quantum encryption service
- * This provides a simplified API while using ML-KEM-768 + ChaCha20-Poly1305 underneath
+ * This provides a simplified API while using ML-KEM-1024 + ChaCha20-Poly1305 underneath
  * All encryption is post-quantum resistant using the same system as the main app
  */
 export class ClientEncryptionService {
@@ -24,7 +24,7 @@ export class ClientEncryptionService {
 	async initialize() {
 		await postQuantumEncryption.initialize();
 		this.isInitialized = true;
-		console.log('🔐 Client encryption service initialized (ML-KEM-768 + ChaCha20-Poly1305)');
+		console.log('🔐 Client encryption service initialized (ML-KEM-1024 + ChaCha20-Poly1305)');
 	}
 
 	/**
@@ -66,7 +66,7 @@ export class ClientEncryptionService {
 			// Use post-quantum encryption with the conversation's public key
 			const encryptedContent = await postQuantumEncryption.encryptForRecipient(message, keys.publicKey);
 
-			console.log(`🔐 [CLIENT-PQ] ✅ Encrypted message using ML-KEM-768 for conversation: ${conversationId}`);
+			console.log(`🔐 [CLIENT-PQ] ✅ Encrypted message using ML-KEM-1024 for conversation: ${conversationId}`);
 			return encryptedContent;
 
 		} catch (error) {
@@ -100,7 +100,7 @@ export class ClientEncryptionService {
 			}
 
 			// Check if it's post-quantum encrypted format (version 3)
-			if (messageData.v === 3 && messageData.alg === 'ML-KEM-768') {
+			if (messageData.v === 3 && (messageData.alg === 'ML-KEM-1024' || messageData.alg === 'ML-KEM-768')) {
 				// Get conversation key pair
 				const keys = await this.getConversationKey(conversationId);
 				
@@ -114,7 +114,7 @@ export class ClientEncryptionService {
 				try {
 					// Use post-quantum decryption
 					const decryptedContent = await postQuantumEncryption.decryptFromSender(encryptedContent, '');
-					console.log(`🔐 [CLIENT-PQ] ✅ Successfully decrypted message using ML-KEM-768: "${decryptedContent}"`);
+					console.log(`🔐 [CLIENT-PQ] ✅ Successfully decrypted message using ML-KEM-1024: "${decryptedContent}"`);
 					return decryptedContent;
 				} finally {
 					// Restore original keys

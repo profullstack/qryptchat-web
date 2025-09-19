@@ -1,6 +1,6 @@
 /**
  * @fileoverview Multi-recipient post-quantum encryption service for QryptChat
- * Encrypts messages for multiple recipients using their individual ML-KEM-768 public keys
+ * Encrypts messages for multiple recipients using their individual ML-KEM-1024 public keys
  * Each recipient gets their own encrypted copy that only they can decrypt
  * Uses only post-quantum encryption methods - no legacy encryption
  */
@@ -10,7 +10,7 @@ import { publicKeyService } from './public-key-service.js';
 
 /**
  * Multi-recipient post-quantum encryption service
- * Handles encrypting messages for all conversation participants using ML-KEM-768
+ * Handles encrypting messages for all conversation participants using ML-KEM-1024
  */
 export class MultiRecipientEncryptionService {
 	constructor() {
@@ -25,7 +25,7 @@ export class MultiRecipientEncryptionService {
 			await postQuantumEncryption.initialize();
 			await publicKeyService.initialize();
 			this.isInitialized = true;
-			console.log('🔐 Multi-recipient post-quantum encryption service initialized (ML-KEM-768)');
+			console.log('🔐 Multi-recipient post-quantum encryption service initialized (ML-KEM-1024)');
 		}
 	}
 
