@@ -200,6 +200,56 @@
 			console.error('Failed to copy public key:', err);
 		}
 	}
+
+	/**
+	 * Handle sending a message to this user
+	 */
+	async function handleSendMessage() {
+		if (!profileUser?.id || !$isAuthenticated) return;
+		
+		loading = true;
+		error = '';
+		
+		try {
+			/** @type {Record<string, string>} */
+			const headers = {
+				'Content-Type': 'application/json'
+			};
+
+			// Add Authorization header with JWT token
+			const storedSession = browser ? localStorage.getItem('qrypt_session') : null;
+			if (storedSession) {
+				const session = JSON.parse(storedSession);
+				if (session.access_token) {
+					headers['Authorization'] = `Bearer ${session.access_token}`;
+				}
+			}
+
+			const response = await fetch('/api/chat/conversations', {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({
+					type: 'direct',
+					participant_ids: [profileUser.id]
+				})
+			});
+
+			const result = await response.json();
+
+			if (!response.ok) {
+				throw new Error(result.error || 'Failed to create conversation');
+			}
+
+			// Navigate to the chat with this conversation
+			goto(`/chat?conversation=${result.conversation_id}`);
+
+		} catch (err) {
+			console.error('Failed to create conversation:', err);
+			error = err instanceof Error ? err.message : 'Failed to start conversation';
+		} finally {
+			loading = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -242,8 +292,8 @@
 				<p class="profile-username">@{profileUser.username}</p>
 			{/if}
 			
-			{#if isOwnProfile}
-				<div class="profile-actions">
+			<div class="profile-actions">
+				{#if isOwnProfile}
 					{#if !editing}
 						<button class="btn btn-secondary" on:click={() => editing = true}>
 							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -271,8 +321,22 @@
 							</button>
 						</div>
 					{/if}
-				</div>
-			{/if}
+				{:else if $isAuthenticated}
+					<button class="btn btn-primary" on:click={handleSendMessage} disabled={loading}>
+						{#if loading}
+							<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M21 12a9 9 0 11-6.219-8.56"/>
+							</svg>
+						{:else}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="m3 3 3 9-3 9 19-9Z"/>
+								<path d="m6 12 13 0"/>
+							</svg>
+						{/if}
+						Send Message
+					</button>
+				{/if}
+			</div>
 		</div>
 	</div>
 
