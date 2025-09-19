@@ -1,5 +1,6 @@
 <script>
 	import { user } from '$lib/stores/auth.js';
+	import { convertUrlsToLinks } from '$lib/utils/url-link-converter.js';
 
 	let {
 		message,
@@ -12,6 +13,9 @@
 	
 	// Use the already-decrypted content from WebSocket store
 	const decryptedContent = $derived(message.content || '');
+	
+	// Convert URLs to clickable links
+	const contentWithLinks = $derived(convertUrlsToLinks(decryptedContent));
 
 	function formatTime(/** @type {string} */ timestamp) {
 		const date = new Date(timestamp);
@@ -58,7 +62,7 @@
 
 		<div class="message-bubble" class:own-bubble={isOwn}>
 			<div class="message-text">
-				{decryptedContent}
+				{@html contentWithLinks}
 			</div>
 			
 			{#if isOwn && showTimestamp}
