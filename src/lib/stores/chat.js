@@ -131,6 +131,34 @@ function createChatStore() {
 		},
 
 		/**
+		 * Refresh conversations without showing loading state
+		 * Used to update unread counts after marking messages as read
+		 */
+		async refreshConversations() {
+			if (!browser) return;
+
+			try {
+				const response = await fetch('/api/chat/conversations', {
+					method: 'GET',
+					credentials: 'include'
+				});
+
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				const { conversations } = await response.json();
+
+				update(state => ({
+					...state,
+					conversations: conversations || []
+				}));
+			} catch (error) {
+				console.error('Failed to refresh conversations:', error);
+			}
+		},
+
+		/**
 		 * Load user groups
 		 * @param {string} userId
 		 */
@@ -228,7 +256,7 @@ function createChatStore() {
 					typingUsers: [] // Clear typing indicators when switching conversations
 				}));
 
-				// Mark messages as read
+				// Mark messages as read and refresh unread counts
 				if (data && data.length > 0) {
 					const messageIds = data
 						.filter(msg => msg.sender_id !== userId)
@@ -236,6 +264,8 @@ function createChatStore() {
 					
 					if (messageIds.length > 0) {
 						await this.markMessagesAsRead(messageIds, userId);
+						// Refresh conversations to update unread counts
+						await this.refreshConversations();
 					}
 				}
 
@@ -550,9 +580,34 @@ function createChatStore() {
 				const exists = state.messages.some(msg => msg.id === message.id);
 				if (exists) return state;
 
+				// Add message to current conversation if it matches
+				const newMessages = state.activeConversation === message.conversation_id
+					? [...state.messages, message]
+					: state.messages;
+
+				// Update conversation unread count if message is from a different conversation
+				const updatedConversations = state.conversations.map(conv => {
+					// Handle both conversation_id and id fields (API returns conversation_id, some places use id)
+					const convId = conv.conversation_id || conv.id;
+					if (convId === message.conversation_id) {
+						// Only increment unread count if this isn't the active conversation
+						const shouldIncrementUnread = state.activeConversation !== message.conversation_id;
+						return {
+							...conv,
+							unread_count: shouldIncrementUnread ? (conv.unread_count || 0) + 1 : conv.unread_count,
+							latest_message_id: message.id,
+							latest_message_content: message.encrypted_content,
+							latest_message_sender_id: message.sender_id,
+							latest_message_created_at: message.created_at
+						};
+					}
+					return conv;
+				});
+
 				return {
 					...state,
-					messages: [...state.messages, message]
+					messages: newMessages,
+					conversations: updatedConversations
 				};
 			});
 		},
