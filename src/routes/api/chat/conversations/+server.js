@@ -22,17 +22,36 @@ export async function GET(event) {
 			return json({ error: 'Failed to load conversations' }, { status: 500 });
 		}
 
-		// Simple transformation to add required fields for frontend compatibility
-		const conversations = (data || []).map(conv => ({
-			...conv,
-			id: conv.conversation_id, // Add 'id' field for frontend compatibility
-			name: conv.conversation_name, // Add 'name' field for frontend compatibility
-			type: conv.conversation_type, // Add 'type' field for frontend compatibility
-			is_archived: false, // Default to not archived for now
-			archived_at: null
-		}));
+		// Get internal user ID to check archive status
+		const { data: internalUser } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
 
-		return json({ conversations });
+		// Simple transformation with proper archive status check
+		const conversationsWithArchive = [];
+		
+		for (const conv of data || []) {
+			// Check archive status for this conversation
+			const { data: participantData } = await supabase
+				.from('conversation_participants')
+				.select('archived_at')
+				.eq('conversation_id', conv.conversation_id)
+				.eq('user_id', internalUser?.id)
+				.maybeSingle();
+
+			conversationsWithArchive.push({
+				...conv,
+				id: conv.conversation_id, // Add 'id' field for frontend compatibility
+				name: conv.conversation_name, // Add 'name' field for frontend compatibility
+				type: conv.conversation_type, // Add 'type' field for frontend compatibility
+				is_archived: participantData?.archived_at !== null,
+				archived_at: participantData?.archived_at
+			});
+		}
+
+		return json({ conversations: conversationsWithArchive });
 	} catch (error) {
 		console.error('API error:', error);
 		return json({ error: 'Internal server error' }, { status: 500 });
