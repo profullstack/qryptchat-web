@@ -1,7 +1,6 @@
 // API endpoint for encrypted file uploads
 import { json, error } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
-import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
 
 export async function POST(event) {
 	try {
@@ -14,24 +13,41 @@ export async function POST(event) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = user.id;
-		console.log(`📁 [FILE-UPLOAD] Upload request from user: ${userId}`);
+		console.log(`📁 [FILE-UPLOAD] Upload request from auth user: ${user.id}`);
+
+		// Get the internal user ID from the users table using auth_user_id
+		const { data: internalUser, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !internalUser) {
+			console.error('📁 [FILE-UPLOAD] Internal user not found:', userError);
+			return error(404, 'User profile not found');
+		}
+
+		const userId = internalUser.id;
+		console.log(`📁 [FILE-UPLOAD] Using internal user ID: ${userId}`);
 
 		// Parse the multipart form data
 		const formData = await event.request.formData();
-		const file = formData.get('file');
+		const encryptedContents = formData.get('encryptedContents');
+		const originalFilename = formData.get('originalFilename');
+		const mimeType = formData.get('mimeType');
+		const fileSize = formData.get('fileSize');
 		const conversationId = formData.get('conversationId');
 		const messageId = formData.get('messageId');
 
 		// Validate inputs
-		if (!file || !(file instanceof File)) {
-			console.error('📁 [FILE-UPLOAD] No file provided or invalid file');
-			return error(400, 'No file provided');
+		if (!encryptedContents) {
+			console.error('📁 [FILE-UPLOAD] No encrypted content provided');
+			return error(400, 'No encrypted content provided');
 		}
 
-		if (!conversationId || !messageId) {
-			console.error('📁 [FILE-UPLOAD] Missing conversationId or messageId');
-			return error(400, 'Missing conversationId or messageId');
+		if (!conversationId || !messageId || !originalFilename || !mimeType || !fileSize) {
+			console.error('📁 [FILE-UPLOAD] Missing required fields');
+			return error(400, 'Missing required fields');
 		}
 
 		// Validate user has access to the conversation
@@ -61,63 +77,19 @@ export async function POST(event) {
 			return error(404, 'Message not found or unauthorized');
 		}
 
-		// Validate file type and size
-		const maxFileSize = 50 * 1024 * 1024; // 50MB
-		const allowedExtensions = [
-			'.txt', '.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', 
-			'.mp3', '.wav', '.mp4', '.webm', '.zip', '.rar'
-		];
-		const blockedExtensions = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
-		
-		const getFileExtension = (filename) => {
-			const lastDot = filename.lastIndexOf('.');
-			return lastDot !== -1 ? filename.substring(lastDot).toLowerCase() : '';
-		};
-		
-		const isAllowedFileType = (filename) => {
-			const extension = getFileExtension(filename);
-			return !blockedExtensions.includes(extension) && 
-				   (!extension || allowedExtensions.includes(extension));
-		};
+		console.log(`📁 [FILE-UPLOAD] Processing encrypted file: ${originalFilename} (${fileSize} bytes)`);
 
-		if (!isAllowedFileType(file.name)) {
-			console.error(`📁 [FILE-UPLOAD] File type not allowed: ${file.name}`);
-			return error(400, `File type not allowed: ${getFileExtension(file.name)}`);
-		}
-
-		if (file.size > maxFileSize) {
-			console.error(`📁 [FILE-UPLOAD] File too large: ${file.size} bytes`);
-			return error(400, `File too large. Maximum size is ${Math.floor(maxFileSize / (1024 * 1024))}MB`);
-		}
-
-		if (file.size === 0) {
-			return error(400, 'File cannot be empty');
-		}
-
-		console.log(`📁 [FILE-UPLOAD] Processing file: ${file.name} (${file.size} bytes)`);
-
-		// Read file content
-		const arrayBuffer = await file.arrayBuffer();
-		const fileContent = Buffer.from(arrayBuffer).toString('base64');
-
-		// Initialize multi-recipient encryption
-		await multiRecipientEncryption.initialize();
-
-		// Encrypt file for all conversation participants using multi-recipient encryption
-		console.log(`📁 [FILE-UPLOAD] Encrypting file for all participants in conversation: ${conversationId}`);
-		const encryptedContents = await multiRecipientEncryption.encryptForConversation(conversationId, fileContent);
-
-		// Generate file ID
+		// Generate file ID and storage path (use auth user ID for storage path to match RLS policy)
 		const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-		const storagePath = `${userId}/${conversationId}/${fileId}`;
+		const storagePath = `${user.id}/${conversationId}/${fileId}`;
 
 		console.log(`📁 [FILE-UPLOAD] Uploading encrypted file to: ${storagePath}`);
 
-		// Upload encrypted file contents to Supabase storage as JSON
+		// Upload encrypted file contents to Supabase storage
 		const { data: uploadData, error: uploadError } = await supabase.storage
 			.from('encrypted-files')
-			.upload(storagePath, JSON.stringify(encryptedContents), {
-				contentType: 'application/json',
+			.upload(storagePath, encryptedContents, {
+				contentType: 'application/octet-stream',
 				cacheControl: '3600',
 				upsert: false
 			});
@@ -135,18 +107,18 @@ export async function POST(event) {
 			.insert({
 				message_id: messageId,
 				storage_path: storagePath,
-				original_filename: file.name,
-				mime_type: file.type,
-				file_size: file.size,
+				original_filename: originalFilename,
+				mime_type: mimeType,
+				file_size: parseInt(fileSize),
 				encrypted_metadata: {
 					id: fileId,
-					originalName: file.name,
-					mimeType: file.type,
-					size: file.size,
+					originalName: originalFilename,
+					mimeType: mimeType,
+					size: parseInt(fileSize),
 					encryptedAt: new Date().toISOString(),
 					version: 2 // Version 2 = multi-recipient encryption
 				},
-				created_by: userId
+				created_by: user.id // Use auth user ID for RLS policy compatibility
 			})
 			.select()
 			.single();
@@ -162,7 +134,7 @@ export async function POST(event) {
 			return error(500, 'Failed to save file metadata');
 		}
 
-		console.log(`📁 [FILE-UPLOAD] ✅ File upload completed successfully: ${file.name}`);
+		console.log(`📁 [FILE-UPLOAD] ✅ File upload completed successfully: ${originalFilename}`);
 
 		// Return success response
 		return json({
@@ -170,10 +142,10 @@ export async function POST(event) {
 			file: {
 				id: dbData.id,
 				messageId: messageId,
-				originalFilename: file.name,
-				mimeType: file.type,
-				fileSize: file.size,
-				formattedSize: formatFileSize(file.size),
+				originalFilename: originalFilename,
+				mimeType: mimeType,
+				fileSize: parseInt(fileSize),
+				formattedSize: formatFileSize(parseInt(fileSize)),
 				createdAt: dbData.created_at
 			}
 		});

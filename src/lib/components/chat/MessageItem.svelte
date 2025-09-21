@@ -134,7 +134,7 @@
 
 	// Load files when message has attachments
 	$effect(() => {
-		if (message.has_files && files.length === 0) {
+		if (message.has_attachments && files.length === 0) {
 			loadFiles();
 		}
 	});
@@ -171,7 +171,7 @@
 			</div>
 			
 			<!-- File attachments -->
-			{#if message.has_files}
+			{#if message.has_attachments}
 				<div class="file-attachments">
 					{#if isLoadingFiles}
 						<div class="file-loading">
@@ -187,22 +187,37 @@
 						</div>
 					{:else}
 						{#each files as file}
-							<div class="file-attachment" onclick={() => downloadFile(file)}>
-								<div class="file-info">
-									<div class="file-icon">
-										{getFileIcon(file.mimeType)}
-									</div>
-									<div class="file-details">
-										<div class="file-name">{file.originalFilename}</div>
-										<div class="file-size">{formatFileSize(file.fileSize)}</div>
+							{#if file.mimeType?.startsWith('image/')}
+								<!-- Inline image preview -->
+								<div class="image-attachment">
+									<div class="image-preview" onclick={() => downloadFile(file)}>
+										<div class="image-placeholder">
+											<div class="image-icon">🖼️</div>
+											<div class="image-filename">{file.originalFilename}</div>
+											<div class="image-size">{formatFileSize(file.fileSize)}</div>
+											<div class="click-to-view">Click to download full image</div>
+										</div>
 									</div>
 								</div>
-								<div class="download-icon">
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
-									</svg>
+							{:else}
+								<!-- Regular file attachment -->
+								<div class="file-attachment" onclick={() => downloadFile(file)}>
+									<div class="file-info">
+										<div class="file-icon">
+											{getFileIcon(file.mimeType)}
+										</div>
+										<div class="file-details">
+											<div class="file-name">{file.originalFilename}</div>
+											<div class="file-size">{formatFileSize(file.fileSize)}</div>
+										</div>
+									</div>
+									<div class="download-icon">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+											<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+										</svg>
+									</div>
 								</div>
-							</div>
+							{/if}
 						{/each}
 					{/if}
 				</div>
@@ -471,6 +486,84 @@
 	}
 
 	.file-attachment:hover .download-icon {
+		opacity: 1;
+	}
+
+	.image-attachment {
+		margin-bottom: 0.5rem;
+	}
+
+	.image-preview {
+		border-radius: 0.75rem;
+		overflow: hidden;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.message-bubble:not(.own-bubble) .image-preview {
+		background: var(--color-surface-hover);
+		border: 1px solid var(--color-border);
+	}
+
+	.image-preview:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	}
+
+	.image-placeholder {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 1.5rem;
+		text-align: center;
+		min-height: 120px;
+		background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+	}
+
+	.message-bubble:not(.own-bubble) .image-placeholder {
+		background: linear-gradient(135deg, var(--color-background), var(--color-surface));
+	}
+
+	.image-icon {
+		font-size: 2rem;
+		margin-bottom: 0.5rem;
+		opacity: 0.8;
+	}
+
+	.image-filename {
+		font-weight: 500;
+		font-size: 0.875rem;
+		margin-bottom: 0.25rem;
+		max-width: 200px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.image-size {
+		font-size: 0.75rem;
+		opacity: 0.7;
+		margin-bottom: 0.5rem;
+	}
+
+	.click-to-view {
+		font-size: 0.75rem;
+		opacity: 0.6;
+		padding: 0.25rem 0.5rem;
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 0.25rem;
+		transition: opacity 0.2s ease;
+	}
+
+	.message-bubble:not(.own-bubble) .click-to-view {
+		background: var(--color-primary-100, #dbeafe);
+		color: var(--color-primary-700, #1d4ed8);
+	}
+
+	.image-preview:hover .click-to-view {
 		opacity: 1;
 	}
 

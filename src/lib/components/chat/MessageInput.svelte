@@ -172,10 +172,29 @@
 				const messageId = messageResult.data.id;
 				console.log(`📁 Created message ${messageId} for file uploads`);
 
-				// Upload each file
+				// Encrypt and upload each file
 				const uploadPromises = selectedFiles.map(async (file) => {
+					// Read file content
+					const arrayBuffer = await file.arrayBuffer();
+					const uint8Array = new Uint8Array(arrayBuffer);
+					
+					// Convert to base64 using browser-compatible method
+					let binary = '';
+					for (let i = 0; i < uint8Array.length; i++) {
+						binary += String.fromCharCode(uint8Array[i]);
+					}
+					const fileContent = btoa(binary);
+
+					// Encrypt file using multi-recipient encryption (client-side)
+					await multiRecipientEncryption.initialize();
+					const encryptedContents = await multiRecipientEncryption.encryptForConversation(conversationId, fileContent);
+
+					// Send encrypted data to server
 					const formData = new FormData();
-					formData.append('file', file);
+					formData.append('encryptedContents', JSON.stringify(encryptedContents));
+					formData.append('originalFilename', file.name);
+					formData.append('mimeType', file.type);
+					formData.append('fileSize', file.size.toString());
 					formData.append('conversationId', conversationId);
 					formData.append('messageId', messageId);
 
@@ -194,6 +213,15 @@
 
 				await Promise.all(uploadPromises);
 				console.log(`📁 ✅ Successfully uploaded ${selectedFiles.length} files`);
+
+				// Update the message to set has_attachments=true (the database trigger should handle this automatically)
+				// Force refresh the conversation to show updated message with attachments
+				try {
+					await wsChat.loadMessages(conversationId);
+					console.log(`📁 ✅ Refreshed messages to show file attachments`);
+				} catch (refreshError) {
+					console.error(`📁 ⚠️ Failed to refresh messages:`, refreshError);
+				}
 				
 				// Clear selected files after successful upload
 				selectedFiles = [];
@@ -397,6 +425,18 @@
 		margin-bottom: 0.75rem;
 		font-size: 0.875rem;
 		font-weight: 500;
+		animation: slideIn 0.3s ease-out;
+	}
+
+	@keyframes slideIn {
+		from {
+			opacity: 0;
+			transform: translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	.file-preview {
