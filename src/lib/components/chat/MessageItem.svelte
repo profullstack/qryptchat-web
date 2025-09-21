@@ -68,7 +68,8 @@
 	}
 
 	async function loadFiles() {
-		if (!message.has_files || files.length > 0 || isLoadingFiles) {
+		if (!message.has_attachments || files.length > 0 || isLoadingFiles) {
+			console.log(`📁 [LOAD-FILES] Skipping load - has_attachments: ${message.has_attachments}, files.length: ${files.length}, isLoadingFiles: ${isLoadingFiles}`);
 			return;
 		}
 
@@ -76,24 +77,30 @@
 		fileLoadError = '';
 
 		try {
-			console.log(`📁 Loading files for message: ${message.id}`);
+			console.log(`📁 [LOAD-FILES] Loading files for message: ${message.id}`);
 
 			const response = await fetch(`/api/files/message/${message.id}`, {
 				method: 'GET',
 				credentials: 'include'
 			});
 
+			console.log(`📁 [LOAD-FILES] API response status: ${response.status}`);
+
 			if (!response.ok) {
-				throw new Error(`Failed to load files: ${response.status}`);
+				const errorText = await response.text();
+				console.error(`📁 [LOAD-FILES] API error: ${response.status} - ${errorText}`);
+				throw new Error(`Failed to load files: ${response.status} - ${errorText}`);
 			}
 
 			const data = await response.json();
+			console.log(`📁 [LOAD-FILES] API response data:`, data);
+			
 			files = data.files || [];
 			
-			console.log(`📁 Loaded ${files.length} files for message: ${message.id}`);
+			console.log(`📁 [LOAD-FILES] ✅ Loaded ${files.length} files for message: ${message.id}`, files);
 
 		} catch (error) {
-			console.error(`📁 Error loading files for message ${message.id}:`, error);
+			console.error(`📁 [LOAD-FILES] ❌ Error loading files for message ${message.id}:`, error);
 			fileLoadError = error instanceof Error ? error.message : 'Failed to load files';
 		} finally {
 			isLoadingFiles = false;
@@ -102,19 +109,59 @@
 
 	async function downloadFile(/** @type {any} */ file) {
 		try {
-			console.log(`📁 Downloading file: ${file.originalFilename}`);
+			console.log(`📁 [DOWNLOAD] Starting client-side decryption for: ${file.originalFilename}`);
 
-			const response = await fetch(`/api/files/${file.id}`, {
+			// Get encrypted file data
+			const response = await fetch(`/api/files/${file.id}/encrypted`, {
 				method: 'GET',
 				credentials: 'include'
 			});
 
 			if (!response.ok) {
-				throw new Error(`Failed to download file: ${response.status}`);
+				throw new Error(`Failed to load encrypted file: ${response.status}`);
 			}
 
-			// Create download link
-			const blob = await response.blob();
+			const encryptedData = await response.json();
+			console.log(`📁 [DOWNLOAD] Retrieved encrypted file data`);
+
+			// Import encryption services
+			const { postQuantumEncryption } = await import('$lib/crypto/post-quantum-encryption.js');
+			await postQuantumEncryption.initialize();
+
+			// Parse encrypted contents
+			const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
+			console.log(`📁 [DOWNLOAD] Available encrypted keys:`, Object.keys(encryptedContents));
+
+			// Find user's encrypted copy
+			const { user } = await import('$lib/stores/auth.js');
+			let currentUser;
+			user.subscribe(u => currentUser = u)();
+			
+			const userId = currentUser?.id;
+			const userEncryptedCopy = encryptedContents[userId];
+			
+			if (!userEncryptedCopy) {
+				console.error(`📁 [DOWNLOAD] No encrypted copy found for user: ${userId}`);
+				throw new Error('No encrypted file copy found for user');
+			}
+
+			console.log(`📁 [DOWNLOAD] Decrypting file client-side...`);
+
+			// Decrypt the file content client-side
+			const decryptedBase64 = await postQuantumEncryption.decryptFromSender(
+				userEncryptedCopy,
+				'' // Sender public key not needed
+			);
+
+			// Convert base64 to binary
+			const binaryString = atob(decryptedBase64);
+			const bytes = new Uint8Array(binaryString.length);
+			for (let i = 0; i < binaryString.length; i++) {
+				bytes[i] = binaryString.charCodeAt(i);
+			}
+
+			// Create blob and download
+			const blob = new Blob([bytes], { type: file.mimeType });
 			const url = window.URL.createObjectURL(blob);
 			const link = document.createElement('a');
 			link.href = url;
@@ -124,17 +171,92 @@
 			link.remove();
 			window.URL.revokeObjectURL(url);
 
-			console.log(`📁 ✅ Downloaded file: ${file.originalFilename}`);
+			console.log(`📁 [DOWNLOAD] ✅ File decrypted and downloaded: ${file.originalFilename}`);
 
 		} catch (error) {
-			console.error(`📁 Error downloading file:`, error);
+			console.error(`📁 [DOWNLOAD] ❌ Error downloading file:`, error);
 			// Could show a toast or error message here
+		}
+	}
+
+	async function getMediaUrl(/** @type {any} */ file) {
+		try {
+			console.log(`📁 [MEDIA] Loading encrypted file data for: ${file.originalFilename}`);
+			
+			// Get encrypted file data
+			const response = await fetch(`/api/files/${file.id}/encrypted`, {
+				method: 'GET',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to load encrypted file: ${response.status}`);
+			}
+
+			const encryptedData = await response.json();
+			console.log(`📁 [MEDIA] Retrieved encrypted file data:`, encryptedData.file.originalFilename);
+
+			// Import encryption services
+			const { postQuantumEncryption } = await import('$lib/crypto/post-quantum-encryption.js');
+			await postQuantumEncryption.initialize();
+
+			// Parse encrypted contents
+			const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
+			console.log(`📁 [MEDIA] Available encrypted keys:`, Object.keys(encryptedContents));
+
+			// Get current user from WebSocket store (which has the correct user data)
+			const { currentUser: wsUser } = await import('$lib/stores/websocket-chat.js');
+			let user;
+			wsUser.subscribe(u => user = u)();
+			
+			if (!user?.id) {
+				throw new Error('User not authenticated');
+			}
+			
+			console.log(`📁 [MEDIA] Trying to decrypt for user: ${user.id}`);
+			
+			// Try to find user's encrypted copy (encrypted contents are keyed by internal user ID)
+			const userEncryptedCopy = encryptedContents[user.id];
+			
+			if (!userEncryptedCopy) {
+				console.error(`📁 [MEDIA] No encrypted copy found for user: ${user.id}`);
+				console.error(`📁 [MEDIA] Available keys:`, Object.keys(encryptedContents));
+				throw new Error('No encrypted file copy found for user');
+			}
+
+			console.log(`📁 [MEDIA] Decrypting file client-side...`);
+
+			// Decrypt the file content client-side
+			const decryptedBase64 = await postQuantumEncryption.decryptFromSender(
+				userEncryptedCopy,
+				'' // Sender public key not needed
+			);
+
+			// Convert base64 to binary
+			const binaryString = atob(decryptedBase64);
+			const bytes = new Uint8Array(binaryString.length);
+			for (let i = 0; i < binaryString.length; i++) {
+				bytes[i] = binaryString.charCodeAt(i);
+			}
+
+			// Create blob with proper MIME type
+			const blob = new Blob([bytes], { type: file.mimeType });
+			const mediaUrl = window.URL.createObjectURL(blob);
+
+			console.log(`📁 [MEDIA] ✅ File decrypted and blob created: ${file.originalFilename}`);
+			return mediaUrl;
+
+		} catch (error) {
+			console.error(`📁 [MEDIA] ❌ Error loading media:`, error);
+			return null;
 		}
 	}
 
 	// Load files when message has attachments
 	$effect(() => {
+		console.log(`📁 [DEBUG] MessageItem effect - Message ID: ${message.id}, has_attachments: ${message.has_attachments}, files.length: ${files.length}`);
 		if (message.has_attachments && files.length === 0) {
+			console.log(`📁 [DEBUG] Loading files for message: ${message.id}`);
 			loadFiles();
 		}
 	});
@@ -188,16 +310,89 @@
 					{:else}
 						{#each files as file}
 							{#if file.mimeType?.startsWith('image/')}
-								<!-- Inline image preview -->
-								<div class="image-attachment">
-									<div class="image-preview" onclick={() => downloadFile(file)}>
-										<div class="image-placeholder">
-											<div class="image-icon">🖼️</div>
-											<div class="image-filename">{file.originalFilename}</div>
-											<div class="image-size">{formatFileSize(file.fileSize)}</div>
-											<div class="click-to-view">Click to download full image</div>
-										</div>
+								<!-- Inline image display -->
+								<div class="media-attachment">
+									<div class="media-header">
+										<span class="media-filename">{file.originalFilename}</span>
+										<span class="media-size">{formatFileSize(file.fileSize)}</span>
+										<button class="download-btn" onclick={() => downloadFile(file)} title="Download">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+											</svg>
+										</button>
 									</div>
+									{#await getMediaUrl(file)}
+										<div class="media-loading">
+											<div class="loading-spinner"></div>
+											<span>Loading image...</span>
+										</div>
+									{:then mediaUrl}
+										{#if mediaUrl}
+											<img src={mediaUrl} alt={file.originalFilename} class="inline-image" onclick={() => downloadFile(file)} />
+										{:else}
+											<div class="media-error">Failed to load image</div>
+										{/if}
+									{:catch error}
+										<div class="media-error">Error loading image</div>
+									{/await}
+								</div>
+							{:else if file.mimeType?.startsWith('video/')}
+								<!-- Inline video display -->
+								<div class="media-attachment">
+									<div class="media-header">
+										<span class="media-filename">{file.originalFilename}</span>
+										<span class="media-size">{formatFileSize(file.fileSize)}</span>
+										<button class="download-btn" onclick={() => downloadFile(file)} title="Download">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+											</svg>
+										</button>
+									</div>
+									{#await getMediaUrl(file)}
+										<div class="media-loading">
+											<div class="loading-spinner"></div>
+											<span>Loading video...</span>
+										</div>
+									{:then mediaUrl}
+										{#if mediaUrl}
+											<video src={mediaUrl} controls class="inline-video">
+												Your browser does not support video playback.
+											</video>
+										{:else}
+											<div class="media-error">Failed to load video</div>
+										{/if}
+									{:catch error}
+										<div class="media-error">Error loading video</div>
+									{/await}
+								</div>
+							{:else if file.mimeType?.startsWith('audio/')}
+								<!-- Inline audio display -->
+								<div class="media-attachment">
+									<div class="media-header">
+										<span class="media-filename">{file.originalFilename}</span>
+										<span class="media-size">{formatFileSize(file.fileSize)}</span>
+										<button class="download-btn" onclick={() => downloadFile(file)} title="Download">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+											</svg>
+										</button>
+									</div>
+									{#await getMediaUrl(file)}
+										<div class="media-loading">
+											<div class="loading-spinner"></div>
+											<span>Loading audio...</span>
+										</div>
+									{:then mediaUrl}
+										{#if mediaUrl}
+											<audio src={mediaUrl} controls class="inline-audio">
+												Your browser does not support audio playback.
+											</audio>
+										{:else}
+											<div class="media-error">Failed to load audio</div>
+										{/if}
+									{:catch error}
+										<div class="media-error">Error loading audio</div>
+									{/await}
 								</div>
 							{:else}
 								<!-- Regular file attachment -->
@@ -565,6 +760,113 @@
 
 	.image-preview:hover .click-to-view {
 		opacity: 1;
+	}
+
+	.media-attachment {
+		margin-bottom: 0.75rem;
+		border-radius: 0.75rem;
+		overflow: hidden;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.message-bubble:not(.own-bubble) .media-attachment {
+		background: var(--color-background);
+		border: 1px solid var(--color-border);
+	}
+
+	.media-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.5rem 0.75rem;
+		background: rgba(0, 0, 0, 0.1);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.message-bubble:not(.own-bubble) .media-header {
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.media-filename {
+		font-weight: 500;
+		font-size: 0.8rem;
+		max-width: 200px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.media-size {
+		font-size: 0.7rem;
+		opacity: 0.7;
+		margin-left: 0.5rem;
+	}
+
+	.download-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.1);
+		color: inherit;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.download-btn:hover {
+		background: rgba(255, 255, 255, 0.2);
+		transform: scale(1.1);
+	}
+
+	.inline-image {
+		width: 100%;
+		max-width: 400px;
+		max-height: 300px;
+		object-fit: cover;
+		cursor: pointer;
+		transition: opacity 0.2s ease;
+	}
+
+	.inline-image:hover {
+		opacity: 0.9;
+	}
+
+	.inline-video {
+		width: 100%;
+		max-width: 400px;
+		max-height: 300px;
+	}
+
+	.inline-audio {
+		width: 100%;
+		max-width: 300px;
+	}
+
+	.media-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 2rem;
+		font-size: 0.8rem;
+		opacity: 0.7;
+	}
+
+	.media-error {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+		font-size: 0.8rem;
+		color: var(--color-error-text, #c53030);
+		background: var(--color-error-background, #fee);
+		border-radius: 0.5rem;
+		margin: 0.5rem;
 	}
 
 	@keyframes spin {

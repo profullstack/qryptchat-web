@@ -14,12 +14,26 @@ export async function GET(event) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = user.id;
 		const fileId = event.params.fileId;
+		console.log(`📁 [FILE-DOWNLOAD] Download request from auth user: ${user.id} for file: ${fileId}`);
 
-		console.log(`📁 [FILE-DOWNLOAD] Download request from user: ${userId} for file: ${fileId}`);
+		// Get the internal user ID from the users table using auth_user_id
+		const { data: internalUser, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !internalUser) {
+			console.error('📁 [FILE-DOWNLOAD] Internal user not found:', userError);
+			return error(404, 'User profile not found');
+		}
+
+		const userId = internalUser.id;
+		console.log(`📁 [FILE-DOWNLOAD] Using internal user: ${userId} for file: ${fileId}`);
 
 		// Get file metadata from database
+		// Fix the relationship path: messages -> conversations -> conversation_participants
 		const { data: fileData, error: fileError } = await supabase
 			.from('encrypted_files')
 			.select(`
@@ -34,13 +48,16 @@ export async function GET(event) {
 				messages!inner(
 					id,
 					conversation_id,
-					conversation_participants!inner(
-						user_id
+					conversations!inner(
+						id,
+						conversation_participants!inner(
+							user_id
+						)
 					)
 				)
 			`)
 			.eq('id', fileId)
-			.eq('messages.conversation_participants.user_id', userId)
+			.eq('messages.conversations.conversation_participants.user_id', userId)
 			.single();
 
 		if (fileError || !fileData) {
@@ -64,28 +81,45 @@ export async function GET(event) {
 		const encryptedContentsJson = await storageData.text();
 		const encryptedContents = JSON.parse(encryptedContentsJson);
 
-		console.log(`📁 [FILE-DOWNLOAD] Decrypting file for user: ${userId}`);
+		console.log(`📁 [FILE-DOWNLOAD] Decrypting file for auth user: ${user.id}, internal user: ${userId}`);
 
 		// Initialize post-quantum encryption
 		await postQuantumEncryption.initialize();
 
-		// Decrypt the file using the user's encrypted copy
+		// Decrypt the file using the user's encrypted copy (keyed by internal user ID, not auth user ID)
+		console.log(`📁 [FILE-DOWNLOAD] Available encrypted keys:`, Object.keys(encryptedContents));
+		const userEncryptedCopy = encryptedContents[userId] || encryptedContents[user.id];
+		
+		if (!userEncryptedCopy) {
+			console.error(`📁 [FILE-DOWNLOAD] No encrypted copy found for user ${userId} or ${user.id}`);
+			return error(404, 'No encrypted file copy found for user');
+		}
+
+		console.log(`📁 [FILE-DOWNLOAD] Using encrypted copy for user ID: ${userEncryptedCopy ? 'found' : 'not found'}`);
+		console.log(`📁 [FILE-DOWNLOAD] Encrypted copy preview:`, userEncryptedCopy?.substring(0, 100));
+
 		const decryptedContent = await postQuantumEncryption.decryptFromSender(
-			encryptedContents[userId], // User's encrypted copy
+			userEncryptedCopy, // User's encrypted copy
 			'' // Sender public key not needed for ML-KEM decryption
 		);
+
+		console.log(`📁 [FILE-DOWNLOAD] Decrypted content type:`, typeof decryptedContent);
+		console.log(`📁 [FILE-DOWNLOAD] Decrypted content length:`, decryptedContent?.length);
+		console.log(`📁 [FILE-DOWNLOAD] Decrypted content preview:`, decryptedContent?.substring(0, 100));
 
 		// Convert base64 back to binary
 		const fileBuffer = Buffer.from(decryptedContent, 'base64');
 
+		console.log(`📁 [FILE-DOWNLOAD] File buffer length:`, fileBuffer.length);
+		console.log(`📁 [FILE-DOWNLOAD] File buffer first 10 bytes:`, fileBuffer.slice(0, 10));
 		console.log(`📁 [FILE-DOWNLOAD] ✅ File decrypted successfully: ${fileData.original_filename}`);
 
-		// Return decrypted file
+		// Return decrypted file with correct content length
 		return new Response(fileBuffer, {
 			status: 200,
 			headers: {
 				'Content-Type': fileData.mime_type,
-				'Content-Length': fileData.file_size.toString(),
+				'Content-Length': fileBuffer.length.toString(),
 				'Content-Disposition': `attachment; filename="${encodeURIComponent(fileData.original_filename)}"`,
 				'Cache-Control': 'private, no-cache, no-store, must-revalidate',
 				'Pragma': 'no-cache',

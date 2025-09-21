@@ -13,12 +13,27 @@ export async function GET(event) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = user.id;
 		const messageId = event.params.messageId;
+		console.log(`📁 [FILES-BY-MESSAGE] Request from auth user: ${user.id} for message: ${messageId}`);
 
-		console.log(`📁 [FILES-BY-MESSAGE] Request from user: ${userId} for message: ${messageId}`);
+		// Get the internal user ID from the users table using auth_user_id
+		const { data: internalUser, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !internalUser) {
+			console.error('📁 [FILES-BY-MESSAGE] Internal user not found:', userError);
+			return error(404, 'User profile not found');
+		}
+
+		const userId = internalUser.id;
+
+		console.log(`📁 [FILES-BY-MESSAGE] Using internal user: ${userId} for message: ${messageId}`);
 
 		// Get files for the message, ensuring user has access
+		// Fix the relationship path: messages -> conversations -> conversation_participants
 		const { data: files, error: filesError } = await supabase
 			.from('encrypted_files')
 			.select(`
@@ -32,13 +47,16 @@ export async function GET(event) {
 				messages!inner(
 					id,
 					conversation_id,
-					conversation_participants!inner(
-						user_id
+					conversations!inner(
+						id,
+						conversation_participants!inner(
+							user_id
+						)
 					)
 				)
 			`)
 			.eq('message_id', messageId)
-			.eq('messages.conversation_participants.user_id', userId);
+			.eq('messages.conversations.conversation_participants.user_id', userId);
 
 		if (filesError) {
 			console.error('📁 [FILES-BY-MESSAGE] Database error:', filesError);
