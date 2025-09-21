@@ -11,3 +11,6 @@ restartPolicyMaxRetries = 10
 [[deploy.variables]]
 name = "NODE_ENV"
 value = "production"
+[[deploy.variables]]
+name = "CLIENT_MAX_BODY_SIZE"
+value = "2048"
