@@ -22,55 +22,17 @@ export async function GET(event) {
 			return json({ error: 'Failed to load conversations' }, { status: 500 });
 		}
 
-		// Get internal user ID first
-		const { data: internalUser } = await supabase
-			.from('users')
-			.select('id')
-			.eq('auth_user_id', user.id)
-			.single();
+		// Simple transformation to add required fields for frontend compatibility
+		const conversations = (data || []).map(conv => ({
+			...conv,
+			id: conv.conversation_id, // Add 'id' field for frontend compatibility
+			name: conv.conversation_name, // Add 'name' field for frontend compatibility
+			type: conv.conversation_type, // Add 'type' field for frontend compatibility
+			is_archived: false, // Default to not archived for now
+			archived_at: null
+		}));
 
-		if (!internalUser) {
-			return json({ conversations: [] });
-		}
-
-		// Get archive data separately for each conversation using internal user ID
-		const conversationsWithArchive = await Promise.all(
-			(data || []).map(async (conv) => {
-				// Get archive status for this user and conversation
-				const { data: participantData } = await supabase
-					.from('conversation_participants')
-					.select('archived_at')
-					.eq('conversation_id', conv.conversation_id)
-					.eq('user_id', internalUser.id) // Use internal user ID, not auth user ID
-					.maybeSingle();
-
-				return {
-					...conv,
-					id: conv.conversation_id, // Add 'id' field for frontend compatibility
-					name: conv.conversation_name, // Add 'name' field for frontend compatibility
-					type: conv.conversation_type, // Add 'type' field for frontend compatibility
-					is_archived: participantData?.archived_at !== null,
-					archived_at: participantData?.archived_at
-				};
-			})
-		);
-
-		// Apply archive filtering
-		const url = new URL(event.request.url);
-		const includeArchived = url.searchParams.get('include_archived') === 'true';
-		const archivedOnly = url.searchParams.get('archived_only') === 'true';
-		
-		const filteredConversations = conversationsWithArchive.filter(conv => {
-			if (archivedOnly) {
-				return conv.is_archived;
-			} else if (includeArchived) {
-				return true; // Include all
-			} else {
-				return !conv.is_archived; // Only non-archived
-			}
-		});
-
-		return json({ conversations: filteredConversations });
+		return json({ conversations });
 	} catch (error) {
 		console.error('API error:', error);
 		return json({ error: 'Internal server error' }, { status: 500 });
