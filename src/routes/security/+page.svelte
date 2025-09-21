@@ -47,7 +47,7 @@
 
 			<section class="security-section">
 				<h2>🏆 Security Audits</h2>
-				<p>QryptChat undergoes regular security audits by independent third-party security firms to ensure the highest level of protection.</p>
+				<p>QryptChat undergoes regular automated security audits by using open source software to ensure the highest level of protection.</p>
 				<ul>
 					<li>Annual penetration testing</li>
 					<li>Code security reviews</li>
