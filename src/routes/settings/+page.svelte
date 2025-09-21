@@ -20,6 +20,12 @@
 	let error = $state('');
 	let selectedTheme = $state($currentTheme);
 	
+	// Nuclear delete state
+	let showNuclearConfirm = $state(false);
+	let nuclearConfirmation = $state('');
+	let isDeleting = $state(false);
+	let deleteResult = $state(null);
+	
 	// Subscribe to theme changes
 	$effect(() => {
 		selectedTheme = $currentTheme;
@@ -94,6 +100,63 @@
 		const newTheme = target.value;
 		themeUtils.setTheme(newTheme);
 		selectedTheme = newTheme;
+	}
+	
+	/**
+	 * Perform nuclear delete of all user data
+	 */
+	async function performNuclearDelete() {
+		if (nuclearConfirmation !== 'DELETE_ALL_MY_DATA') {
+			return;
+		}
+		
+		isDeleting = true;
+		deleteResult = null;
+		
+		try {
+			const response = await fetch('/api/user/nuclear-delete', {
+				method: 'DELETE',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					confirmation: nuclearConfirmation
+				})
+			});
+			
+			const result = await response.json();
+			
+			if (response.ok && result.success) {
+				deleteResult = {
+					success: true,
+					message: result.message,
+					summary: result.deletion_summary
+				};
+				
+				// Reset form after success
+				showNuclearConfirm = false;
+				nuclearConfirmation = '';
+				
+				// After 3 seconds, redirect to home or login page
+				setTimeout(() => {
+					window.location.href = '/';
+				}, 3000);
+				
+			} else {
+				deleteResult = {
+					success: false,
+					error: result.error || 'Nuclear delete failed'
+				};
+			}
+		} catch (error) {
+			console.error('Nuclear delete error:', error);
+			deleteResult = {
+				success: false,
+				error: 'Network error occurred'
+			};
+		} finally {
+			isDeleting = false;
+		}
 	}
 </script>
 
@@ -185,6 +248,79 @@
 				
 				<section class="settings-section">
 					<CompleteKeyReset />
+				</section>
+				
+				<section class="settings-section danger-zone">
+					<div class="setting-group">
+						<h2>☢️ Danger Zone</h2>
+						<p>The following actions are <strong>irreversible</strong> and will permanently delete all your data.</p>
+						
+						<div class="nuclear-delete-container">
+							<h3>Nuclear Delete</h3>
+							<p>This will permanently delete <strong>ALL</strong> of your data including:</p>
+							<ul>
+								<li>All your messages and conversations</li>
+								<li>All your uploaded files and attachments</li>
+								<li>Your encryption keys and backups</li>
+								<li>Your account and profile information</li>
+								<li>All SMS notifications and history</li>
+							</ul>
+							
+							<div class="warning-box">
+								<p><strong>⚠️ WARNING:</strong> This action cannot be undone. Your account and all associated data will be permanently removed from our servers.</p>
+							</div>
+							
+							{#if !showNuclearConfirm}
+								<button
+									class="btn-nuclear"
+									onclick={() => showNuclearConfirm = true}
+								>
+									🚨 Nuclear Delete All My Data
+								</button>
+							{:else}
+								<div class="confirm-nuclear">
+									<p>Are you absolutely sure? Type <code>DELETE_ALL_MY_DATA</code> to confirm:</p>
+									<input
+										type="text"
+										bind:value={nuclearConfirmation}
+										placeholder="Type confirmation here..."
+										class="nuclear-input"
+									/>
+									<div class="nuclear-buttons">
+										<button
+											class="btn-cancel"
+											onclick={() => { showNuclearConfirm = false; nuclearConfirmation = ''; }}
+										>
+											Cancel
+										</button>
+										<button
+											class="btn-confirm-nuclear"
+											disabled={nuclearConfirmation !== 'DELETE_ALL_MY_DATA' || isDeleting}
+											onclick={performNuclearDelete}
+										>
+											{isDeleting ? 'Deleting...' : '💥 Confirm Nuclear Delete'}
+										</button>
+									</div>
+								</div>
+							{/if}
+							
+							{#if deleteResult}
+								<div class="delete-result">
+									{#if deleteResult.success}
+										<div class="success-message">
+											<p>✅ Nuclear delete completed successfully!</p>
+											<p>All your data has been permanently removed.</p>
+										</div>
+									{:else}
+										<div class="error-message">
+											<p>❌ Nuclear delete failed:</p>
+											<p>{deleteResult.error}</p>
+										</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					</div>
 				</section>
 			</div>
 		{/if}
@@ -329,6 +465,158 @@
 		border-color: var(--border-secondary);
 	}
 	
+	.danger-zone {
+		border: 2px solid #ef4444;
+		background: rgba(239, 68, 68, 0.05);
+	}
+
+	.danger-zone h2 {
+		color: #dc2626;
+	}
+
+	.nuclear-delete-container {
+		margin-top: 1.5rem;
+	}
+
+	.nuclear-delete-container h3 {
+		color: #dc2626;
+		font-size: 1.125rem;
+		margin-bottom: 1rem;
+	}
+
+	.warning-box {
+		background: rgba(239, 68, 68, 0.1);
+		border: 1px solid #ef4444;
+		border-radius: 0.375rem;
+		padding: 1rem;
+		margin: 1rem 0;
+	}
+
+	.warning-box p {
+		color: #dc2626;
+		margin: 0;
+		font-weight: 500;
+	}
+
+	.btn-nuclear {
+		background: #dc2626;
+		color: white;
+		border: none;
+		padding: 0.75rem 1.5rem;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+
+	.btn-nuclear:hover {
+		background: #b91c1c;
+	}
+
+	.confirm-nuclear {
+		margin-top: 1rem;
+		padding: 1rem;
+		background: rgba(239, 68, 68, 0.05);
+		border-radius: 0.375rem;
+		border: 1px solid #ef4444;
+	}
+
+	.confirm-nuclear p {
+		color: #dc2626;
+		font-weight: 500;
+		margin-bottom: 0.5rem;
+	}
+
+	.confirm-nuclear code {
+		background: rgba(0, 0, 0, 0.1);
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		font-family: monospace;
+	}
+
+	.nuclear-input {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		margin: 0.5rem 0;
+		border: 2px solid #ef4444;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		background: var(--bg-primary);
+		color: var(--text-primary);
+	}
+
+	.nuclear-input:focus {
+		outline: none;
+		border-color: #dc2626;
+		box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+	}
+
+	.nuclear-buttons {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 1rem;
+	}
+
+	.btn-cancel {
+		background: #6b7280;
+		color: white;
+		border: none;
+		padding: 0.5rem 1rem;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: background-color 0.2s;
+		font-size: 0.875rem;
+	}
+
+	.btn-cancel:hover {
+		background: #4b5563;
+	}
+
+	.btn-confirm-nuclear {
+		background: #dc2626;
+		color: white;
+		border: none;
+		padding: 0.5rem 1rem;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: background-color 0.2s;
+		font-weight: 600;
+		font-size: 0.875rem;
+	}
+
+	.btn-confirm-nuclear:hover:not(:disabled) {
+		background: #b91c1c;
+	}
+
+	.btn-confirm-nuclear:disabled {
+		background: #9ca3af;
+		cursor: not-allowed;
+	}
+
+	.delete-result {
+		margin-top: 1rem;
+		padding: 1rem;
+		border-radius: 0.375rem;
+	}
+
+	.success-message {
+		background: rgba(34, 197, 94, 0.1);
+		border: 1px solid #22c55e;
+		color: #15803d;
+	}
+
+	.error-message {
+		background: rgba(239, 68, 68, 0.1);
+		border: 1px solid #ef4444;
+		color: #dc2626;
+	}
+
+	.success-message p,
+	.error-message p {
+		margin: 0.5rem 0;
+	}
+	
 	@media (max-width: 640px) {
 		.settings-page {
 			padding: 1rem 0.5rem;
@@ -344,6 +632,14 @@
 		
 		.setting-group {
 			padding: 1rem;
+		}
+		
+		.nuclear-buttons {
+			flex-direction: column;
+		}
+		
+		.nuclear-input {
+			font-size: 16px; /* Prevent zoom on iOS */
 		}
 	}
 </style>
