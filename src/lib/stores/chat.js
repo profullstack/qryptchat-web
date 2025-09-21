@@ -392,18 +392,32 @@ function createChatStore() {
 		/**
 		 * Mark messages as read
 		 * @param {string[]} messageIds
-		 * @param {string} userId
+		 * @param {string} authUserId - Supabase Auth user ID
 		 */
-		async markMessagesAsRead(messageIds, userId) {
+		async markMessagesAsRead(messageIds, authUserId) {
 			if (!browser || !messageIds.length) return;
 
 			try {
 				const supabase = getSupabase();
 				if (!supabase) throw new Error('Supabase client not available');
 
+				// Get internal user ID from auth user ID
+				const { data: userData, error: userError } = await supabase
+					.from('users')
+					.select('id')
+					.eq('auth_user_id', authUserId)
+					.single();
+
+				if (userError || !userData) {
+					console.error('Failed to get internal user ID:', userError);
+					return;
+				}
+
+				const internalUserId = userData.id;
+
 				const readStatuses = messageIds.map(messageId => ({
 					message_id: messageId,
-					user_id: userId,
+					user_id: internalUserId, // Use internal user ID, not auth user ID
 					status: 'read',
 					timestamp: new Date().toISOString()
 				}));
@@ -411,6 +425,8 @@ function createChatStore() {
 				await supabase
 					.from('message_status')
 					.upsert(readStatuses, { onConflict: 'message_id,user_id' });
+
+				console.log(`Marked ${messageIds.length} messages as read for internal user ${internalUserId}`);
 
 			} catch (error) {
 				console.error('Failed to mark messages as read:', error);
