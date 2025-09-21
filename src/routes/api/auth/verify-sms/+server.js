@@ -354,20 +354,6 @@ export async function POST(event) {
 			user = newUser;
 			isNewUser = true;
 			logger.info('User account created successfully', { userId: newUser.id });
-
-			// Initialize public key record for new user (placeholder for client-side key generation)
-			try {
-				logger.info('Setting up public key infrastructure for new user');
-				await serviceSupabase.rpc('auto_generate_user_public_key', {
-					target_user_id: verifyData.user.id
-				});
-				logger.info('Public key infrastructure initialized successfully');
-			} catch (keySetupError) {
-				// Log error but don't fail account creation
-				logger.error('Failed to set up public key infrastructure', { error: keySetupError });
-				console.error('Public key setup error:', keySetupError);
-				// Account creation continues - keys can be set up later when user visits app
-			}
 		}
 
 		logger.info('SMS verification completed successfully', {

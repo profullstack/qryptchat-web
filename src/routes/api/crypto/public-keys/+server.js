@@ -122,10 +122,11 @@ export async function GET({ url, request }) {
 			return json({ public_key: null });
 		}
 
-		// Fetch public key using auth_user_id with flexible type lookup
-		const { data: keyData, error } = await getServiceRoleClient()
-			.rpc('get_user_public_key_any_type', {
-				target_user_id: userData.auth_user_id
+		// Fetch public key using auth_user_id
+		const { data: publicKey, error } = await getServiceRoleClient()
+			.rpc('get_user_public_key', {
+				target_user_id: userData.auth_user_id,
+				key_type_param: 'ML-KEM-768'
 			});
 
 		if (error) {
@@ -133,10 +134,7 @@ export async function GET({ url, request }) {
 			return json({ error: 'Failed to fetch public key' }, { status: 500 });
 		}
 
-		// Extract public key from the result
-		const publicKey = keyData && keyData.length > 0 ? keyData[0].public_key : null;
-
-		return json({
+		return json({ 
 			public_key: publicKey,
 			user_id: userId
 		});
@@ -184,18 +182,17 @@ export async function POST({ request }) {
 					continue;
 				}
 
-				// Fetch public key using auth_user_id with flexible type lookup
-				const { data: keyData, error } = await getServiceRoleClient()
-					.rpc('get_user_public_key_any_type', {
-						target_user_id: userData.auth_user_id
+				// Fetch public key using auth_user_id
+				const { data: publicKey, error } = await getServiceRoleClient()
+					.rpc('get_user_public_key', {
+						target_user_id: userData.auth_user_id,
+						key_type_param: 'ML-KEM-768'
 					});
 
 				if (error) {
 					console.error(`Error fetching public key for user ${userId}:`, error);
 					publicKeys[userId] = null;
 				} else {
-					// Extract public key from the result
-					const publicKey = keyData && keyData.length > 0 ? keyData[0].public_key : null;
 					publicKeys[userId] = publicKey;
 				}
 
