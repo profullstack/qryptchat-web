@@ -41,7 +41,7 @@
 			<div class="feature-item">
 				<div class="feature-number">01</div>
 				<h3>Post-Quantum Cryptography</h3>
-				<p>Uses CRYSTALS-Kyber and CRYSTALS-Dilithium algorithms approved by NIST for quantum resistance.</p>
+				<p>Uses ML-KEM-1024 (CRYSTALS-Kyber) and CRYSTALS-Dilithium algorithms approved by NIST for quantum resistance.</p>
 			</div>
 			<div class="feature-item">
 				<div class="feature-number">02</div>

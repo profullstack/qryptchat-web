@@ -10,25 +10,35 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    current_user_id UUID;
+    current_auth_user_id UUID;
+    current_internal_user_id UUID;
     deleted_counts JSON;
     temp_count INTEGER;
 BEGIN
-    -- Get the current authenticated user
-    current_user_id := auth.uid();
+    -- Get the current authenticated user (auth user ID)
+    current_auth_user_id := auth.uid();
     
     -- Security check: ensure user is authenticated
-    IF current_user_id IS NULL THEN
+    IF current_auth_user_id IS NULL THEN
         RAISE EXCEPTION 'User must be authenticated to delete data';
+    END IF;
+    
+    -- Get the internal user ID for the authenticated user
+    SELECT id INTO current_internal_user_id
+    FROM users
+    WHERE auth_user_id = current_auth_user_id;
+    
+    IF current_internal_user_id IS NULL THEN
+        RAISE EXCEPTION 'User profile not found';
     END IF;
     
     -- If no target specified, delete current user's data
     IF target_user_id IS NULL THEN
-        target_user_id := current_user_id;
+        target_user_id := current_internal_user_id;
     END IF;
     
-    -- Security check: users can only delete their own data
-    IF target_user_id != current_user_id THEN
+    -- Security check: users can only delete their own data (compare internal user IDs)
+    IF target_user_id != current_internal_user_id THEN
         RAISE EXCEPTION 'Users can only delete their own data';
     END IF;
     

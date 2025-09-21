@@ -3,14 +3,28 @@ import { createSupabaseServerClient } from '$lib/supabase.js';
 
 export async function DELETE(event) {
 	try {
-		const supabase = createSupabaseServerClient(event);
-		
-		// Get the authenticated user from session
-		const { data: { user }, error: authError } = await supabase.auth.getUser();
-		
-		if (authError || !user) {
-			return json({ error: 'Not authenticated' }, { status: 401 });
+		// Get authorization header
+		const authHeader = event.request.headers.get('authorization');
+		if (!authHeader?.startsWith('Bearer ')) {
+			return json({ error: 'Missing or invalid authorization header' }, { status: 401 });
 		}
+
+		// Create Supabase client and set session
+		const supabase = createSupabaseServerClient(event);
+		const token = authHeader.replace('Bearer ', '');
+
+		// Set the session to ensure auth.uid() is available for RLS
+		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+		if (authError || !user) {
+			console.error('Auth error:', authError);
+			return json({ error: 'Invalid or expired token' }, { status: 401 });
+		}
+
+		// Set the session for RLS context
+		await supabase.auth.setSession({
+			access_token: token,
+			refresh_token: '' // Not needed for this operation
+		});
 		
 		// Get user profile from database to get internal user ID
 		const { data: profile, error: profileError } = await supabase

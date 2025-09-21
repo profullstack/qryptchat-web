@@ -19,7 +19,7 @@
 				<h2>🔒 Post-Quantum Cryptography</h2>
 				<p>QryptChat uses NIST-approved post-quantum cryptographic algorithms to protect your messages against both classical and quantum computer attacks.</p>
 				<ul>
-					<li>CRYSTALS-Kyber for key encapsulation</li>
+					<li>ML-KEM-1024 (CRYSTALS-Kyber) for key encapsulation</li>
 					<li>CRYSTALS-Dilithium for digital signatures</li>
 					<li>SPHINCS+ for hash-based signatures</li>
 				</ul>
