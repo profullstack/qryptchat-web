@@ -7,8 +7,6 @@
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 	import { voiceCallManager } from '$lib/stores/voice-call.js';
-	import IncomingCallModal from '$lib/components/voice-call/IncomingCallModal.svelte';
-	import ActiveCallInterface from '$lib/components/voice-call/ActiveCallInterface.svelte';
 
 	/** @type {import('./$types').PageData} */
 	export let data;
@@ -572,9 +570,6 @@
 	</div>
 </div>
 
-<!-- Voice call components -->
-<IncomingCallModal />
-<ActiveCallInterface />
 
 <style>
 	.profile-container {

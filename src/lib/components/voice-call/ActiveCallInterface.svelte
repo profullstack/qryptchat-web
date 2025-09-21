@@ -1,5 +1,5 @@
 <script>
-	import { isInCall, currentCall, callStats, voiceCallManager } from '$lib/stores/voice-call.js';
+	import { isCallInProgress, currentCall, callStats, voiceCallManager } from '$lib/stores/voice-call.js';
 	import { createEventDispatcher } from 'svelte';
 
 	const dispatch = createEventDispatcher();
@@ -7,7 +7,7 @@
 	let callData = null;
 
 	// Subscribe to current call changes
-	$: if ($isInCall && $currentCall) {
+	$: if ($isCallInProgress && $currentCall) {
 		callData = $currentCall;
 	}
 
@@ -47,7 +47,7 @@
 	}
 </script>
 
-{#if $isInCall && callData}
+{#if $isCallInProgress && callData}
 	<!-- Active call overlay -->
 	<div class="active-call-overlay" role="dialog" aria-modal="true" aria-labelledby="active-call-title">
 		<div class="call-interface">

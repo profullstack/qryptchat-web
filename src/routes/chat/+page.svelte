@@ -9,6 +9,7 @@
 	import MessageList from '$lib/components/chat/MessageList.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
 	import AddParticipantModal from '$lib/components/chat/AddParticipantModal.svelte';
+	import { voiceCallManager } from '$lib/stores/voice-call.js';
 	
 	// Import debug utilities for development
 	import '$lib/debug/encryption-debug.js';
@@ -57,6 +58,60 @@
 		console.log('Participants added:', event.detail);
 		// The conversation will be updated via WebSocket, so we don't need to manually refresh
 		showAddParticipantModal = false;
+	}
+
+	/**
+	 * Start group voice call
+	 */
+	async function handleGroupVoiceCall() {
+		if (!activeConversationId || !currentConversation) return;
+		
+		try {
+			console.log('Starting group voice call for conversation:', activeConversationId);
+			
+			// For group calls, we use the conversation name and first participant as representative
+			const participantName = currentConversation.name || 'Group Chat';
+			const firstParticipant = currentConversation.participants?.[0];
+			const participantId = firstParticipant?.id || activeConversationId;
+			
+			await voiceCallManager.startCall(
+				participantId,
+				participantName,
+				'voice',
+				null // No single avatar for group calls
+			);
+		} catch (error) {
+			console.error('Failed to start group voice call:', error);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			alert(`Failed to start group voice call: ${errorMessage}`);
+		}
+	}
+
+	/**
+	 * Start group video call
+	 */
+	async function handleGroupVideoCall() {
+		if (!activeConversationId || !currentConversation) return;
+		
+		try {
+			console.log('Starting group video call for conversation:', activeConversationId);
+			
+			// For group calls, we use the conversation name and first participant as representative
+			const participantName = currentConversation.name || 'Group Chat';
+			const firstParticipant = currentConversation.participants?.[0];
+			const participantId = firstParticipant?.id || activeConversationId;
+			
+			await voiceCallManager.startCall(
+				participantId,
+				participantName,
+				'video',
+				null // No single avatar for group calls
+			);
+		} catch (error) {
+			console.error('Failed to start group video call:', error);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			alert(`Failed to start group video call: ${errorMessage}`);
+		}
 	}
 
 	// Check if current conversation supports adding participants

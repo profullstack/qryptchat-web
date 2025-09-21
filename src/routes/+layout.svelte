@@ -3,6 +3,8 @@
 	import Navbar from '$lib/components/Navbar.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import PWAToastManager from '$lib/components/PWAToastManager.svelte';
+	import IncomingCallModal from '$lib/components/voice-call/IncomingCallModal.svelte';
+	import ActiveCallInterface from '$lib/components/voice-call/ActiveCallInterface.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { currentTheme, themeUtils } from '$lib/stores/theme.js';
@@ -48,6 +50,10 @@
 	{/if}
 	<PWAToastManager />
 </div>
+
+<!-- Global voice call components -->
+<IncomingCallModal />
+<ActiveCallInterface />
 
 <style>
 	.app {
