@@ -22,12 +22,25 @@ export async function GET(event) {
 			({ data, error } = await supabase.rpc('get_user_archived_conversations', {
 				user_uuid: user.id
 			}));
-		} else {
-			// Call the enhanced conversations function with archive options
-			({ data, error } = await supabase.rpc('get_user_conversations_enhanced', {
+		} else if (includeArchived) {
+			// Call the new function with archive filtering
+			({ data, error } = await supabase.rpc('get_conversations_with_archive_support', {
 				user_uuid: user.id,
 				include_archived: includeArchived
 			}));
+		} else {
+			// Use original function for backward compatibility and add archive fields in frontend
+			const { data: conversations, error: convError } = await supabase.rpc('get_user_conversations_enhanced', {
+				user_uuid: user.id
+			});
+			
+			// Add default archive fields to maintain consistency with frontend expectations
+			data = conversations?.map(conv => ({
+				...conv,
+				is_archived: false,
+				archived_at: null
+			})) || [];
+			error = convError;
 		}
 
 		if (error) {

@@ -73,8 +73,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Enhanced get_user_conversations function that excludes archived conversations by default
-CREATE OR REPLACE FUNCTION get_user_conversations_enhanced(
+-- New function for getting conversations with archive data (does not modify existing functions)
+CREATE OR REPLACE FUNCTION get_conversations_with_archive_support(
     user_uuid UUID,
     include_archived BOOLEAN DEFAULT FALSE
 )
@@ -97,21 +97,21 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         c.id as conversation_id,
         c.type as conversation_type,
-        CASE 
-            WHEN c.type = 'direct' THEN 
-                (SELECT u.display_name FROM users u 
-                 JOIN conversation_participants cp ON u.id = cp.user_id 
+        CASE
+            WHEN c.type = 'direct' THEN
+                (SELECT u.display_name FROM users u
+                 JOIN conversation_participants cp ON u.id = cp.user_id
                  WHERE cp.conversation_id = c.id AND u.id != user_uuid LIMIT 1)
             WHEN c.type = 'room' THEN c.name
             ELSE c.name
         END as conversation_name,
-        CASE 
-            WHEN c.type = 'direct' THEN 
-                (SELECT u.avatar_url FROM users u 
-                 JOIN conversation_participants cp ON u.id = cp.user_id 
+        CASE
+            WHEN c.type = 'direct' THEN
+                (SELECT u.avatar_url FROM users u
+                 JOIN conversation_participants cp ON u.id = cp.user_id
                  WHERE cp.conversation_id = c.id AND u.id != user_uuid LIMIT 1)
             ELSE c.avatar_url
         END as conversation_avatar_url,
@@ -123,10 +123,10 @@ BEGIN
         lm.sender_id as latest_message_sender_id,
         lu.username as latest_message_sender_username,
         lm.created_at as latest_message_created_at,
-        (SELECT COUNT(*) FROM messages m 
+        (SELECT COUNT(*) FROM messages m
          LEFT JOIN message_status ms ON m.id = ms.message_id AND ms.user_id = user_uuid
-         WHERE m.conversation_id = c.id 
-         AND m.sender_id != user_uuid 
+         WHERE m.conversation_id = c.id
+         AND m.sender_id != user_uuid
          AND (ms.status IS NULL OR ms.status != 'read')
          AND m.deleted_at IS NULL) as unread_count,
         (cp.archived_at IS NOT NULL) as is_archived,
@@ -135,17 +135,17 @@ BEGIN
     JOIN conversation_participants cp ON c.id = cp.conversation_id
     LEFT JOIN groups g ON c.group_id = g.id
     LEFT JOIN LATERAL (
-        SELECT m.* FROM messages m 
-        WHERE m.conversation_id = c.id 
+        SELECT m.* FROM messages m
+        WHERE m.conversation_id = c.id
         AND m.deleted_at IS NULL
-        ORDER BY m.created_at DESC 
+        ORDER BY m.created_at DESC
         LIMIT 1
     ) lm ON true
     LEFT JOIN users lu ON lm.sender_id = lu.id
-    WHERE cp.user_id = user_uuid 
+    WHERE cp.user_id = user_uuid
     AND cp.left_at IS NULL
     AND (include_archived = TRUE OR cp.archived_at IS NULL)
-    ORDER BY 
+    ORDER BY
         CASE WHEN cp.archived_at IS NOT NULL THEN 1 ELSE 0 END,
         COALESCE(lm.created_at, c.created_at) DESC;
 END;
@@ -225,12 +225,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Grant permissions
 GRANT EXECUTE ON FUNCTION archive_conversation(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION unarchive_conversation(UUID, UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION get_user_conversations_enhanced(UUID, BOOLEAN) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_conversations_with_archive_support(UUID, BOOLEAN) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_user_archived_conversations(UUID) TO authenticated;
 
 -- Add comments for documentation
 COMMENT ON FUNCTION archive_conversation(UUID, UUID) IS 'Archives a conversation for a specific user';
 COMMENT ON FUNCTION unarchive_conversation(UUID, UUID) IS 'Unarchives a conversation for a specific user';
-COMMENT ON FUNCTION get_user_conversations_enhanced(UUID, BOOLEAN) IS 'Gets user conversations with optional inclusion of archived conversations';
+COMMENT ON FUNCTION get_conversations_with_archive_support(UUID, BOOLEAN) IS 'Gets user conversations with archive support and filtering';
 COMMENT ON FUNCTION get_user_archived_conversations(UUID) IS 'Gets only archived conversations for a user';
 COMMENT ON COLUMN conversation_participants.archived_at IS 'When the user archived this conversation (NULL = not archived)';
