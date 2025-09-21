@@ -25,11 +25,20 @@ import {
 	handleLoadMessages, 
 	handleLoadMoreMessages 
 } from './handlers/messages.js';
-import { 
-	handleTypingStart, 
+import {
+	handleTypingStart,
 	handleTypingStop,
-	cleanupTypingIndicators 
+	cleanupTypingIndicators
 } from './handlers/typing.js';
+import {
+	handleCallOffer,
+	handleCallAnswer,
+	handleCallDecline,
+	handleCallEnd,
+	handleIceCandidate,
+	handleSdpOffer,
+	handleSdpAnswer
+} from './handlers/voice-calls.js';
 
 /**
  * WebSocket server class
@@ -266,6 +275,41 @@ export class ChatWebSocketServer {
 					const pongResponse = createPongMessage(message.requestId);
 					ws.send(serializeMessage(pongResponse));
 					context.lastPing = Date.now();
+					break;
+
+				case MESSAGE_TYPES.CALL_OFFER:
+					console.log('📥 [SERVER] Routing to CALL_OFFER handler');
+					await handleCallOffer(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.CALL_ANSWER:
+					console.log('📥 [SERVER] Routing to CALL_ANSWER handler');
+					await handleCallAnswer(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.CALL_DECLINE:
+					console.log('📥 [SERVER] Routing to CALL_DECLINE handler');
+					await handleCallDecline(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.CALL_END:
+					console.log('📥 [SERVER] Routing to CALL_END handler');
+					await handleCallEnd(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.CALL_ICE_CANDIDATE:
+					console.log('📥 [SERVER] Routing to CALL_ICE_CANDIDATE handler');
+					await handleIceCandidate(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.CALL_SDP_OFFER:
+					console.log('📥 [SERVER] Routing to CALL_SDP_OFFER handler');
+					await handleSdpOffer(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.CALL_SDP_ANSWER:
+					console.log('📥 [SERVER] Routing to CALL_SDP_ANSWER handler');
+					await handleSdpAnswer(ws, message, context);
 					break;
 
 				default:

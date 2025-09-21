@@ -58,7 +58,17 @@ export const MESSAGE_TYPES = {
 	KEY_SHARE: 'key_share',
 	KEY_REQUEST: 'key_request',
 	KEY_RESPONSE: 'key_response',
-	KEY_INIT: 'key_init'
+	KEY_INIT: 'key_init',
+
+	// Voice/Video calling
+	CALL_OFFER: 'call_offer',
+	CALL_ANSWER: 'call_answer',
+	CALL_DECLINE: 'call_decline',
+	CALL_END: 'call_end',
+	CALL_ICE_CANDIDATE: 'call_ice_candidate',
+	CALL_SDP_OFFER: 'call_sdp_offer',
+	CALL_SDP_ANSWER: 'call_sdp_answer',
+	CALL_STATUS: 'call_status'
 };
 
 /**

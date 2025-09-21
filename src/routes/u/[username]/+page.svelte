@@ -6,6 +6,9 @@
 	import { browser } from '$app/environment';
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
+	import { voiceCallManager } from '$lib/stores/voice-call.js';
+	import IncomingCallModal from '$lib/components/voice-call/IncomingCallModal.svelte';
+	import ActiveCallInterface from '$lib/components/voice-call/ActiveCallInterface.svelte';
 
 	/** @type {import('./$types').PageData} */
 	export let data;
@@ -250,6 +253,50 @@
 			loading = false;
 		}
 	}
+
+	/**
+	 * Handle voice call initiation
+	 */
+	async function handleVoiceCall() {
+		if (!profileUser?.id || !$isAuthenticated) return;
+		
+		try {
+			console.log('Initiating voice call with:', profileUser.username);
+			
+			await voiceCallManager.startCall(
+				profileUser.id,
+				profileUser.displayName || profileUser.username,
+				'voice',
+				profileUser.avatarUrl
+			);
+		} catch (error) {
+			console.error('Failed to start voice call:', error);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			alert(`Failed to start voice call: ${errorMessage}`);
+		}
+	}
+
+	/**
+	 * Handle video call initiation
+	 */
+	async function handleVideoCall() {
+		if (!profileUser?.id || !$isAuthenticated) return;
+		
+		try {
+			console.log('Initiating video call with:', profileUser.username);
+			
+			await voiceCallManager.startCall(
+				profileUser.id,
+				profileUser.displayName || profileUser.username,
+				'video',
+				profileUser.avatarUrl
+			);
+		} catch (error) {
+			console.error('Failed to start video call:', error);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			alert(`Failed to start video call: ${errorMessage}`);
+		}
+	}
 </script>
 
 <svelte:head>
@@ -322,19 +369,34 @@
 						</div>
 					{/if}
 				{:else if $isAuthenticated}
-					<button class="btn btn-primary" on:click={handleSendMessage} disabled={loading}>
-						{#if loading}
-							<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M21 12a9 9 0 11-6.219-8.56"/>
+					<div class="profile-actions-grid">
+						<button class="btn btn-primary" on:click={handleSendMessage} disabled={loading}>
+							{#if loading}
+								<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M21 12a9 9 0 11-6.219-8.56"/>
+								</svg>
+							{:else}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="m3 3 3 9-3 9 19-9Z"/>
+									<path d="m6 12 13 0"/>
+								</svg>
+							{/if}
+							Message
+						</button>
+						
+						<button class="btn btn-call-voice" on:click={handleVoiceCall} title="Voice Call">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
 							</svg>
-						{:else}
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="m3 3 3 9-3 9 19-9Z"/>
-								<path d="m6 12 13 0"/>
+						</button>
+						
+						<button class="btn btn-call-video" on:click={handleVideoCall} title="Video Call">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polygon points="23 7 16 12 23 17 23 7"/>
+								<rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
 							</svg>
-						{/if}
-						Send Message
-					</button>
+						</button>
+					</div>
 				{/if}
 			</div>
 		</div>
@@ -509,6 +571,10 @@
 		</div>
 	</div>
 </div>
+
+<!-- Voice call components -->
+<IncomingCallModal />
+<ActiveCallInterface />
 
 <style>
 	.profile-container {
@@ -915,6 +981,82 @@
 
 		.copy-btn {
 			align-self: flex-start;
+		}
+	}
+
+	/* Profile Actions Grid */
+	.profile-actions-grid {
+		display: flex;
+		gap: var(--space-3);
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.btn-call-voice,
+	.btn-call-video {
+		padding: var(--space-3);
+		border: none;
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 48px;
+		height: 44px;
+		background: var(--color-bg-secondary);
+		color: var(--color-text-primary);
+		border: 1px solid var(--color-border-primary);
+	}
+
+	.btn-call-voice:hover {
+		background: var(--color-success);
+		color: white;
+		border-color: var(--color-success);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+	}
+
+	.btn-call-video:hover {
+		background: var(--color-brand-primary);
+		color: white;
+		border-color: var(--color-brand-primary);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+	}
+
+	.btn-call-voice:focus,
+	.btn-call-video:focus {
+		outline: none;
+		ring: 2px solid var(--color-brand-primary);
+	}
+
+	@media (max-width: 640px) {
+		.profile-actions-grid {
+			flex-direction: column;
+			width: 100%;
+		}
+
+		.profile-actions-grid .btn {
+			width: 100%;
+			justify-content: center;
+		}
+
+		.btn-call-voice,
+		.btn-call-video {
+			width: 100%;
+			justify-content: center;
+			gap: var(--space-2);
+		}
+
+		.btn-call-voice::after {
+			content: "Voice Call";
+			font-size: 0.875rem;
+		}
+
+		.btn-call-video::after {
+			content: "Video Call";
+			font-size: 0.875rem;
 		}
 	}
 </style>
