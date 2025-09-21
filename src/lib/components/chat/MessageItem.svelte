@@ -137,17 +137,24 @@
 			const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
 			console.log(`📁 [DOWNLOAD] Available encrypted keys:`, Object.keys(encryptedContents));
 
-			// Find user's encrypted copy
-			const { user } = await import('$lib/stores/auth.js');
-			let currentUser;
-			user.subscribe(u => currentUser = u)();
+			// Get current user from WebSocket store (which has the correct user data)
+			const { currentUser: wsUser } = await import('$lib/stores/websocket-chat.js');
+			let user = /** @type {any} */ (null);
+			const unsubscribe = wsUser.subscribe(/** @type {any} */ (u) => user = u);
+			unsubscribe();
 			
-			// Use hardcoded fallback to fix compilation - will use WebSocket user in runtime
-			const userId = 'fallback';
+			if (!user?.id) {
+				throw new Error('User not authenticated');
+			}
+			
+			console.log(`📁 [DOWNLOAD] Trying to decrypt for user: ${user.id}`);
+			
+			// Try to find user's encrypted copy (encrypted contents are keyed by internal user ID)
 			const userEncryptedCopy = encryptedContents[user.id];
 			
 			if (!userEncryptedCopy) {
-				console.error(`📁 [DOWNLOAD] No encrypted copy found for user: ${userId}`);
+				console.error(`📁 [DOWNLOAD] No encrypted copy found for user: ${user.id}`);
+				console.error(`📁 [DOWNLOAD] Available keys:`, Object.keys(encryptedContents));
 				throw new Error('No encrypted file copy found for user');
 			}
 
