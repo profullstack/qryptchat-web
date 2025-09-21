@@ -270,24 +270,33 @@
 	{#if selectedFiles.length > 0}
 		<div class="selected-files">
 			{#each selectedFiles as file, index}
-				<div class="file-preview">
+				<div class="file-preview" class:uploading={isUploadingFiles}>
 					<div class="file-info">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-						</svg>
+						{#if isUploadingFiles}
+							<div class="file-upload-spinner"></div>
+						{:else}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+							</svg>
+						{/if}
 						<span class="file-name">{file.name}</span>
 						<span class="file-size">({formatFileSize(file.size)})</span>
+						{#if isUploadingFiles}
+							<span class="upload-status">Encrypting & uploading...</span>
+						{/if}
 					</div>
-					<button 
-						type="button" 
-						class="remove-file-btn"
-						onclick={() => removeSelectedFile(index)}
-						title="Remove file"
-					>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12 19,6.41Z"/>
-						</svg>
-					</button>
+					{#if !isUploadingFiles}
+						<button
+							type="button"
+							class="remove-file-btn"
+							onclick={() => removeSelectedFile(index)}
+							title="Remove file"
+						>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12 19,6.41Z"/>
+							</svg>
+						</button>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -379,6 +388,12 @@
 		border-radius: 0.5rem;
 		padding: 0.5rem 0.75rem;
 		margin-bottom: 0.5rem;
+		transition: all 0.2s ease;
+	}
+
+	.file-preview.uploading {
+		background: var(--color-primary-50, #f0f9ff);
+		border-color: var(--color-primary-200, #bfdbfe);
 	}
 
 	.file-info {
@@ -400,6 +415,22 @@
 	.file-size {
 		color: var(--color-text-secondary);
 		font-size: 0.8rem;
+	}
+
+	.upload-status {
+		color: var(--color-primary-600, #2563eb);
+		font-size: 0.8rem;
+		font-weight: 500;
+		margin-left: 0.5rem;
+	}
+
+	.file-upload-spinner {
+		width: 16px;
+		height: 16px;
+		border: 2px solid var(--color-primary-200, #bfdbfe);
+		border-top: 2px solid var(--color-primary-500, #3b82f6);
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
 	}
 
 	.remove-file-btn {
