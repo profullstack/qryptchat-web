@@ -1,9 +1,7 @@
--- Delete Encrypted Data Only Migration
--- This migration creates a function that deletes only encrypted data (messages, files)
--- while preserving the user account and profile information
+-- Fix Column Names in Delete Function
+-- Update the function to use correct column names from the database
 
--- Create the encrypted data delete function
-CREATE OR REPLACE FUNCTION delete_encrypted_data_only(authenticated_user_id UUID DEFAULT NULL, target_user_id UUID DEFAULT NULL)
+CREATE OR REPLACE FUNCTION delete_encrypted_data_only(authenticated_user_id UUID, target_user_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -14,12 +12,12 @@ DECLARE
     temp_count INTEGER;
 BEGIN
     -- Security check: ensure both user IDs are provided
-    IF target_user_id IS NULL THEN
-        RAISE EXCEPTION 'Target user ID is required';
-    END IF;
-    
     IF authenticated_user_id IS NULL THEN
         RAISE EXCEPTION 'Authenticated user ID is required';
+    END IF;
+    
+    IF target_user_id IS NULL THEN
+        RAISE EXCEPTION 'Target user ID is required';
     END IF;
     
     -- Security check: users can only delete their own data
@@ -32,16 +30,11 @@ BEGIN
         RAISE EXCEPTION 'User not found';
     END IF;
     
-    -- Verify user exists
-    IF NOT EXISTS (SELECT 1 FROM users WHERE id = target_user_id) THEN
-        RAISE EXCEPTION 'User not found';
-    END IF;
-    
     -- Delete encrypted data in proper order (respecting foreign keys)
     -- Focus only on encrypted/sensitive data, preserve account structure
     
-    -- 1. Delete message recipients (encrypted content for user)
-    DELETE FROM message_recipients WHERE user_id = target_user_id;
+    -- 1. Delete message recipients (encrypted content for user) - uses recipient_user_id
+    DELETE FROM message_recipients WHERE recipient_user_id = target_user_id;
     GET DIAGNOSTICS temp_count = ROW_COUNT;
     deleted_counts := JSON_BUILD_OBJECT('message_recipients', temp_count);
     
@@ -75,8 +68,8 @@ BEGIN
     GET DIAGNOSTICS temp_count = ROW_COUNT;
     deleted_counts := deleted_counts || JSON_BUILD_OBJECT('key_access_log', temp_count);
     
-    -- 8. Delete deliveries (message delivery tracking)
-    DELETE FROM deliveries WHERE user_id = target_user_id;
+    -- 8. Delete deliveries (message delivery tracking) - uses recipient_user_id
+    DELETE FROM deliveries WHERE recipient_user_id = target_user_id;
     GET DIAGNOSTICS temp_count = ROW_COUNT;
     deleted_counts := deleted_counts || JSON_BUILD_OBJECT('deliveries', temp_count);
     
@@ -100,17 +93,16 @@ BEGIN
     GET DIAGNOSTICS temp_count = ROW_COUNT;
     deleted_counts := deleted_counts || JSON_BUILD_OBJECT('conversations', temp_count);
     
-    -- NOTE: We preserve:
-    -- - User account (users table)
-    -- - User profile information
-    -- - SMS notification preferences
-    -- - Group memberships (but remove if they created groups with no other members)
-    -- - Basic settings and preferences
+    -- 12. Delete voice calls where user is caller or callee
+    DELETE FROM voice_calls WHERE caller_id = target_user_id OR callee_id = target_user_id;
+    GET DIAGNOSTICS temp_count = ROW_COUNT;
+    deleted_counts := deleted_counts || JSON_BUILD_OBJECT('voice_calls', temp_count);
     
     -- Return summary of what was deleted
     RETURN JSON_BUILD_OBJECT(
         'success', true,
-        'user_id', target_user_id,
+        'authenticated_user_id', authenticated_user_id,
+        'target_user_id', target_user_id,
         'deleted_at', NOW(),
         'scope', 'encrypted_data_only',
         'preserved', 'User account and profile remain intact',
@@ -124,8 +116,6 @@ EXCEPTION
 END;
 $$;
 
--- Grant execute permission to authenticated users
+-- Update function grants and comments
 GRANT EXECUTE ON FUNCTION delete_encrypted_data_only(UUID, UUID) TO authenticated;
-
--- Add comment explaining the function
-COMMENT ON FUNCTION delete_encrypted_data_only(UUID, UUID) IS 'Deletes only encrypted data (messages, files, keys) while preserving user account and profile. Users can only delete their own data. Requires both target_user_id and authenticated_user_id for security validation.';
+COMMENT ON FUNCTION delete_encrypted_data_only(UUID, UUID) IS 'Deletes only encrypted data (messages, files, keys) while preserving user account and profile. Uses correct column names: recipient_user_id for message_recipients and deliveries tables.';

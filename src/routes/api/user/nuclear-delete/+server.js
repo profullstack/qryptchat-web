@@ -135,8 +135,8 @@ export async function DELETE({ request }) {
 		// Pass both authenticated and target user IDs for security validation
 		const { data: result, error: deleteError } = await createServiceRoleClient()
 			.rpc('delete_encrypted_data_only', {
-				target_user_id: userId,
-				authenticated_user_id: userId  // Must match target_user_id for security
+				authenticated_user_id: userId,  // Who is requesting the deletion
+				target_user_id: userId          // Whose data to delete (must match for security)
 			});
 		
 		if (deleteError) {

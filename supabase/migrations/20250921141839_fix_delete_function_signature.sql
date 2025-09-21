@@ -1,9 +1,12 @@
--- Delete Encrypted Data Only Migration
--- This migration creates a function that deletes only encrypted data (messages, files)
--- while preserving the user account and profile information
+-- Fix Delete Function Signature Migration
+-- Drop and recreate the function with correct parameter order
 
--- Create the encrypted data delete function
-CREATE OR REPLACE FUNCTION delete_encrypted_data_only(authenticated_user_id UUID DEFAULT NULL, target_user_id UUID DEFAULT NULL)
+-- Drop the existing function (with old signature)
+DROP FUNCTION IF EXISTS delete_encrypted_data_only(UUID);
+DROP FUNCTION IF EXISTS delete_encrypted_data_only(UUID, UUID);
+
+-- Recreate with correct signature: authenticated_user_id first, target_user_id second
+CREATE OR REPLACE FUNCTION delete_encrypted_data_only(authenticated_user_id UUID, target_user_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -14,22 +17,17 @@ DECLARE
     temp_count INTEGER;
 BEGIN
     -- Security check: ensure both user IDs are provided
-    IF target_user_id IS NULL THEN
-        RAISE EXCEPTION 'Target user ID is required';
-    END IF;
-    
     IF authenticated_user_id IS NULL THEN
         RAISE EXCEPTION 'Authenticated user ID is required';
+    END IF;
+    
+    IF target_user_id IS NULL THEN
+        RAISE EXCEPTION 'Target user ID is required';
     END IF;
     
     -- Security check: users can only delete their own data
     IF target_user_id != authenticated_user_id THEN
         RAISE EXCEPTION 'Users can only delete their own data';
-    END IF;
-    
-    -- Verify user exists
-    IF NOT EXISTS (SELECT 1 FROM users WHERE id = target_user_id) THEN
-        RAISE EXCEPTION 'User not found';
     END IF;
     
     -- Verify user exists
@@ -100,17 +98,11 @@ BEGIN
     GET DIAGNOSTICS temp_count = ROW_COUNT;
     deleted_counts := deleted_counts || JSON_BUILD_OBJECT('conversations', temp_count);
     
-    -- NOTE: We preserve:
-    -- - User account (users table)
-    -- - User profile information
-    -- - SMS notification preferences
-    -- - Group memberships (but remove if they created groups with no other members)
-    -- - Basic settings and preferences
-    
     -- Return summary of what was deleted
     RETURN JSON_BUILD_OBJECT(
         'success', true,
-        'user_id', target_user_id,
+        'authenticated_user_id', authenticated_user_id,
+        'target_user_id', target_user_id,
         'deleted_at', NOW(),
         'scope', 'encrypted_data_only',
         'preserved', 'User account and profile remain intact',
@@ -128,4 +120,4 @@ $$;
 GRANT EXECUTE ON FUNCTION delete_encrypted_data_only(UUID, UUID) TO authenticated;
 
 -- Add comment explaining the function
-COMMENT ON FUNCTION delete_encrypted_data_only(UUID, UUID) IS 'Deletes only encrypted data (messages, files, keys) while preserving user account and profile. Users can only delete their own data. Requires both target_user_id and authenticated_user_id for security validation.';
+COMMENT ON FUNCTION delete_encrypted_data_only(UUID, UUID) IS 'Deletes only encrypted data (messages, files, keys) while preserving user account and profile. Users can only delete their own data. Parameters: authenticated_user_id, target_user_id (must match for security).';
