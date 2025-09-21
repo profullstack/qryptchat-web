@@ -12,7 +12,17 @@ export async function GET(event) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		// Get the internal user ID first
+		// Call the original working function
+		const { data, error } = await supabase.rpc('get_user_conversations_enhanced', {
+			user_uuid: user.id
+		});
+
+		if (error) {
+			console.error('Database error:', error);
+			return json({ error: 'Failed to load conversations' }, { status: 500 });
+		}
+
+		// Get internal user ID first
 		const { data: internalUser } = await supabase
 			.from('users')
 			.select('id')
@@ -23,62 +33,34 @@ export async function GET(event) {
 			return json({ conversations: [] });
 		}
 
-		// Query conversations directly to avoid function conflicts
-		const { data: participantData, error } = await supabase
-			.from('conversation_participants')
-			.select(`
-				conversation_id,
-				archived_at,
-				conversations!inner(
-					id,
-					type,
-					name,
-					group_id,
-					created_at,
-					groups(name)
-				)
-			`)
-			.eq('user_id', internalUser.id)
-			.is('left_at', null);
+		// Get archive data separately for each conversation using internal user ID
+		const conversationsWithArchive = await Promise.all(
+			(data || []).map(async (conv) => {
+				// Get archive status for this user and conversation
+				const { data: participantData } = await supabase
+					.from('conversation_participants')
+					.select('archived_at')
+					.eq('conversation_id', conv.conversation_id)
+					.eq('user_id', internalUser.id) // Use internal user ID, not auth user ID
+					.maybeSingle();
 
-		if (error) {
-			console.error('Database error:', error);
-			return json({ error: 'Failed to load conversations' }, { status: 500 });
-		}
+				return {
+					...conv,
+					id: conv.conversation_id, // Add 'id' field for frontend compatibility
+					name: conv.conversation_name, // Add 'name' field for frontend compatibility
+					type: conv.conversation_type, // Add 'type' field for frontend compatibility
+					is_archived: participantData?.archived_at !== null,
+					archived_at: participantData?.archived_at
+				};
+			})
+		);
 
-		// Transform the data to match expected format
-		const conversations = (participantData || []).map(participant => {
-			const conv = participant.conversations;
-			// Handle both single object and array responses from Supabase
-			const conversation = Array.isArray(conv) ? conv[0] : conv;
-			
-			return {
-				id: conversation.id, // Frontend expects 'id', not 'conversation_id'
-				conversation_id: conversation.id, // Keep both for compatibility
-				type: conversation.type, // Frontend expects 'type', not 'conversation_type'
-				conversation_type: conversation.type, // Keep both for compatibility
-				name: conversation.name || 'Unnamed', // Frontend expects 'name', not 'conversation_name'
-				conversation_name: conversation.name || 'Unnamed', // Keep both for compatibility
-				conversation_avatar_url: null,
-				group_id: conversation.group_id,
-				group_name: null, // Simplified for now to avoid type conflicts
-				participant_count: 1, // Simplified for now
-				latest_message_id: null,
-				latest_message_content: null,
-				latest_message_sender_id: null,
-				latest_message_sender_username: null,
-				latest_message_created_at: conversation.created_at,
-				unread_count: 0, // Simplified for now
-				is_archived: participant.archived_at !== null,
-				archived_at: participant.archived_at
-			};
-		})
-		.filter(conv => {
-			// Filter based on archive status
-			const url = new URL(event.request.url);
-			const includeArchived = url.searchParams.get('include_archived') === 'true';
-			const archivedOnly = url.searchParams.get('archived_only') === 'true';
-			
+		// Apply archive filtering
+		const url = new URL(event.request.url);
+		const includeArchived = url.searchParams.get('include_archived') === 'true';
+		const archivedOnly = url.searchParams.get('archived_only') === 'true';
+		
+		const filteredConversations = conversationsWithArchive.filter(conv => {
 			if (archivedOnly) {
 				return conv.is_archived;
 			} else if (includeArchived) {
@@ -86,15 +68,9 @@ export async function GET(event) {
 			} else {
 				return !conv.is_archived; // Only non-archived
 			}
-		})
-		.sort((a, b) => {
-			// Sort by creation date, newest first
-			const aDate = new Date(a.latest_message_created_at || 0);
-			const bDate = new Date(b.latest_message_created_at || 0);
-			return bDate.getTime() - aDate.getTime();
 		});
 
-		return json({ conversations });
+		return json({ conversations: filteredConversations });
 	} catch (error) {
 		console.error('API error:', error);
 		return json({ error: 'Internal server error' }, { status: 500 });
