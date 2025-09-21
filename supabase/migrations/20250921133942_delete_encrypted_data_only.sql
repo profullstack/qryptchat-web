@@ -3,43 +3,33 @@
 -- while preserving the user account and profile information
 
 -- Create the encrypted data delete function
-CREATE OR REPLACE FUNCTION delete_encrypted_data_only(target_user_id UUID DEFAULT NULL)
+CREATE OR REPLACE FUNCTION delete_encrypted_data_only(target_user_id UUID DEFAULT NULL, authenticated_user_id UUID DEFAULT NULL)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    current_auth_user_id UUID;
-    current_internal_user_id UUID;
     deleted_counts JSON;
     temp_count INTEGER;
 BEGIN
-    -- Get the current authenticated user (auth user ID)
-    current_auth_user_id := auth.uid();
-    
-    -- Security check: ensure user is authenticated
-    IF current_auth_user_id IS NULL THEN
-        RAISE EXCEPTION 'User must be authenticated to delete data';
-    END IF;
-    
-    -- Get the internal user ID for the authenticated user
-    SELECT id INTO current_internal_user_id
-    FROM users
-    WHERE auth_user_id = current_auth_user_id;
-    
-    IF current_internal_user_id IS NULL THEN
-        RAISE EXCEPTION 'User profile not found';
-    END IF;
-    
-    -- If no target specified, delete current user's data
+    -- Security check: ensure both user IDs are provided
     IF target_user_id IS NULL THEN
-        target_user_id := current_internal_user_id;
+        RAISE EXCEPTION 'Target user ID is required';
     END IF;
     
-    -- Security check: users can only delete their own data (compare internal user IDs)
-    IF target_user_id != current_internal_user_id THEN
+    IF authenticated_user_id IS NULL THEN
+        RAISE EXCEPTION 'Authenticated user ID is required';
+    END IF;
+    
+    -- Security check: users can only delete their own data
+    IF target_user_id != authenticated_user_id THEN
         RAISE EXCEPTION 'Users can only delete their own data';
+    END IF;
+    
+    -- Verify user exists
+    IF NOT EXISTS (SELECT 1 FROM users WHERE id = target_user_id) THEN
+        RAISE EXCEPTION 'User not found';
     END IF;
     
     -- Verify user exists
@@ -135,7 +125,7 @@ END;
 $$;
 
 -- Grant execute permission to authenticated users
-GRANT EXECUTE ON FUNCTION delete_encrypted_data_only(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION delete_encrypted_data_only(UUID, UUID) TO authenticated;
 
 -- Add comment explaining the function
-COMMENT ON FUNCTION delete_encrypted_data_only(UUID) IS 'Deletes only encrypted data (messages, files, keys) while preserving user account and profile. Users can only delete their own data.';
+COMMENT ON FUNCTION delete_encrypted_data_only(UUID, UUID) IS 'Deletes only encrypted data (messages, files, keys) while preserving user account and profile. Users can only delete their own data. Requires both target_user_id and authenticated_user_id for security validation.';

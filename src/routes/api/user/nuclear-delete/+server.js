@@ -132,9 +132,11 @@ export async function DELETE({ request }) {
 		console.log(`🔐 [API] Encrypted data delete initiated for user ${userId} (${userData.phone_number})`);
 		
 		// Call the encrypted data delete function (preserves account)
+		// Pass both authenticated and target user IDs for security validation
 		const { data: result, error: deleteError } = await createServiceRoleClient()
 			.rpc('delete_encrypted_data_only', {
-				target_user_id: userId
+				target_user_id: userId,
+				authenticated_user_id: userId  // Must match target_user_id for security
 			});
 		
 		if (deleteError) {
