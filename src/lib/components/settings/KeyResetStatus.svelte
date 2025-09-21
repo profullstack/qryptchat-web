@@ -44,7 +44,7 @@
 					statusReport += `   📏 Key length: ${publicKey.length} chars\n`;
 					
 					// Try to determine if this looks like a fresh key
-					// Fresh keys should be base64 encoded and around 1400+ chars for ML-KEM-768
+					// Fresh keys should be base64 encoded and around 2100+ chars for ML-KEM-1024
 					if (publicKey.length > 1000 && publicKey.match(/^[A-Za-z0-9+/=]+$/)) {
 						statusReport += `   ✅ Key appears valid (proper format and length)\n`;
 					} else {

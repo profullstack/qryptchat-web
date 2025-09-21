@@ -299,7 +299,7 @@
 				<ul>
 					<li><strong>Public Key:</strong> Like your mailbox address - everyone can see it and send you encrypted mail</li>
 					<li><strong>Private Key:</strong> Like your house key - stays hidden in your browser and only you can use it to read your mail</li>
-					<li><strong>Quantum-Safe:</strong> Uses ML-KEM-768 algorithm that even quantum computers can't break</li>
+					<li><strong>Quantum-Safe:</strong> Uses ML-KEM-1024 algorithm that even quantum computers can't break</li>
 				</ul>
 			</div>
 		</div>
@@ -308,9 +308,9 @@
 	<div class="encryption-info">
 		<h4>About End-to-End Encryption</h4>
 		<ul>
-			<li><strong>Quantum-Resistant:</strong> Uses ML-KEM-768 + ChaCha20-Poly1305 encryption that's secure against quantum computers</li>
+			<li><strong>Quantum-Resistant:</strong> Uses ML-KEM-1024 + ChaCha20-Poly1305 encryption that's secure against quantum computers</li>
 			<li><strong>Client-Side:</strong> All encryption happens in your browser - the server never sees your messages</li>
-			<li><strong>Post-Quantum KEM:</strong> Uses FIPS 203 ML-KEM-768 for quantum-resistant key exchange</li>
+			<li><strong>Post-Quantum KEM:</strong> Uses FIPS 203 ML-KEM-1024 for quantum-resistant key exchange</li>
 			<li><strong>Forward Secrecy:</strong> Public keys are automatically shared securely between participants</li>
 		</ul>
 	</div>

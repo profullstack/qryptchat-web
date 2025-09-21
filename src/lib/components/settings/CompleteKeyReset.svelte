@@ -27,7 +27,7 @@
 			if (mlKemKey) {
 				try {
 					const parsed = JSON.parse(mlKemKey);
-					if (parsed.algorithm === 'ML-KEM-768' && parsed.publicKey && parsed.privateKey) {
+					if (parsed.algorithm === 'ML-KEM-1024' && parsed.publicKey && parsed.privateKey) {
 						hasValidKey = true;
 						keyInfo.push(`✅ ML-KEM key: ${parsed.generated ? new Date(parsed.generated).toLocaleString() : 'Unknown date'}`);
 					} else {
@@ -41,7 +41,7 @@
 			if (qryptKey) {
 				try {
 					const parsed = JSON.parse(qryptKey);
-					if (parsed.algorithm === 'ML-KEM-768' && parsed.publicKey && parsed.privateKey) {
+					if (parsed.algorithm === 'ML-KEM-1024' && parsed.publicKey && parsed.privateKey) {
 						hasValidKey = true;
 						keyInfo.push(`✅ Legacy key: ${parsed.timestamp ? new Date(parsed.timestamp).toLocaleString() : 'Unknown date'}`);
 					} else {
@@ -91,7 +91,7 @@
 			await new Promise(resolve => setTimeout(resolve, 500));
 
 			// Step 3: Generate fresh ML-KEM keypair
-			resetStatus = '🔑 Generating fresh ML-KEM-768 keypair...';
+			resetStatus = '🔑 Generating fresh ML-KEM-1024 keypair...';
 			const rawKeypair = await Kyber.generateKeyPair();
 			const newKeypair = Kyber.serializeKeyPair(rawKeypair);
 			console.log('🔑 Generated new keypair:', {
@@ -119,7 +119,7 @@
 			const mlKemKey = {
 				publicKey: newKeypair.publicKey,
 				privateKey: newKeypair.privateKey,
-				algorithm: 'ML-KEM-768',
+				algorithm: 'ML-KEM-1024',
 				generated: new Date().toISOString(),
 				userId: $user.id
 			};
@@ -129,7 +129,7 @@
 			const legacyKey = {
 				publicKey: newKeypair.publicKey,
 				privateKey: newKeypair.privateKey,
-				algorithm: 'ML-KEM-768',
+				algorithm: 'ML-KEM-1024',
 				timestamp: Date.now(),
 				version: '3.0',
 				userId: $user.id
