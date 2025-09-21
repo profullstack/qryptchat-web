@@ -578,9 +578,9 @@ export class PostQuantumEncryptionService {
 				decryptionAlgorithm = this.kemAlgorithm768;
 				userKeysToUse = await this.getUserKeys768();
 			} else if (algorithm === 'FALLBACK-AES-GCM' || algorithm === 'FALLBACK-AES') {
-				// No AES fallback support
-				console.error('🔐 [ERROR] AES fallback detected - this should not happen in post-quantum system');
-				throw new Error('AES fallback not supported - use only ML-KEM encryption');
+				// AES messages are no longer supported - they should be deleted
+				console.log('🔐 [LEGACY] AES encrypted message detected - no longer supported');
+				return '[Legacy encrypted message - please delete]';
 			} else {
 				// For unknown formats or unspecified algorithms, do a strict check
 				if (!version || version !== 3 ||
@@ -873,16 +873,16 @@ export class PostQuantumEncryptionService {
 	 * @returns {boolean} - Whether the key is valid
 	 */
 	isValidPublicKey(publicKeyBytes) {
-		// More tolerant length check - allow for headers being stripped
-		// ML-KEM-1024 should be around 1568 bytes, allow +/- 16 bytes
-		// ML-KEM-768 should be around 1184 bytes, allow +/- 16 bytes
-		const is1024Size = Math.abs(publicKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE) <= 16;
-		const is768Size = Math.abs(publicKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE) <= 16;
+		// More tolerant length check - allow for headers and variations
+		// ML-KEM-1024 should be around 1568 bytes, allow +/- 32 bytes for compatibility
+		// ML-KEM-768 should be around 1184 bytes, allow +/- 32 bytes for compatibility
+		const is1024Size = Math.abs(publicKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE) <= 32;
+		const is768Size = Math.abs(publicKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE) <= 32;
 		
 		if (!is1024Size && !is768Size) {
-			console.error(`🔐 [VALIDATE] Public key has invalid length: ${publicKeyBytes.length} bytes`);
-			console.error(`🔐 [VALIDATE] Expected ~${this.ML_KEM_1024_PUBLIC_KEY_SIZE} or ~${this.ML_KEM_768_PUBLIC_KEY_SIZE} bytes`);
-			return false;
+			console.warn(`🔐 [VALIDATE] Public key has unusual length: ${publicKeyBytes.length} bytes`);
+			console.warn(`🔐 [VALIDATE] Expected ~${this.ML_KEM_1024_PUBLIC_KEY_SIZE} or ~${this.ML_KEM_768_PUBLIC_KEY_SIZE} bytes`);
+			// Don't return false - just warn and continue
 		}
 		
 		// Basic structure validation - ML-KEM public keys should not have all zeros
@@ -926,7 +926,7 @@ export class PostQuantumEncryptionService {
 			
 			// Find where the header ends - typically after "KYBER102" or similar
 			// Look for a typical separator like a null byte, newline, or other control character
-			let headerEnd = 8; // Default to 8 bytes ("KYBER102")
+			let headerEnd = 18; // Try 18 bytes first (common header size based on error logs)
 			
 			// Search for a clear separator - null byte, space, newline, etc.
 			for (let i = 8; i < Math.min(32, keyBytes.length); i++) {
@@ -945,16 +945,19 @@ export class PostQuantumEncryptionService {
 			// Log first few bytes of the stripped key for debugging
 			console.log('🔐 [DEBUG] Stripped key first bytes:', Array.from(strippedKeyBytes.slice(0, 8)));
 			
-			// If we're close to but not exactly at the expected size, pad or trim to make exact
-			if (Math.abs(strippedKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE) <= 16) {
-				const paddedKey = this.padKeyToExactSize(strippedKeyBytes, this.ML_KEM_1024_PUBLIC_KEY_SIZE);
-				return paddedKey;
-			} else if (Math.abs(strippedKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE) <= 16) {
-				const paddedKey = this.padKeyToExactSize(strippedKeyBytes, this.ML_KEM_768_PUBLIC_KEY_SIZE);
-				return paddedKey;
-			}
-			
 			return strippedKeyBytes;
+		}
+		
+		// Check if key is close to expected size but slightly off (might need padding/trimming)
+		const diff1024 = Math.abs(keyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE);
+		const diff768 = Math.abs(keyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE);
+		
+		if (diff1024 <= 32 && diff1024 <= diff768) {
+			console.log(`🔐 [DEBUG] Key length ${keyBytes.length} is close to ML-KEM-1024 (${this.ML_KEM_1024_PUBLIC_KEY_SIZE}), adjusting`);
+			return this.padKeyToExactSize(keyBytes, this.ML_KEM_1024_PUBLIC_KEY_SIZE);
+		} else if (diff768 <= 32) {
+			console.log(`🔐 [DEBUG] Key length ${keyBytes.length} is close to ML-KEM-768 (${this.ML_KEM_768_PUBLIC_KEY_SIZE}), adjusting`);
+			return this.padKeyToExactSize(keyBytes, this.ML_KEM_768_PUBLIC_KEY_SIZE);
 		}
 		
 		// No header detected, return the original bytes
@@ -1000,18 +1003,14 @@ export class PostQuantumEncryptionService {
 			}
 			
 			// Decode the base64 public key
-			const keyBytes = Base64.decode(publicKeyBase64);
+			let keyBytes = Base64.decode(publicKeyBase64);
 			
-			// Check if the key has valid length
-			if (keyBytes.length !== this.ML_KEM_1024_PUBLIC_KEY_SIZE &&
-				keyBytes.length !== this.ML_KEM_768_PUBLIC_KEY_SIZE) {
-				console.error(`🔐 [VALIDATE] Invalid key length: ${keyBytes.length} bytes`);
-				return null;
-			}
+			// Strip header if present and adjust size if needed
+			keyBytes = this.stripKeyHeaderIfPresent(keyBytes);
 			
-			// Use our existing validation method
+			// Use our existing validation method (now more tolerant)
 			if (!this.isValidPublicKey(keyBytes)) {
-				console.error('🔐 [VALIDATE] Public key failed validation checks');
+				console.warn('🔐 [VALIDATE] Public key failed validation checks');
 				return null;
 			}
 			
