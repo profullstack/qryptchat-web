@@ -334,7 +334,7 @@
 												<span class="media-size">{formatFileSize(file.fileSize)}</span>
 											</div>
 										</div>
-										<button class="download-btn" onclick={() => downloadFile(file)} title="Download">
+										<button class="download-btn" onclick={() => downloadFile(file)} title="Download" aria-label="Download file">
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
 											</svg>
@@ -347,7 +347,9 @@
 										</div>
 									{:then mediaUrl}
 										{#if mediaUrl}
-											<img src={mediaUrl} alt={file.originalFilename} class="inline-image" onclick={() => downloadFile(file)} />
+											<button type="button" class="image-button" onclick={() => downloadFile(file)} aria-label="Download image">
+												<img src={mediaUrl} alt={file.originalFilename} class="inline-image" />
+											</button>
 										{:else}
 											<div class="media-error">Failed to load image</div>
 										{/if}
@@ -366,7 +368,7 @@
 												<span class="media-size">{formatFileSize(file.fileSize)}</span>
 											</div>
 										</div>
-										<button class="download-btn" onclick={() => downloadFile(file)} title="Download">
+										<button class="download-btn" onclick={() => downloadFile(file)} title="Download" aria-label="Download file">
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
 											</svg>
@@ -380,6 +382,7 @@
 									{:then mediaUrl}
 										{#if mediaUrl}
 											<video src={mediaUrl} controls class="inline-video">
+												<track kind="captions" src="" srclang="en" label="English" default />
 												Your browser does not support video playback.
 											</video>
 										{:else}
@@ -400,7 +403,7 @@
 												<span class="media-size">{formatFileSize(file.fileSize)}</span>
 											</div>
 										</div>
-										<button class="download-btn" onclick={() => downloadFile(file)} title="Download">
+										<button class="download-btn" onclick={() => downloadFile(file)} title="Download" aria-label="Download file">
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
 											</svg>
@@ -425,7 +428,7 @@
 								</div>
 							{:else}
 								<!-- Regular file attachment -->
-								<div class="file-attachment" onclick={() => downloadFile(file)}>
+								<button type="button" class="file-attachment" onclick={() => downloadFile(file)} aria-label="Download {file.originalFilename}">
 									<div class="file-info">
 										<div class="file-icon">
 											{getFileIcon(file.mimeType)}
@@ -440,7 +443,7 @@
 											<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
 										</svg>
 									</div>
-								</div>
+								</button>
 							{/if}
 						{/each}
 					{/if}
@@ -713,83 +716,7 @@
 		opacity: 1;
 	}
 
-	.image-attachment {
-		margin-bottom: 0.5rem;
-	}
-
-	.image-preview {
-		border-radius: 0.75rem;
-		overflow: hidden;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-	}
-
-	.message-bubble:not(.own-bubble) .image-preview {
-		background: var(--color-surface-hover);
-		border: 1px solid var(--color-border);
-	}
-
-	.image-preview:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-	}
-
-	.image-placeholder {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		padding: 1.5rem;
-		text-align: center;
-		min-height: 120px;
-		background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-	}
-
-	.message-bubble:not(.own-bubble) .image-placeholder {
-		background: linear-gradient(135deg, var(--color-background), var(--color-surface));
-	}
-
-	.image-icon {
-		font-size: 2rem;
-		margin-bottom: 0.5rem;
-		opacity: 0.8;
-	}
-
-	.image-filename {
-		font-weight: 500;
-		font-size: 0.875rem;
-		margin-bottom: 0.25rem;
-		max-width: 200px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.image-size {
-		font-size: 0.75rem;
-		opacity: 0.7;
-		margin-bottom: 0.5rem;
-	}
-
-	.click-to-view {
-		font-size: 0.75rem;
-		opacity: 0.6;
-		padding: 0.25rem 0.5rem;
-		background: rgba(255, 255, 255, 0.1);
-		border-radius: 0.25rem;
-		transition: opacity 0.2s ease;
-	}
-
-	.message-bubble:not(.own-bubble) .click-to-view {
-		background: var(--color-primary-100, #dbeafe);
-		color: var(--color-primary-700, #1d4ed8);
-	}
-
-	.image-preview:hover .click-to-view {
-		opacity: 1;
-	}
+	/* Removed unused CSS selectors for cleaner build */
 
 	.media-attachment {
 		margin-bottom: 0.75rem;
@@ -872,17 +799,26 @@
 		transform: scale(1.1);
 	}
 
+	.image-button {
+		border: none;
+		background: transparent;
+		padding: 0;
+		cursor: pointer;
+		display: block;
+		width: 100%;
+		transition: opacity 0.2s ease;
+	}
+
+	.image-button:hover {
+		opacity: 0.9;
+	}
+
 	.inline-image {
 		width: 100%;
 		max-width: 400px;
 		max-height: 300px;
 		object-fit: cover;
-		cursor: pointer;
-		transition: opacity 0.2s ease;
-	}
-
-	.inline-image:hover {
-		opacity: 0.9;
+		display: block;
 	}
 
 	.inline-video {

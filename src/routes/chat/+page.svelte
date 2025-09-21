@@ -78,7 +78,7 @@
 				participantId,
 				participantName,
 				'voice',
-				null // No single avatar for group calls
+				undefined // No single avatar for group calls
 			);
 		} catch (error) {
 			console.error('Failed to start group voice call:', error);
@@ -105,7 +105,7 @@
 				participantId,
 				participantName,
 				'video',
-				null // No single avatar for group calls
+				undefined // No single avatar for group calls
 			);
 		} catch (error) {
 			console.error('Failed to start group video call:', error);
@@ -264,7 +264,7 @@
 									</button>
 								{/if}
 
-								<button class="header-action-btn menu-button" onclick={toggleSidebar}>
+								<button class="header-action-btn menu-button" onclick={toggleSidebar} aria-label="Toggle sidebar">
 									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<line x1="3" y1="6" x2="21" y2="6"/>
 										<line x1="3" y1="12" x2="21" y2="12"/>

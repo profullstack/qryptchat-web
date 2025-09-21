@@ -265,10 +265,9 @@
 		height: 100%;
 	}
 
-	.call-btn svg,
-	.call-btn span {
-		position: relative;
-		z-index: 1;
+	.call-btn svg {
+	  position: relative;
+	  z-index: 1;
 	}
 
 	.decline-btn {

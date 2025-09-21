@@ -13,21 +13,21 @@
 	import { privateKeyManager } from '$lib/crypto/private-key-manager.js';
 
 	/** @type {'phone' | 'verify' | 'profile' | 'backup'} */
-	let step = 'phone';
-	let phoneNumber = '';
-	let verificationCode = '';
-	let username = '';
-	let displayName = '';
-	let isNewUser = false;
-	let countdown = 0;
-	let canResend = true;
-	let expiresAt = null;
+	let step = $state('phone');
+	let phoneNumber = $state('');
+	let verificationCode = $state('');
+	let username = $state('');
+	let displayName = $state('');
+	let isNewUser = $state(false);
+	let countdown = $state(0);
+	let canResend = $state(true);
+	let expiresAt = $state(/** @type {string | null} */ (null));
 	/** @type {any} */
-	let verifiedSession = null; // Store the verified session for account creation
+	let verifiedSession = $state(null); // Store the verified session for account creation
 	/** @type {string | null | undefined} */
-	let avatarUrl = null; // Store uploaded avatar URL
+	let avatarUrl = $state(null); // Store uploaded avatar URL
 	/** @type {string | null | undefined} */
-	let createdUserId = null; // Store user ID after account creation for avatar upload
+	let createdUserId = $state(null); // Store user ID after account creation for avatar upload
 	
 	// Key backup prompts
 	let showKeyBackupPrompt = $state(false);
