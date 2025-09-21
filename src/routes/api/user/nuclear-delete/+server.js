@@ -1,64 +1,101 @@
 import { json } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 
-export async function DELETE(event) {
+// Create regular Supabase client for authentication
+const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+
+/**
+ * Authenticate user from request cookies
+ * @param {Request} request - The request object
+ * @returns {Promise<{user: Object|null, error: string|null}>}
+ */
+async function authenticateUser(request) {
 	try {
-		// Get authorization header
-		const authHeader = event.request.headers.get('authorization');
-		if (!authHeader?.startsWith('Bearer ')) {
-			return json({ error: 'Missing or invalid authorization header' }, { status: 401 });
+		// Parse cookies to get JWT token
+		const cookieHeader = request.headers.get('cookie');
+		if (!cookieHeader) {
+			return { user: null, error: 'No authentication cookies found' };
 		}
 
-		// Create Supabase client and set session
-		const supabase = createSupabaseServerClient(event);
-		const token = authHeader.replace('Bearer ', '');
+		// Extract access token from cookies
+		const cookies = Object.fromEntries(
+			cookieHeader.split('; ').map(cookie => {
+				const [name, ...rest] = cookie.split('=');
+				return [name, rest.join('=')];
+			})
+		);
 
-		// Set the session to ensure auth.uid() is available for RLS
-		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+		const accessToken = cookies['sb-access-token'] || cookies['sb-refresh-token'];
+		if (!accessToken) {
+			return { user: null, error: 'No authentication tokens found' };
+		}
+
+		// Verify the JWT token with regular Supabase client
+		const { data: { user }, error } = await supabaseClient.auth.getUser(accessToken);
+
+		if (error) {
+			return { user: null, error: `Authentication failed: ${error.message}` };
+		}
+
+		if (!user) {
+			return { user: null, error: 'Invalid authentication token' };
+		}
+
+		return { user, error: null };
+
+	} catch (error) {
+		console.error('Authentication error:', error);
+		return { user: null, error: 'Authentication system error' };
+	}
+}
+
+export async function DELETE({ request }) {
+	try {
+		console.log('🔐 [API] DELETE /api/user/nuclear-delete - Starting authentication');
+
+		// Authenticate user
+		const { user, error: authError } = await authenticateUser(request);
 		if (authError || !user) {
-			console.error('Auth error:', authError);
-			return json({ error: 'Invalid or expired token' }, { status: 401 });
+			console.log('🔐 [API] ❌ Authentication failed:', authError);
+			return json({ error: authError || 'Authentication failed' }, { status: 401 });
 		}
 
-		// Set the session for RLS context
-		await supabase.auth.setSession({
-			access_token: token,
-			refresh_token: '' // Not needed for this operation
-		});
+		console.log('🔐 [API] ✅ User authenticated:', user.id);
 		
-		// Get user profile from database to get internal user ID
-		const { data: profile, error: profileError } = await supabase
+		// Get internal user ID from auth_user_id
+		const { data: userData, error: userError } = await createServiceRoleClient()
 			.from('users')
 			.select('id, phone_number, username')
 			.eq('auth_user_id', user.id)
 			.single();
 		
-		if (profileError) {
-			console.error('Profile fetch error:', profileError);
-			return json({ error: 'Failed to fetch user profile' }, { status: 500 });
+		if (userError || !userData) {
+			console.log('🔐 [API] ❌ Failed to get internal user ID:', userError?.message);
+			return json({ error: 'User not found' }, { status: 404 });
 		}
 		
-		if (!profile) {
-			return json({ error: 'User profile not found' }, { status: 404 });
-		}
+		const userId = userData.id;
+		console.log('🔐 [API] ✅ Internal user ID:', userId);
 		
 		// Additional confirmation check - require confirmation in request body
-		const body = await event.request.json().catch(() => ({}));
+		const body = await request.json().catch(() => ({}));
 		const { confirmation } = body;
 		
 		if (confirmation !== 'DELETE_ALL_MY_DATA') {
-			return json({ 
+			return json({
 				error: 'Nuclear delete requires explicit confirmation',
 				required_confirmation: 'DELETE_ALL_MY_DATA'
 			}, { status: 400 });
 		}
 		
-		console.log(`Encrypted data delete initiated for user ${profile.id} (${profile.phone_number})`);
+		console.log(`🔐 [API] Encrypted data delete initiated for user ${userId} (${userData.phone_number})`);
 		
 		// Call the encrypted data delete function (preserves account)
-		const { data: result, error: deleteError } = await supabase
+		const { data: result, error: deleteError } = await createServiceRoleClient()
 			.rpc('delete_encrypted_data_only', {
-				target_user_id: profile.id
+				target_user_id: userId
 			});
 		
 		if (deleteError) {
@@ -85,15 +122,15 @@ export async function DELETE(event) {
 			return json({ error: 'Encrypted data delete returned no result' }, { status: 500 });
 		}
 		
-		console.log(`Encrypted data delete completed for user ${profile.id}:`, result);
+		console.log(`Encrypted data delete completed for user ${userId}:`, result);
 		
 		// Return success with deletion summary
 		return json({
 			success: true,
 			message: 'All encrypted data has been permanently deleted. Your account remains active.',
 			user_info: {
-				phone_number: profile.phone_number,
-				username: profile.username
+				phone_number: userData.phone_number,
+				username: userData.username
 			},
 			deletion_summary: result
 		}, { status: 200 });

@@ -114,10 +114,23 @@
 		deleteResult = null;
 		
 		try {
+			// Get the current session to extract the access token
+			const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+			
+			if (sessionError || !session?.access_token) {
+				deleteResult = {
+					success: false,
+					error: 'Not authenticated - please refresh and try again'
+				};
+				isDeleting = false;
+				return;
+			}
+			
 			const response = await fetch('/api/user/nuclear-delete', {
 				method: 'DELETE',
 				headers: {
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${session.access_token}`
 				},
 				body: JSON.stringify({
 					confirmation: nuclearConfirmation
