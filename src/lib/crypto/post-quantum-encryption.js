@@ -233,17 +233,19 @@ export class PostQuantumEncryptionService {
 	 	// Check if the key has a text header (e.g., "KYBER102") and strip it if needed
 	 	recipientPubKeyBytes = this.stripKeyHeaderIfPresent(recipientPubKeyBytes);
 	 	
-	 	// Pad/trim to exact size if needed
+	 	// Always ensure key is exact size after header stripping
+	 	const diff1024 = Math.abs(recipientPubKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE);
+	 	const diff768 = Math.abs(recipientPubKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE);
+	 	
 	 	if (recipientPubKeyBytes.length !== this.ML_KEM_1024_PUBLIC_KEY_SIZE &&
 	 	    recipientPubKeyBytes.length !== this.ML_KEM_768_PUBLIC_KEY_SIZE) {
 	 		
-	 		// If we're close to ML-KEM-1024 size
-	 		if (Math.abs(recipientPubKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE) <= 16) {
+	 		// Choose the closest target size and pad to exact size
+	 		if (diff1024 <= 32 && diff1024 <= diff768) {
 	 			console.log(`🔐 [DEBUG] Key length ${recipientPubKeyBytes.length} close to ML-KEM-1024, padding to exact size`);
 	 			recipientPubKeyBytes = this.padKeyToExactSize(recipientPubKeyBytes, this.ML_KEM_1024_PUBLIC_KEY_SIZE);
 	 		}
-	 		// If we're close to ML-KEM-768 size
-	 		else if (Math.abs(recipientPubKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE) <= 16) {
+	 		else if (diff768 <= 32) {
 	 			console.log(`🔐 [DEBUG] Key length ${recipientPubKeyBytes.length} close to ML-KEM-768, padding to exact size`);
 	 			recipientPubKeyBytes = this.padKeyToExactSize(recipientPubKeyBytes, this.ML_KEM_768_PUBLIC_KEY_SIZE);
 	 		}
@@ -944,6 +946,18 @@ export class PostQuantumEncryptionService {
 			
 			// Log first few bytes of the stripped key for debugging
 			console.log('🔐 [DEBUG] Stripped key first bytes:', Array.from(strippedKeyBytes.slice(0, 8)));
+			
+			// After stripping header, ensure key is exactly the right size
+			const diff1024 = Math.abs(strippedKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE);
+			const diff768 = Math.abs(strippedKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE);
+			
+			if (diff1024 <= 32 && diff1024 <= diff768) {
+				console.log(`🔐 [DEBUG] Header stripped key length ${strippedKeyBytes.length} is close to ML-KEM-1024 (${this.ML_KEM_1024_PUBLIC_KEY_SIZE}), adjusting`);
+				return this.padKeyToExactSize(strippedKeyBytes, this.ML_KEM_1024_PUBLIC_KEY_SIZE);
+			} else if (diff768 <= 32) {
+				console.log(`🔐 [DEBUG] Header stripped key length ${strippedKeyBytes.length} is close to ML-KEM-768 (${this.ML_KEM_768_PUBLIC_KEY_SIZE}), adjusting`);
+				return this.padKeyToExactSize(strippedKeyBytes, this.ML_KEM_768_PUBLIC_KEY_SIZE);
+			}
 			
 			return strippedKeyBytes;
 		}
