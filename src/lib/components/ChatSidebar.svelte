@@ -20,21 +20,32 @@
 	let hasLoadedConversations = $state(false);
 	let showArchived = $state(false);
 	let contextMenu = $state({ show: false, x: 0, y: 0, conversation: null });
+	
+	// Local conversations state to bypass broken WebSocket
+	let localConversations = $state([]);
 
-	// Derived state using Svelte 5 runes - simplified filtering for now
-	const filteredConversations = $derived($conversations.filter(conv => {
-		// Just filter by search query for now - disable archive filtering temporarily
+	// Use local conversations instead of broken WebSocket store
+	const filteredConversations = $derived(localConversations.filter(conv => {
+		// Filter by archive status
+		let matchesArchiveFilter = true;
+		if (showArchived) {
+			matchesArchiveFilter = conv.is_archived === true;
+		} else {
+			matchesArchiveFilter = conv.is_archived !== true;
+		}
+		
+		// Filter by search query
 		const matchesSearch = !searchQuery ||
 			(conv.name || conv.conversation_name || '')?.toLowerCase().includes(searchQuery.toLowerCase());
 		
-		return matchesSearch;
+		return matchesArchiveFilter && matchesSearch;
 	}));
 
 	const directMessages = $derived(filteredConversations.filter(conv => conv.type === 'direct'));
 	const groupConversations = $derived(filteredConversations.filter(conv => conv.type === 'group'));
 	const roomConversations = $derived(filteredConversations.filter(conv => conv.type === 'room'));
 	
-	const archivedCount = $derived($conversations.filter(conv => conv.is_archived || false).length);
+	const archivedCount = $derived(localConversations.filter(conv => conv.is_archived || false).length);
 
 	// Group rooms by group_id
 	const groupedRooms = $derived(roomConversations.reduce((acc, room) => {
@@ -62,11 +73,29 @@
 		
 		loading = true;
 		try {
-			// Revert to WebSocket store to restore basic functionality
-			await wsChat.loadConversations();
+			// Bypass broken WebSocket and call working HTTP API directly
+			console.log('🔄 Loading conversations via HTTP API...');
+			
+			const response = await fetch('/api/chat/conversations', {
+				method: 'GET',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+
+			const { conversations: apiConversations } = await response.json();
+			console.log('✅ Loaded', apiConversations?.length || 0, 'conversations from HTTP API');
+
+			// Update local state with HTTP API data
+			localConversations = apiConversations || [];
+			wsChat.setError(null);
+
 			hasLoadedConversations = true; // Mark as loaded
 		} catch (error) {
 			console.error('Failed to load conversations:', error);
+			wsChat.setError('Failed to load conversations');
 		} finally {
 			loading = false;
 		}
@@ -347,7 +376,7 @@
 			{/if}
 
 			<!-- Empty State -->
-			{#if !loading && $conversations.length === 0}
+			{#if !loading && localConversations.length === 0}
 				<div class="empty-state">
 					<div class="empty-icon">💬</div>
 					<h3>No conversations yet</h3>

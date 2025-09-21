@@ -105,12 +105,7 @@ function createChatStore() {
 			update(state => ({ ...state, loading: true, error: null }));
 
 			try {
-				const params = new URLSearchParams();
-				if (includeArchived) {
-					params.append('include_archived', 'true');
-				}
-
-				const response = await fetch(`/api/chat/conversations?${params.toString()}`, {
+				const response = await fetch('/api/chat/conversations', {
 					method: 'GET',
 					credentials: 'include'
 				});
