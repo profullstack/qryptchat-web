@@ -5,6 +5,9 @@ import { createSupabaseServerClient } from '$lib/supabase.js';
 export async function GET(event) {
 	try {
 		const supabase = createSupabaseServerClient(event);
+		const url = new URL(event.request.url);
+		const includeArchived = url.searchParams.get('include_archived') === 'true';
+		const archivedOnly = url.searchParams.get('archived_only') === 'true';
 		
 		// Get user from session
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -12,10 +15,20 @@ export async function GET(event) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		// Call the enhanced conversations function
-		const { data, error } = await supabase.rpc('get_user_conversations_enhanced', {
-			user_uuid: user.id
-		});
+		let data, error;
+
+		if (archivedOnly) {
+			// Get only archived conversations
+			({ data, error } = await supabase.rpc('get_user_archived_conversations', {
+				user_uuid: user.id
+			}));
+		} else {
+			// Call the enhanced conversations function with archive options
+			({ data, error } = await supabase.rpc('get_user_conversations_enhanced', {
+				user_uuid: user.id,
+				include_archived: includeArchived
+			}));
+		}
 
 		if (error) {
 			console.error('Database error:', error);
@@ -162,9 +175,65 @@ export async function POST(event) {
 			return json({ error: 'Failed to add participants' }, { status: 500 });
 		}
 
-		return json({ 
+		return json({
 			conversation_id: conversationId,
 			message: 'Conversation created successfully'
+		});
+	} catch (error) {
+		console.error('API error:', error);
+		return json({ error: 'Internal server error' }, { status: 500 });
+	}
+}
+
+/** @type {import('./$types').RequestHandler} */
+export async function PATCH(event) {
+	try {
+		const supabase = createSupabaseServerClient(event);
+		const { conversation_id, action } = await event.request.json();
+		
+		// Get user from session
+		const { data: { user }, error: userError } = await supabase.auth.getUser();
+		if (userError || !user) {
+			return json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		// Validate input
+		if (!conversation_id) {
+			return json({ error: 'conversation_id is required' }, { status: 400 });
+		}
+
+		if (!action || !['archive', 'unarchive'].includes(action)) {
+			return json({ error: 'action must be "archive" or "unarchive"' }, { status: 400 });
+		}
+
+		let success, error;
+
+		if (action === 'archive') {
+			({ data: success, error } = await supabase.rpc('archive_conversation', {
+				conversation_uuid: conversation_id,
+				user_uuid: user.id
+			}));
+		} else {
+			({ data: success, error } = await supabase.rpc('unarchive_conversation', {
+				conversation_uuid: conversation_id,
+				user_uuid: user.id
+			}));
+		}
+
+		if (error) {
+			console.error('Database error:', error);
+			return json({ error: `Failed to ${action} conversation` }, { status: 500 });
+		}
+
+		if (!success) {
+			return json({
+				error: `Conversation not found or cannot be ${action}d`
+			}, { status: 404 });
+		}
+
+		return json({
+			success: true,
+			message: `Conversation ${action}d successfully`
 		});
 	} catch (error) {
 		console.error('API error:', error);

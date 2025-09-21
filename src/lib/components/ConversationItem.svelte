@@ -15,6 +15,12 @@
 		dispatch('select', conversation.id);
 	}
 
+	// Handle right-click context menu
+	function handleContextMenu(event) {
+		event.preventDefault();
+		dispatch('contextmenu', event);
+	}
+
 	// Format last message time
 	function formatTime(/** @type {string | null | undefined} */ timestamp) {
 		if (!timestamp) return '';
@@ -52,7 +58,9 @@
 	class="conversation-item"
 	class:active
 	class:is-room={isRoom}
+	class:archived={conversation.is_archived}
 	onclick={handleClick}
+	oncontextmenu={handleContextMenu}
 >
 	<div class="conversation-avatar">
 		{#if conversation.avatar_url}
@@ -79,6 +87,9 @@
 				{conversation.name || 'Unknown'}
 				{#if conversation.unread_count > 0}
 					<div class="unread-indicator" title="{conversation.unread_count} unread messages"></div>
+				{/if}
+				{#if conversation.is_archived}
+					<div class="archive-indicator" title="Archived">📦</div>
 				{/if}
 			</div>
 			

@@ -22,6 +22,8 @@ import { createSupabaseClient } from '$lib/supabase.js';
  * @property {string|null} latest_message_sender_username
  * @property {string|null} latest_message_created_at
  * @property {number} unread_count
+ * @property {boolean} is_archived
+ * @property {string|null} archived_at
  */
 
 /**
@@ -95,14 +97,20 @@ function createChatStore() {
 		/**
 		 * Load user conversations (direct chats, groups, and rooms)
 		 * @param {string} userId
+		 * @param {boolean} includeArchived - Whether to include archived conversations
 		 */
-		async loadConversations(userId) {
+		async loadConversations(userId, includeArchived = false) {
 			if (!browser) return;
 
 			update(state => ({ ...state, loading: true, error: null }));
 
 			try {
-				const response = await fetch('/api/chat/conversations', {
+				const params = new URLSearchParams();
+				if (includeArchived) {
+					params.append('include_archived', 'true');
+				}
+
+				const response = await fetch(`/api/chat/conversations?${params.toString()}`, {
 					method: 'GET',
 					credentials: 'include'
 				});
@@ -133,12 +141,18 @@ function createChatStore() {
 		/**
 		 * Refresh conversations without showing loading state
 		 * Used to update unread counts after marking messages as read
+		 * @param {boolean} includeArchived - Whether to include archived conversations
 		 */
-		async refreshConversations() {
+		async refreshConversations(includeArchived = false) {
 			if (!browser) return;
 
 			try {
-				const response = await fetch('/api/chat/conversations', {
+				const params = new URLSearchParams();
+				if (includeArchived) {
+					params.append('include_archived', 'true');
+				}
+
+				const response = await fetch(`/api/chat/conversations?${params.toString()}`, {
 					method: 'GET',
 					credentials: 'include'
 				});
@@ -707,12 +721,151 @@ function createChatStore() {
 		},
 
 		/**
+		 * Archive a conversation
+		 * @param {string} conversationId
+		 * @returns {Promise<{success: boolean, error?: string}>}
+		 */
+		async archiveConversation(conversationId) {
+			if (!browser) return { success: false, error: 'Not in browser environment' };
+
+			try {
+				const response = await fetch('/api/chat/conversations', {
+					method: 'PATCH',
+					credentials: 'include',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						conversation_id: conversationId,
+						action: 'archive'
+					})
+				});
+
+				const result = await response.json();
+
+				if (!response.ok) {
+					throw new Error(result.error || 'Failed to archive conversation');
+				}
+
+				// Update local state to mark conversation as archived
+				update(state => ({
+					...state,
+					conversations: state.conversations.map(conv =>
+						conv.conversation_id === conversationId
+							? { ...conv, is_archived: true, archived_at: new Date().toISOString() }
+							: conv
+					)
+				}));
+
+				return { success: true };
+			} catch (error) {
+				console.error('Failed to archive conversation:', error);
+				return { success: false, error: error.message };
+			}
+		},
+
+		/**
+		 * Unarchive a conversation
+		 * @param {string} conversationId
+		 * @returns {Promise<{success: boolean, error?: string}>}
+		 */
+		async unarchiveConversation(conversationId) {
+			if (!browser) return { success: false, error: 'Not in browser environment' };
+
+			try {
+				const response = await fetch('/api/chat/conversations', {
+					method: 'PATCH',
+					credentials: 'include',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						conversation_id: conversationId,
+						action: 'unarchive'
+					})
+				});
+
+				const result = await response.json();
+
+				if (!response.ok) {
+					throw new Error(result.error || 'Failed to unarchive conversation');
+				}
+
+				// Update local state to mark conversation as unarchived
+				update(state => ({
+					...state,
+					conversations: state.conversations.map(conv =>
+						conv.conversation_id === conversationId
+							? { ...conv, is_archived: false, archived_at: null }
+							: conv
+					)
+				}));
+
+				return { success: true };
+			} catch (error) {
+				console.error('Failed to unarchive conversation:', error);
+				return { success: false, error: error.message };
+			}
+		},
+
+		/**
+		 * Load archived conversations
+		 * @returns {Promise<void>}
+		 */
+		async loadArchivedConversations() {
+			if (!browser) return;
+
+			update(state => ({ ...state, loading: true, error: null }));
+
+			try {
+				const response = await fetch('/api/chat/conversations?archived_only=true', {
+					method: 'GET',
+					credentials: 'include'
+				});
+
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				const { conversations } = await response.json();
+
+				update(state => ({
+					...state,
+					conversations: conversations || [],
+					loading: false,
+					error: null
+				}));
+			} catch (error) {
+				console.error('Failed to load archived conversations:', error);
+				update(state => ({
+					...state,
+					conversations: [],
+					loading: false,
+					error: 'Failed to load archived conversations'
+				}));
+			}
+		},
+
+		/**
+		 * Filter conversations by archived status
+		 * @param {boolean} archivedStatus - true for archived, false for active
+		 * @returns {Conversation[]}
+		 */
+		filterConversationsByArchivedStatus(archivedStatus) {
+			const state = get(chatState);
+			return state.conversations.filter(conv => conv.is_archived === archivedStatus);
+		},
+
+		/**
 		 * Get unread message count
+		 * @param {boolean} includeArchived - Whether to include archived conversations in count
 		 * @returns {number}
 		 */
-		getTotalUnreadCount() {
+		getTotalUnreadCount(includeArchived = false) {
 			const state = get(chatState);
-			return state.conversations.reduce((total, conv) => total + conv.unread_count, 0);
+			return state.conversations
+				.filter(conv => includeArchived || !conv.is_archived)
+				.reduce((total, conv) => total + conv.unread_count, 0);
 		},
 
 		/**

@@ -1,6 +1,7 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { wsChat, conversations, groups, isConnected, isAuthenticated } from '$lib/stores/websocket-chat.js';
+	import { chat } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import ConversationItem from './ConversationItem.svelte';
 	import GroupItem from './GroupItem.svelte';
@@ -17,17 +18,26 @@
 	let expandedGroups = $state(new Set());
 	let loading = $state(false);
 	let hasLoadedConversations = $state(false);
+	let showArchived = $state(false);
+	let contextMenu = $state({ show: false, x: 0, y: 0, conversation: null });
 
 	// Derived state using Svelte 5 runes
-	const filteredConversations = $derived(searchQuery
-		? $conversations.filter(conv =>
-			conv.name?.toLowerCase().includes(searchQuery.toLowerCase())
-		)
-		: $conversations);
+	const filteredConversations = $derived($conversations.filter(conv => {
+		// Filter by archive status (if archive fields exist)
+		const matchesArchiveFilter = showArchived ? (conv.is_archived || false) : !(conv.is_archived || false);
+		
+		// Filter by search query
+		const matchesSearch = !searchQuery ||
+			conv.name?.toLowerCase().includes(searchQuery.toLowerCase());
+		
+		return matchesArchiveFilter && matchesSearch;
+	}));
 
 	const directMessages = $derived(filteredConversations.filter(conv => conv.type === 'direct'));
 	const groupConversations = $derived(filteredConversations.filter(conv => conv.type === 'group'));
 	const roomConversations = $derived(filteredConversations.filter(conv => conv.type === 'room'));
+	
+	const archivedCount = $derived($conversations.filter(conv => conv.is_archived || false).length);
 
 	// Group rooms by group_id
 	const groupedRooms = $derived(roomConversations.reduce((acc, room) => {
@@ -61,6 +71,58 @@
 			console.error('Failed to load conversations:', error);
 		} finally {
 			loading = false;
+		}
+	}
+
+	// Toggle archive view
+	function toggleArchiveView() {
+		showArchived = !showArchived;
+		hasLoadedConversations = false; // Reset to reload with new filter
+		loadConversationsData();
+	}
+
+	// Handle conversation right-click
+	function handleConversationContextMenu(event, conversation) {
+		event.preventDefault();
+		contextMenu = {
+			show: true,
+			x: event.clientX,
+			y: event.clientY,
+			conversation
+		};
+		
+		// Close context menu when clicking elsewhere
+		function handleClickOutside() {
+			contextMenu.show = false;
+			document.removeEventListener('click', handleClickOutside);
+		}
+		
+		setTimeout(() => {
+			document.addEventListener('click', handleClickOutside);
+		}, 0);
+	}
+
+	// Handle archive/unarchive action
+	async function handleArchiveToggle(conversation) {
+		contextMenu.show = false;
+		
+		try {
+			let result;
+			if (conversation.is_archived) {
+				result = await chat.unarchiveConversation(conversation.id);
+			} else {
+				result = await chat.archiveConversation(conversation.id);
+			}
+			
+			if (result.success) {
+				// Reload conversations to reflect changes
+				hasLoadedConversations = false;
+				await loadConversationsData();
+			} else {
+				console.error('Failed to toggle archive status:', result.error);
+			}
+		} catch (error) {
+			console.error('Archive toggle error:', error);
 		}
 	}
 
@@ -175,17 +237,35 @@
 		</div>
 	</div>
 
-	<!-- Search -->
+	<!-- Search and Archive Toggle -->
 	<div class="search-section">
 		<div class="search-input">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="search-icon">
 				<path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
 			</svg>
-			<input 
-				type="text" 
-				placeholder="Search conversations..." 
+			<input
+				type="text"
+				placeholder="Search conversations..."
 				bind:value={searchQuery}
 			/>
+		</div>
+		
+		<div class="archive-toggle">
+			<button
+				class="toggle-button"
+				class:active={showArchived}
+				onclick={toggleArchiveView}
+				title={showArchived ? "Show active conversations" : "Show archived conversations"}
+			>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.42l.82-1zM5 19V8h14v11H5zm3-5.5l4 4 4-4-1.41-1.41L13 14.67V10h-2v4.67l-1.59-1.58L8 14.5z"/>
+				</svg>
+				{#if showArchived}
+					Archived ({archivedCount})
+				{:else}
+					Archive ({archivedCount})
+				{/if}
+			</button>
 		</div>
 	</div>
 
@@ -243,6 +323,7 @@
 							{conversation}
 							active={activeConversationId === conversation.id}
 							on:select={() => handleConversationSelect(conversation.id)}
+							on:contextmenu={(event) => handleConversationContextMenu(event.detail, conversation)}
 						/>
 					{/each}
 				</div>
@@ -261,6 +342,7 @@
 							{conversation}
 							active={activeConversationId === conversation.id}
 							on:select={() => handleConversationSelect(conversation.id)}
+							on:contextmenu={(event) => handleConversationContextMenu(event.detail, conversation)}
 						/>
 					{/each}
 				</div>
@@ -290,6 +372,24 @@
 	</div>
 </div>
 
+<!-- Context Menu -->
+{#if contextMenu.show}
+	<div
+		class="context-menu"
+		style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+	>
+		<button
+			class="context-item"
+			onclick={() => handleArchiveToggle(contextMenu.conversation)}
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.42l.82-1zM5 19V8h14v11H5zm3-5.5l4 4 4-4-1.41-1.41L13 14.67V10h-2v4.67l-1.59-1.58L8 14.5z"/>
+			</svg>
+			{contextMenu.conversation?.is_archived ? 'Unarchive' : 'Archive'}
+		</button>
+	</div>
+{/if}
+
 <!-- Modals -->
 {#if showNewChatModal}
 	<NewChatModal
@@ -300,7 +400,7 @@
 {/if}
 
 {#if showJoinGroupModal}
-	<JoinGroupModal 
+	<JoinGroupModal
 		on:close={() => showJoinGroupModal = false}
 		on:joined={handleGroupJoined}
 	/>
@@ -614,5 +714,69 @@
 
 	.sidebar-content::-webkit-scrollbar-thumb:hover {
 		background: var(--color-text-secondary);
+	}
+
+	/* Archive toggle styles */
+	.archive-toggle {
+		margin-top: 0.5rem;
+	}
+
+	.toggle-button {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border-primary);
+		border-radius: 0.375rem;
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		transition: all 0.2s ease;
+	}
+
+	.toggle-button:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-primary);
+	}
+
+	.toggle-button.active {
+		background: var(--color-primary-100);
+		border-color: var(--color-primary-500);
+		color: var(--color-primary-700);
+	}
+
+	/* Context menu styles */
+	.context-menu {
+		position: fixed;
+		background: var(--color-bg-primary);
+		border: 1px solid var(--color-border-primary);
+		border-radius: 0.5rem;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		z-index: 1000;
+		min-width: 150px;
+		padding: 0.25rem;
+	}
+
+	.context-item {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		background: none;
+		border: none;
+		text-align: left;
+		color: var(--color-text-primary);
+		font-size: 0.875rem;
+		cursor: pointer;
+		border-radius: 0.25rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		transition: background-color 0.2s ease;
+	}
+
+	.context-item:hover {
+		background: var(--color-bg-secondary);
 	}
 </style>
