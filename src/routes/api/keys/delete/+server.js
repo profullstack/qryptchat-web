@@ -34,8 +34,14 @@ export async function POST(event) {
 
 		// Delete the user's public key from the database
 		const { error: deleteError } = await serviceSupabase
-			.from('user_profiles')
-			.update({ 
+			.from('user_public_keys')
+			.delete()
+			.eq('user_id', user.id);
+
+		// Also clear from users table if needed
+		const { error: updateError } = await serviceSupabase
+			.from('users')
+			.update({
 				ml_kem_public_key: null,
 				updated_at: new Date().toISOString()
 			})

@@ -16,9 +16,9 @@ export async function GET(event) {
 
 		// Get all users with public keys
 		const { data: users, error } = await supabase
-			.from('user_profiles')
-			.select('user_id, ml_kem_public_key')
-			.not('ml_kem_public_key', 'is', null);
+			.from('user_public_keys')
+			.select('user_id, public_key')
+			.not('public_key', 'is', null);
 
 		if (error) {
 			console.error('Failed to fetch all user keys:', error);
@@ -28,7 +28,7 @@ export async function GET(event) {
 		// Transform the data to match expected format
 		const userKeys = users.map(user => ({
 			user_id: user.user_id,
-			public_key: user.ml_kem_public_key
+			public_key: user.public_key
 		}));
 
 		console.log(`📊 Retrieved ${userKeys.length} users with public keys`);
