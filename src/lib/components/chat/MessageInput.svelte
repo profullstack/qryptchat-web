@@ -92,7 +92,7 @@
 		uploadError = '';
 		
 		// File validation utilities
-		const maxFileSize = 50 * 1024 * 1024; // 50MB
+		const maxFileSize = 2 * 1024 * 1024 * 1024; // 2GB
 		const allowedExtensions = [
 			'.txt', '.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif',
 			'.mp3', '.wav', '.mp4', '.webm', '.zip', '.rar'
@@ -118,7 +118,7 @@
 				return;
 			}
 			if (file.size > maxFileSize) {
-				uploadError = `File too large. Maximum size is ${Math.floor(maxFileSize / (1024 * 1024))}MB`;
+				uploadError = `File too large. Maximum size is ${Math.floor(maxFileSize / (1024 * 1024 * 1024))}GB`;
 				return;
 			}
 			if (file.size === 0) {
@@ -173,7 +173,7 @@
 				const messageId = messageResult.data.id;
 				console.log(`📁 Created message ${messageId} for file uploads`);
 
-				// Encrypt and upload each file
+				// Encrypt and upload each file using direct upload
 				const uploadPromises = selectedFiles.map(async (file) => {
 					// Read file content
 					const arrayBuffer = await file.arrayBuffer();
@@ -190,26 +190,60 @@
 					await multiRecipientEncryption.initialize();
 					const encryptedContents = await multiRecipientEncryption.encryptForConversation(conversationId, fileContent);
 
-					// Send encrypted data to server
-					const formData = new FormData();
-					formData.append('encryptedContents', JSON.stringify(encryptedContents));
-					formData.append('originalFilename', file.name);
-					formData.append('mimeType', file.type);
-					formData.append('fileSize', file.size.toString());
-					formData.append('conversationId', conversationId);
-					formData.append('messageId', messageId);
-
-					const response = await fetch('/api/files/upload', {
+					// Step 1: Get signed upload URL from server
+					const uploadUrlResponse = await fetch('/api/files/upload-url', {
 						method: 'POST',
-						body: formData
+						headers: {
+							'Content-Type': 'application/json'
+						},
+						body: JSON.stringify({
+							conversationId,
+							messageId,
+							originalFilename: file.name,
+							mimeType: file.type,
+							fileSize: file.size
+						})
 					});
 
-					if (!response.ok) {
-						const errorData = await response.json().catch(() => ({}));
-						throw new Error(errorData.message || `Failed to upload ${file.name}`);
+					if (!uploadUrlResponse.ok) {
+						const errorData = await uploadUrlResponse.json().catch(() => ({}));
+						throw new Error(errorData.message || `Failed to get upload URL for ${file.name}`);
 					}
 
-					return response.json();
+					const { uploadUrl, storagePath, fileId, metadata } = await uploadUrlResponse.json();
+
+					// Step 2: Upload encrypted file directly to Supabase Storage
+					const uploadResponse = await fetch(uploadUrl, {
+						method: 'PUT',
+						headers: {
+							'Content-Type': 'application/octet-stream'
+						},
+						body: JSON.stringify(encryptedContents)
+					});
+
+					if (!uploadResponse.ok) {
+						throw new Error(`Failed to upload ${file.name} to storage`);
+					}
+
+					// Step 3: Complete the upload by saving metadata
+					const completeResponse = await fetch('/api/files/upload-complete', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json'
+						},
+						body: JSON.stringify({
+							storagePath,
+							fileId,
+							metadata
+						})
+					});
+
+					if (!completeResponse.ok) {
+						const errorData = await completeResponse.json().catch(() => ({}));
+						throw new Error(errorData.message || `Failed to complete upload for ${file.name}`);
+					}
+
+					return completeResponse.json();
 				});
 
 				await Promise.all(uploadPromises);
