@@ -23,12 +23,20 @@
 
 	// Derived state using Svelte 5 runes
 	const filteredConversations = $derived($conversations.filter(conv => {
-		// Filter by archive status (if archive fields exist)
-		const matchesArchiveFilter = showArchived ? (conv.is_archived || false) : !(conv.is_archived || false);
+		// Filter by archive status - be more lenient if archive fields don't exist
+		let matchesArchiveFilter = true;
+		
+		if (showArchived) {
+			// Show only archived conversations
+			matchesArchiveFilter = conv.is_archived === true;
+		} else {
+			// Show only non-archived conversations (default)
+			matchesArchiveFilter = conv.is_archived !== true; // This includes undefined/null
+		}
 		
 		// Filter by search query
 		const matchesSearch = !searchQuery ||
-			conv.name?.toLowerCase().includes(searchQuery.toLowerCase());
+			(conv.name || conv.conversation_name || '')?.toLowerCase().includes(searchQuery.toLowerCase());
 		
 		return matchesArchiveFilter && matchesSearch;
 	}));
