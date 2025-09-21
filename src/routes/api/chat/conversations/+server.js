@@ -53,9 +53,12 @@ export async function GET(event) {
 			const conversation = Array.isArray(conv) ? conv[0] : conv;
 			
 			return {
-				conversation_id: conversation.id,
-				conversation_type: conversation.type,
-				conversation_name: conversation.name || 'Unnamed',
+				id: conversation.id, // Frontend expects 'id', not 'conversation_id'
+				conversation_id: conversation.id, // Keep both for compatibility
+				type: conversation.type, // Frontend expects 'type', not 'conversation_type'
+				conversation_type: conversation.type, // Keep both for compatibility
+				name: conversation.name || 'Unnamed', // Frontend expects 'name', not 'conversation_name'
+				conversation_name: conversation.name || 'Unnamed', // Keep both for compatibility
 				conversation_avatar_url: null,
 				group_id: conversation.group_id,
 				group_name: null, // Simplified for now to avoid type conflicts

@@ -1,7 +1,7 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
-	import { wsChat, conversations, groups, isConnected, isAuthenticated } from '$lib/stores/websocket-chat.js';
-	import { chat } from '$lib/stores/chat.js';
+	import { wsChat, groups, isConnected, isAuthenticated } from '$lib/stores/websocket-chat.js';
+	import { chat, conversations } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import ConversationItem from './ConversationItem.svelte';
 	import GroupItem from './GroupItem.svelte';
@@ -65,7 +65,8 @@
 		
 		loading = true;
 		try {
-			await wsChat.loadConversations();
+			// Use the chat store instead of wsChat to get archive data
+			await chat.loadConversations($user?.id, showArchived);
 			hasLoadedConversations = true; // Mark as loaded
 		} catch (error) {
 			console.error('Failed to load conversations:', error);
