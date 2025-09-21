@@ -1,28 +1,15 @@
 import { json } from '@sveltejs/kit';
-import { createSupabaseClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '$lib/supabase.js';
 
-export async function DELETE({ cookies, request }) {
+export async function DELETE(event) {
 	try {
-		const supabase = createSupabaseClient();
+		const supabase = createSupabaseServerClient(event);
 		
-		// Get the authenticated user from cookies/headers
-		const authHeader = request.headers.get('authorization');
-		const accessToken = authHeader?.replace('Bearer ', '') || cookies.get('sb-access-token');
-		
-		if (!accessToken) {
-			return json({ error: 'Not authenticated - no access token' }, { status: 401 });
-		}
-		
-		// Set the auth token for this request
-		await supabase.auth.setSession({
-			access_token: accessToken,
-			refresh_token: cookies.get('sb-refresh-token') || ''
-		});
-		
+		// Get the authenticated user from session
 		const { data: { user }, error: authError } = await supabase.auth.getUser();
 		
 		if (authError || !user) {
-			return json({ error: 'Not authenticated - invalid session' }, { status: 401 });
+			return json({ error: 'Not authenticated' }, { status: 401 });
 		}
 		
 		// Get user profile from database to get internal user ID
@@ -42,7 +29,7 @@ export async function DELETE({ cookies, request }) {
 		}
 		
 		// Additional confirmation check - require confirmation in request body
-		const body = await request.json().catch(() => ({}));
+		const body = await event.request.json().catch(() => ({}));
 		const { confirmation } = body;
 		
 		if (confirmation !== 'DELETE_ALL_MY_DATA') {

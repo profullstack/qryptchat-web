@@ -551,7 +551,7 @@
 					<div class="key-info">
 						<p><strong>🛡️ Security Details:</strong></p>
 						<ul>
-							<li><strong>Algorithm:</strong> ML-KEM-768 (Post-Quantum)</li>
+							<li><strong>Algorithm:</strong> ML-KEM-1024 (Post-Quantum)</li>
 							<li><strong>Quantum-Resistant:</strong> Safe against quantum computer attacks</li>
 							<li><strong>FIPS 203 Compliant:</strong> Government-approved encryption standard</li>
 						</ul>
