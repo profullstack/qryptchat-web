@@ -21,24 +21,13 @@
 	let showArchived = $state(false);
 	let contextMenu = $state({ show: false, x: 0, y: 0, conversation: null });
 
-	// Derived state using Svelte 5 runes
+	// Derived state using Svelte 5 runes - simplified filtering for now
 	const filteredConversations = $derived($conversations.filter(conv => {
-		// Filter by archive status - be more lenient if archive fields don't exist
-		let matchesArchiveFilter = true;
-		
-		if (showArchived) {
-			// Show only archived conversations
-			matchesArchiveFilter = conv.is_archived === true;
-		} else {
-			// Show only non-archived conversations (default)
-			matchesArchiveFilter = conv.is_archived !== true; // This includes undefined/null
-		}
-		
-		// Filter by search query
+		// Just filter by search query for now - disable archive filtering temporarily
 		const matchesSearch = !searchQuery ||
 			(conv.name || conv.conversation_name || '')?.toLowerCase().includes(searchQuery.toLowerCase());
 		
-		return matchesArchiveFilter && matchesSearch;
+		return matchesSearch;
 	}));
 
 	const directMessages = $derived(filteredConversations.filter(conv => conv.type === 'direct'));
@@ -73,6 +62,7 @@
 		
 		loading = true;
 		try {
+			// Revert to WebSocket store to restore basic functionality
 			await wsChat.loadConversations();
 			hasLoadedConversations = true; // Mark as loaded
 		} catch (error) {
