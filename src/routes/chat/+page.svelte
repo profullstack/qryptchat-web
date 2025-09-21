@@ -576,8 +576,23 @@
 
 	/* Responsive */
 	@media (max-width: 768px) {
-		.mobile-header {
+		.chat-header {
+			display: flex !important;
+			padding: 0.75rem;
+		}
+
+		.back-button {
 			display: flex;
+		}
+
+		.header-actions {
+			gap: 0.375rem;
+		}
+
+		.header-action-btn {
+			padding: 0.375rem;
+			min-width: 32px;
+			height: 32px;
 		}
 
 		.sidebar-container {
