@@ -9,8 +9,10 @@
 	import { currentTheme, themeUtils } from '$lib/stores/theme.js';
 	import Message from '$lib/components/Message.svelte';
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
+	import { keyManager } from '$lib/crypto/key-manager.js';
+	import { privateKeyManager } from '$lib/crypto/private-key-manager.js';
 
-	/** @type {'phone' | 'verify' | 'profile'} */
+	/** @type {'phone' | 'verify' | 'profile' | 'backup'} */
 	let step = 'phone';
 	let phoneNumber = '';
 	let verificationCode = '';
@@ -26,6 +28,16 @@
 	let avatarUrl = null; // Store uploaded avatar URL
 	/** @type {string | null | undefined} */
 	let createdUserId = null; // Store user ID after account creation for avatar upload
+	
+	// Key backup prompts
+	let showKeyBackupPrompt = $state(false);
+	let keyBackupPassword = $state('');
+	let confirmKeyBackupPassword = $state('');
+	let showBackupPassword = $state(false);
+	let useGPGBackup = $state(true);
+	let gpgBackupPassword = $state('');
+	let confirmGPGBackupPassword = $state('');
+	let showGPGBackupPassword = $state(false);
 
 	// Redirect if already authenticated
 	onMount(() => {
@@ -178,8 +190,19 @@
 				// Store user ID for potential avatar upload
 				createdUserId = data.user.id;
 				
-				messages.success('Account created successfully! Welcome to QryptChat!');
-				goto('/chat?welcome=true');
+				// Generate encryption keys for new user
+				try {
+					await keyManager.generateUserKeys();
+					console.log('🔑 Generated encryption keys for new user');
+					
+					// Go to backup step
+					step = 'backup';
+					messages.success('Account created successfully! Please backup your encryption keys.');
+				} catch (keyError) {
+					console.error('Failed to generate encryption keys:', keyError);
+					messages.warning('Account created but failed to generate encryption keys. You can generate them later in Settings.');
+					goto('/chat?welcome=true');
+				}
 			} else {
 				messages.error(data.error || 'Failed to create account');
 			}
@@ -237,6 +260,80 @@
 	function handleAvatarRemoved() {
 		avatarUrl = null;
 		messages.info('Profile picture removed');
+	}
+
+	/**
+	 * Download key backup during registration
+	 */
+	async function downloadKeyBackup() {
+		if (!keyBackupPassword || keyBackupPassword.trim().length === 0) {
+			messages.error('Please enter a password to protect your key backup');
+			return;
+		}
+		
+		if (keyBackupPassword !== confirmKeyBackupPassword) {
+			messages.error('Passwords do not match');
+			return;
+		}
+		
+		if (keyBackupPassword.length < 8) {
+			messages.error('Password must be at least 8 characters long');
+			return;
+		}
+
+		// Validate GPG password if GPG backup is enabled
+		if (useGPGBackup) {
+			if (!gpgBackupPassword || gpgBackupPassword.trim().length === 0) {
+				messages.error('Please enter a GPG password for additional encryption');
+				return;
+			}
+			
+			if (gpgBackupPassword !== confirmGPGBackupPassword) {
+				messages.error('GPG passwords do not match');
+				return;
+			}
+			
+			if (gpgBackupPassword.length < 8) {
+				messages.error('GPG password must be at least 8 characters long');
+				return;
+			}
+		}
+		
+		try {
+			let exportedData;
+			if (useGPGBackup) {
+				// Export with GPG encryption
+				exportedData = await privateKeyManager.exportPrivateKeysWithGPG(keyBackupPassword, gpgBackupPassword);
+				privateKeyManager.downloadGPGEncryptedKeys(exportedData);
+				messages.success('Key backup downloaded with GPG encryption! Welcome to QryptChat!');
+			} else {
+				// Standard export
+				exportedData = await privateKeyManager.exportPrivateKeys(keyBackupPassword);
+				privateKeyManager.downloadExportedKeys(exportedData);
+				messages.success('Key backup downloaded! Welcome to QryptChat!');
+			}
+			
+			// Clear passwords and proceed to chat
+			keyBackupPassword = '';
+			confirmKeyBackupPassword = '';
+			gpgBackupPassword = '';
+			confirmGPGBackupPassword = '';
+			showKeyBackupPrompt = false;
+			
+			goto('/chat?welcome=true');
+		} catch (error) {
+			console.error('Failed to download key backup:', error);
+			messages.error('Failed to download key backup: ' + (error.message || 'Unknown error'));
+		}
+	}
+	
+	/**
+	 * Skip key backup (not recommended but allowed)
+	 */
+	function skipKeyBackup() {
+		messages.warning('Key backup skipped. You can create a backup later in Settings.');
+		showKeyBackupPrompt = false;
+		goto('/chat?welcome=true');
 	}
 
 	onMount(() => {
@@ -441,6 +538,163 @@
 						{/if}
 					</button>
 				</form>
+			</div>
+		{/if}
+
+		<!-- Key Backup Step -->
+		{#if step === 'backup'}
+			<div class="auth-step">
+				<h2>🔐 Backup Your Encryption Keys</h2>
+				<p class="step-description">
+					Your encryption keys have been generated! Please create a secure backup to ensure you never lose access to your messages.
+				</p>
+				
+				<div class="backup-warning">
+					<p><strong>⚠️ Critical:</strong> Without this backup, you will lose access to all your encrypted messages if you lose this device or clear your browser data.</p>
+				</div>
+				
+				<form on:submit|preventDefault={downloadKeyBackup}>
+					<div class="input-group">
+						<label for="backup-password">Backup Password *</label>
+						<div class="password-input">
+							<input
+								id="backup-password"
+								type={showBackupPassword ? 'text' : 'password'}
+								bind:value={keyBackupPassword}
+								placeholder="Enter a strong password to protect your backup"
+								required
+								disabled={$isLoading}
+							/>
+							<button
+								type="button"
+								class="toggle-password"
+								onclick={() => showBackupPassword = !showBackupPassword}
+								disabled={$isLoading}
+							>
+								{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+							</button>
+						</div>
+					</div>
+					
+					<div class="input-group">
+						<label for="confirm-backup-password">Confirm Password *</label>
+						<div class="password-input">
+							<input
+								id="confirm-backup-password"
+								type={showBackupPassword ? 'text' : 'password'}
+								bind:value={confirmKeyBackupPassword}
+								placeholder="Confirm your password"
+								required
+								disabled={$isLoading}
+							/>
+							<button
+								type="button"
+								class="toggle-password"
+								onclick={() => showBackupPassword = !showBackupPassword}
+								disabled={$isLoading}
+							>
+								{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+							</button>
+						</div>
+					</div>
+
+					<!-- GPG Encryption Option -->
+					<div class="input-group">
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								bind:checked={useGPGBackup}
+								disabled={$isLoading}
+							/>
+							<span class="checkbox-text">🔐 Enable GPG encryption (recommended)</span>
+						</label>
+						<p class="help-text-small">
+							Adds an additional layer of GPG encryption for maximum security
+						</p>
+					</div>
+
+					{#if useGPGBackup}
+						<div class="gpg-backup-section">
+							<div class="input-group">
+								<label for="gpg-backup-password">GPG Password *</label>
+								<div class="password-input">
+									<input
+										id="gpg-backup-password"
+										type={showGPGBackupPassword ? 'text' : 'password'}
+										bind:value={gpgBackupPassword}
+										placeholder="Enter a strong GPG password"
+										required
+										disabled={$isLoading}
+									/>
+									<button
+										type="button"
+										class="toggle-password"
+										onclick={() => showGPGBackupPassword = !showGPGBackupPassword}
+										disabled={$isLoading}
+									>
+										{showGPGBackupPassword ? '👁️' : '👁️‍🗨️'}
+									</button>
+								</div>
+							</div>
+							
+							<div class="input-group">
+								<label for="confirm-gpg-backup-password">Confirm GPG Password *</label>
+								<div class="password-input">
+									<input
+										id="confirm-gpg-backup-password"
+										type={showGPGBackupPassword ? 'text' : 'password'}
+										bind:value={confirmGPGBackupPassword}
+										placeholder="Confirm your GPG password"
+										required
+										disabled={$isLoading}
+									/>
+									<button
+										type="button"
+										class="toggle-password"
+										onclick={() => showGPGBackupPassword = !showGPGBackupPassword}
+										disabled={$isLoading}
+									>
+										{showGPGBackupPassword ? '👁️' : '👁️‍🗨️'}
+									</button>
+								</div>
+							</div>
+						</div>
+					{/if}
+					
+					<div class="button-group">
+						<button
+							type="submit"
+							disabled={$isLoading || !keyBackupPassword || !confirmKeyBackupPassword || (useGPGBackup && (!gpgBackupPassword || !confirmGPGBackupPassword))}
+							class="primary-button"
+						>
+							{#if $isLoading}
+								<span class="loading-spinner"></span>
+								Creating Backup...
+							{:else}
+								{useGPGBackup ? '🔐 Download GPG Backup' : '📁 Download Backup'}
+							{/if}
+						</button>
+						
+						<button
+							type="button"
+							class="secondary-button"
+							onclick={skipKeyBackup}
+							disabled={$isLoading}
+						>
+							Skip (Not Recommended)
+						</button>
+					</div>
+				</form>
+				
+				<div class="backup-info">
+					<p><strong>💡 Tips:</strong></p>
+					<ul>
+						<li>Use a strong, unique password for your backup</li>
+						<li>Store the backup file in a secure location (cloud storage, USB drive, etc.)</li>
+						<li>Remember both passwords - you'll need them to restore your keys</li>
+						<li>You can create additional backups later in Settings</li>
+					</ul>
+				</div>
 			</div>
 		{/if}
 
@@ -696,5 +950,143 @@
 		.avatar-description {
 			font-size: 0.7rem;
 		}
+	}
+
+	/* Password input styles */
+	.password-input {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+
+	.password-input input {
+		padding-right: 3rem;
+	}
+
+	.toggle-password {
+		position: absolute;
+		right: 0.75rem;
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 1rem;
+		color: var(--color-text-secondary);
+		padding: 0.25rem;
+	}
+
+	.toggle-password:hover {
+		color: var(--color-text-primary);
+	}
+
+	/* Backup step specific styles */
+	.backup-warning {
+		background: rgba(239, 68, 68, 0.1);
+		border: 1px solid #ef4444;
+		border-radius: 0.375rem;
+		padding: 1rem;
+		margin: 1rem 0;
+	}
+
+	.backup-warning p {
+		color: #dc2626;
+		margin: 0;
+		font-weight: 500;
+		font-size: 0.875rem;
+	}
+
+	.checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text-primary);
+	}
+
+	.checkbox-label input[type="checkbox"] {
+		margin: 0;
+		cursor: pointer;
+		width: auto;
+	}
+
+	.checkbox-text {
+		user-select: none;
+	}
+
+	.help-text-small {
+		margin: 0.5rem 0 0 0;
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+		line-height: 1.4;
+	}
+
+	.gpg-backup-section {
+		margin-top: 1rem;
+		padding: 1rem;
+		background: rgba(99, 102, 241, 0.05);
+		border-radius: 0.375rem;
+		border: 1px solid rgba(99, 102, 241, 0.2);
+	}
+
+	.button-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+	}
+
+	.secondary-button {
+		width: 100%;
+		padding: 0.75rem;
+		background: var(--color-bg-secondary);
+		color: var(--color-text-secondary);
+		border: 1px solid var(--color-border-primary);
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.secondary-button:hover:not(:disabled) {
+		background: var(--color-bg-tertiary);
+		border-color: var(--color-border-secondary);
+	}
+
+	.secondary-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.backup-info {
+		margin-top: 1.5rem;
+		padding: 1rem;
+		background: rgba(34, 197, 94, 0.05);
+		border-radius: 0.375rem;
+		border: 1px solid rgba(34, 197, 94, 0.2);
+	}
+
+	.backup-info p {
+		color: #065f46;
+		margin: 0 0 0.5rem 0;
+		font-weight: 600;
+		font-size: 0.875rem;
+	}
+
+	.backup-info ul {
+		margin: 0;
+		padding-left: 1.25rem;
+		font-size: 0.8125rem;
+		color: #047857;
+		line-height: 1.5;
+	}
+
+	.backup-info li {
+		margin-bottom: 0.25rem;
+	}
+
+	.backup-info li:last-child {
+		margin-bottom: 0;
 	}
 </style>

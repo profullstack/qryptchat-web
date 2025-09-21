@@ -193,6 +193,34 @@
 		error = '';
 		success = '';
 	}
+	
+	/**
+	 * Generate encryption keys for new users
+	 */
+	async function generateKeys() {
+		try {
+			loading = true;
+			error = '';
+			success = '';
+			
+			// Generate user encryption keys
+			await keyManager.generateUserKeys();
+			
+			// Update status
+			hasEncryptionKeys = true;
+			
+			success = 'Encryption keys generated successfully! You can now export them for backup.';
+			
+			// Dispatch event for parent component
+			dispatch('exported', { timestamp: Date.now(), generated: true });
+			
+		} catch (err) {
+			console.error('Failed to generate encryption keys:', err);
+			error = err.message || 'Failed to generate encryption keys';
+		} finally {
+			loading = false;
+		}
+	}
 </script>
 
 <div class="private-key-manager">
@@ -215,7 +243,38 @@
 		</div>
 	{/if}
 	
-	{#if hasEncryptionKeys}
+	<!-- Key Generation Section for users without keys -->
+	{#if !hasEncryptionKeys}
+		<div class="key-section generate-section">
+			<div class="section-title">
+				<h4>🔐 Generate Encryption Keys</h4>
+				<p>You need encryption keys to secure your messages. Generate them now to start using QryptChat securely.</p>
+			</div>
+			
+			<div class="warning-box">
+				<p><strong>⚠️ Important:</strong></p>
+				<ul>
+					<li>Your encryption keys will be generated locally and stored securely</li>
+					<li>You'll be prompted to download a backup after generation</li>
+					<li>Keep your backup safe - it's the only way to restore your keys</li>
+				</ul>
+			</div>
+			
+			<button
+				type="button"
+				class="btn primary"
+				onclick={generateKeys}
+				disabled={loading}
+			>
+				{#if loading}
+					<div class="btn-spinner"></div>
+					Generating Keys...
+				{:else}
+					🔐 Generate My Encryption Keys
+				{/if}
+			</button>
+		</div>
+	{:else}
 		<!-- Export Section -->
 		<div class="key-section">
 			<div class="section-title">
@@ -786,5 +845,47 @@
 
 	.gpg-section .form-group:last-child {
 		margin-bottom: 0;
+	}
+
+	/* Warning box for key generation */
+	.warning-box {
+		background: rgba(251, 191, 36, 0.1);
+		border: 1px solid #f59e0b;
+		border-radius: 0.375rem;
+		padding: 1rem;
+		margin: 1rem 0;
+	}
+
+	.warning-box p {
+		color: #d97706;
+		margin: 0 0 0.5rem 0;
+		font-weight: 500;
+		font-size: 0.875rem;
+	}
+
+	.warning-box ul {
+		margin: 0;
+		padding-left: 1.25rem;
+		font-size: 0.8125rem;
+		color: #92400e;
+		line-height: 1.5;
+	}
+
+	.warning-box li {
+		margin-bottom: 0.25rem;
+	}
+
+	.warning-box li:last-child {
+		margin-bottom: 0;
+	}
+
+	/* Generate section specific styling */
+	.generate-section {
+		border: 2px dashed var(--color-border);
+		background: var(--color-bg-secondary);
+	}
+
+	.generate-section .section-title h4 {
+		color: var(--color-brand-primary);
 	}
 </style>
