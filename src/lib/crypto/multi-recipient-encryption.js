@@ -87,31 +87,15 @@ export class MultiRecipientEncryptionService {
 						firstChars: publicKey?.substring(0, 20) || 'N/A'
 					});
 					
-					try {
-						// Try ML-KEM encryption first
-						const encryptedContent = await postQuantumEncryption.encryptForRecipient(
-							messageContent,
-							publicKey
-						);
-						
-						encryptedContents[userId] = encryptedContent;
-						this.successfulEncryptionCount++;
-						console.log(`🔐 [MULTI] ✅ Encrypted for participant: ${userId}`);
-					} catch (encryptError) {
-						console.error(`🔐 [MULTI] ❌ Failed to encrypt for participant ${userId} with ML-KEM:`, encryptError);
-						
-						// Fall back to AES encryption
-						try {
-							console.log(`🔐 [MULTI] Trying fallback encryption for ${userId}`);
-							const fallbackEncrypted = await this.fallbackEncrypt(messageContent, userId);
-							encryptedContents[userId] = fallbackEncrypted;
-							this.successfulEncryptionCount++;
-							console.log(`🔐 [MULTI] ✅ Encrypted for participant ${userId} using fallback method`);
-						} catch (fallbackError) {
-							console.error(`🔐 [MULTI] ❌ Fallback encryption also failed for ${userId}:`, fallbackError);
-							this.failedEncryptionCount++;
-						}
-					}
+					// Only use ML-KEM encryption - no AES fallbacks
+					const encryptedContent = await postQuantumEncryption.encryptForRecipient(
+						messageContent,
+						publicKey
+					);
+					
+					encryptedContents[userId] = encryptedContent;
+					this.successfulEncryptionCount++;
+					console.log(`🔐 [MULTI] ✅ Encrypted for participant: ${userId} using ML-KEM`);
 				} catch (error) {
 					console.error(`🔐 [MULTI] ❌ Failed to validate or encrypt for participant ${userId}:`, error);
 					this.failedEncryptionCount++;
@@ -172,13 +156,7 @@ export class MultiRecipientEncryptionService {
 					}
 				}
 				
-				// Check if this is a fallback encrypted message
-				if (messageData && messageData.alg === 'FALLBACK-AES') {
-					console.log('🔐 [MULTI] Detected fallback encrypted message, using fallback decryption');
-					decryptedContent = await this.fallbackDecrypt(messageData);
-					console.log(`🔐 [MULTI] ✅ Successfully decrypted fallback message: "${decryptedContent}"`);
-					return decryptedContent;
-				}
+				// No AES fallback support - only post-quantum encryption
 				
 				// Otherwise use standard ML-KEM decryption
 				try {
@@ -227,19 +205,9 @@ export class MultiRecipientEncryptionService {
 					const publicKey = await publicKeyService.getUserPublicKey(userId);
 					
 					if (!publicKey) {
-						console.warn(`🔐 [MULTI] No public key found for user: ${userId}`);
-						
-						// Try fallback encryption even without a public key
-						try {
-							console.log(`🔐 [MULTI] Using fallback encryption for ${userId} (no public key)`);
-							const fallbackEncrypted = await this.fallbackEncrypt(messageContent, userId);
-							encryptedContents[userId] = fallbackEncrypted;
-							console.log(`🔐 [MULTI] ✅ Encrypted for recipient ${userId} using fallback method`);
-							continue;
-						} catch (fallbackError) {
-							console.error(`🔐 [MULTI] ❌ Fallback encryption failed for ${userId}:`, fallbackError);
-							continue;
-						}
+						console.error(`🔐 [MULTI] ❌ No public key found for user: ${userId} - skipping encryption`);
+						this.failedEncryptionCount++;
+						continue;
 					}
 
 					console.log(`🔐 [MULTI] Encrypting for recipient: ${userId}`);
@@ -251,28 +219,14 @@ export class MultiRecipientEncryptionService {
 						firstChars: publicKey?.substring(0, 20) || 'N/A'
 					});
 					
-					try {
-						// Try ML-KEM encryption first
-						const encryptedContent = await postQuantumEncryption.encryptForRecipient(
-							messageContent,
-							publicKey
-						);
-						
-						encryptedContents[userId] = encryptedContent;
-						console.log(`🔐 [MULTI] ✅ Encrypted for recipient: ${userId}`);
-					} catch (encryptError) {
-						console.error(`🔐 [MULTI] ❌ Failed to encrypt for recipient ${userId} with ML-KEM:`, encryptError);
-						
-						// Fall back to AES encryption
-						try {
-							console.log(`🔐 [MULTI] Trying fallback encryption for ${userId}`);
-							const fallbackEncrypted = await this.fallbackEncrypt(messageContent, userId);
-							encryptedContents[userId] = fallbackEncrypted;
-							console.log(`🔐 [MULTI] ✅ Encrypted for recipient ${userId} using fallback method`);
-						} catch (fallbackError) {
-							console.error(`🔐 [MULTI] ❌ Fallback encryption also failed for ${userId}:`, fallbackError);
-						}
-					}
+					// Only use ML-KEM encryption - no AES fallbacks
+					const encryptedContent = await postQuantumEncryption.encryptForRecipient(
+						messageContent,
+						publicKey
+					);
+					
+					encryptedContents[userId] = encryptedContent;
+					console.log(`🔐 [MULTI] ✅ Encrypted for recipient: ${userId} using ML-KEM`);
 				} catch (error) {
 					console.error(`🔐 [MULTI] ❌ Failed to validate or encrypt for recipient ${userId}:`, error);
 					// Continue with other recipients

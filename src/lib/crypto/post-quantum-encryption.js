@@ -350,14 +350,14 @@ export class PostQuantumEncryptionService {
 	 		console.log(`🔐 ✅ Encrypted message using ${kemName}`);
 	 		return result;
 	 	} catch (encapError) {
-	 		console.error(`🔐 ❌ ML-KEM encapsulation failed, using fallback encryption:`, encapError);
+	 		console.error(`🔐 ❌ ML-KEM encapsulation failed:`, encapError);
 	 		
 	 		// Log key analysis for debugging
 	 		const keyInfo = this.analyzePublicKey(recipientPubKeyBytes);
 	 		console.log(`🔐 [DEBUG] Public key analysis:`, keyInfo);
 	 		
-	 		// Use Web Crypto API as fallback
-	 		return await this.encryptWithFallbackMethod(message, recipientPublicKey);
+	 		// No fallback - throw the error to surface the real issue
+	 		throw new Error(`ML-KEM encryption failed: ${encapError.message}`);
 	 	}
 	 } catch (error) {
 	 	console.error(`🔐 ❌ All encryption methods failed:`, error);
@@ -578,9 +578,9 @@ export class PostQuantumEncryptionService {
 				decryptionAlgorithm = this.kemAlgorithm768;
 				userKeysToUse = await this.getUserKeys768();
 			} else if (algorithm === 'FALLBACK-AES-GCM' || algorithm === 'FALLBACK-AES') {
-				// Handle fallback encryption format
-				console.log('🔐 [DEBUG] Detected fallback encryption format:', algorithm);
-				return await this.decryptWithFallbackMethod(messageData);
+				// No AES fallback support
+				console.error('🔐 [ERROR] AES fallback detected - this should not happen in post-quantum system');
+				throw new Error('AES fallback not supported - use only ML-KEM encryption');
 			} else {
 				// For unknown formats or unspecified algorithms, do a strict check
 				if (!version || version !== 3 ||
