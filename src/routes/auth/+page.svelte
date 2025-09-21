@@ -380,14 +380,14 @@
 				<h2>{$t('auth.enterPhone')}</h2>
 				<p class="step-description">{$t('auth.phoneDescription')}</p>
 				
-				<form on:submit|preventDefault={sendSMS}>
+				<form onsubmit={sendSMS}>
 					<div class="input-group">
 						<label for="phone">{$t('auth.phoneNumber')}</label>
 						<input
 							id="phone"
 							type="tel"
 							bind:value={phoneNumber}
-							on:input={handlePhoneInput}
+							oninput={handlePhoneInput}
 							placeholder="+1234567890"
 							required
 							disabled={$isLoading}
@@ -415,7 +415,7 @@
 		<!-- Verification Step -->
 		{#if step === 'verify'}
 			<div class="auth-step">
-				<button class="back-button" on:click={goBack}>
+				<button class="back-button" onclick={goBack}>
 					← {$t('common.back')}
 				</button>
 				
@@ -424,14 +424,14 @@
 					{$t('auth.codeDescription')} <strong>{phoneNumber}</strong>
 				</p>
 				
-				<form on:submit|preventDefault={verifySMS}>
+				<form onsubmit={verifySMS}>
 					<div class="input-group">
 						<label for="code">{$t('auth.verificationCode')}</label>
 						<input
 							id="code"
 							type="text"
 							bind:value={verificationCode}
-							on:input={handleCodeInput}
+							oninput={handleCodeInput}
 							placeholder="123456"
 							maxlength="6"
 							required
@@ -457,7 +457,7 @@
 				
 				<div class="resend-section">
 					{#if canResend}
-						<button class="link-button" on:click={sendSMS}>
+						<button class="link-button" onclick={sendSMS}>
 							{$t('auth.resendCode')}
 						</button>
 					{:else}
@@ -472,14 +472,14 @@
 		<!-- Profile Setup Step -->
 		{#if step === 'profile'}
 			<div class="auth-step">
-				<button class="back-button" on:click={goBack}>
+				<button class="back-button" onclick={goBack}>
 					← {$t('common.back')}
 				</button>
 				
 				<h2>{$t('auth.createProfile')}</h2>
 				<p class="step-description">{$t('auth.profileDescription')}</p>
 				
-				<form on:submit|preventDefault={completeProfile}>
+				<form onsubmit={completeProfile}>
 					<!-- Avatar Upload Section -->
 					<div class="avatar-section">
 						<div class="avatar-label">Profile Picture (Optional)</div>
@@ -553,7 +553,7 @@
 					<p><strong>⚠️ Critical:</strong> Without this backup, you will lose access to all your encrypted messages if you lose this device or clear your browser data.</p>
 				</div>
 				
-				<form on:submit|preventDefault={downloadKeyBackup}>
+				<form onsubmit={downloadKeyBackup}>
 					<div class="input-group">
 						<label for="backup-password">Backup Password *</label>
 						<div class="password-input">
