@@ -126,6 +126,8 @@
 				return;
 			}
 			
+			console.log('🔐 [UI] Sending nuclear delete request with JWT token');
+			
 			const response = await fetch('/api/user/nuclear-delete', {
 				method: 'DELETE',
 				headers: {

@@ -13,21 +13,57 @@ const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KE
  */
 async function authenticateUser(request) {
 	try {
-		// Parse cookies to get JWT token
-		const cookieHeader = request.headers.get('cookie');
-		if (!cookieHeader) {
-			return { user: null, error: 'No authentication cookies found' };
+		let accessToken = null;
+		
+		// First, check for Authorization header (priority)
+		const authHeader = request.headers.get('authorization');
+		if (authHeader?.startsWith('Bearer ')) {
+			accessToken = authHeader.replace('Bearer ', '');
+			console.log('🔐 [API] ✅ Using JWT from Authorization header');
+			console.log('🔐 [API] JWT segments count:', accessToken.split('.').length);
+			console.log('🔐 [API] JWT preview:', accessToken.substring(0, 50) + '...');
+		} else {
+			// Fallback to cookies
+			const cookieHeader = request.headers.get('cookie');
+			if (!cookieHeader) {
+				return { user: null, error: 'No authentication found' };
+			}
+
+			// Extract access token from cookies
+			const cookies = Object.fromEntries(
+				cookieHeader.split('; ').map(cookie => {
+					const [name, ...rest] = cookie.split('=');
+					return [name, rest.join('=')];
+				})
+			);
+
+			// Try standard cookie names first
+			accessToken = cookies['sb-access-token'] || cookies['sb-refresh-token'];
+			
+			// If not found, look for the base64 encoded auth token format
+			if (!accessToken) {
+				for (const [cookieName, cookieValue] of Object.entries(cookies)) {
+					if (cookieName.includes('auth-token') && cookieValue.startsWith('base64-')) {
+						try {
+							// Decode the base64 JSON
+							const base64Data = cookieValue.replace('base64-', '');
+							const decodedData = Buffer.from(base64Data, 'base64').toString('utf8');
+							const authData = JSON.parse(decodedData);
+							
+							// Extract the access token from the decoded data
+							if (authData.access_token) {
+								accessToken = authData.access_token;
+								console.log('🔐 [API] ✅ Found access token in base64 auth cookie');
+								break;
+							}
+						} catch (decodeError) {
+							console.log('🔐 [API] ❌ Failed to decode auth cookie:', decodeError.message);
+						}
+					}
+				}
+			}
 		}
-
-		// Extract access token from cookies
-		const cookies = Object.fromEntries(
-			cookieHeader.split('; ').map(cookie => {
-				const [name, ...rest] = cookie.split('=');
-				return [name, rest.join('=')];
-			})
-		);
-
-		const accessToken = cookies['sb-access-token'] || cookies['sb-refresh-token'];
+		
 		if (!accessToken) {
 			return { user: null, error: 'No authentication tokens found' };
 		}
@@ -36,6 +72,8 @@ async function authenticateUser(request) {
 		const { data: { user }, error } = await supabaseClient.auth.getUser(accessToken);
 
 		if (error) {
+			console.log('🔐 [API] ❌ JWT validation failed:', error.message);
+			console.log('🔐 [API] Token preview:', accessToken.substring(0, 50) + '...');
 			return { user: null, error: `Authentication failed: ${error.message}` };
 		}
 
@@ -43,10 +81,11 @@ async function authenticateUser(request) {
 			return { user: null, error: 'Invalid authentication token' };
 		}
 
+		console.log('🔐 [API] ✅ JWT validation successful for user:', user.id);
 		return { user, error: null };
 
 	} catch (error) {
-		console.error('Authentication error:', error);
+		console.error('🔐 [API] ❌ Authentication error:', error);
 		return { user: null, error: 'Authentication system error' };
 	}
 }
