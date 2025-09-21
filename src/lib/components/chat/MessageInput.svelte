@@ -269,6 +269,12 @@
 	<!-- Selected files preview -->
 	{#if selectedFiles.length > 0}
 		<div class="selected-files">
+			<div class="files-ready-indicator">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/>
+				</svg>
+				<span>{selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} ready to send</span>
+			</div>
 			{#each selectedFiles as file, index}
 				<div class="file-preview" class:uploading={isUploadingFiles}>
 					<div class="file-info">
@@ -377,6 +383,20 @@
 
 	.selected-files {
 		margin-bottom: 1rem;
+	}
+
+	.files-ready-indicator {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: var(--color-success-background, #f0fdf4);
+		color: var(--color-success-text, #166534);
+		border: 1px solid var(--color-success-border, #bbf7d0);
+		border-radius: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		margin-bottom: 0.75rem;
+		font-size: 0.875rem;
+		font-weight: 500;
 	}
 
 	.file-preview {
