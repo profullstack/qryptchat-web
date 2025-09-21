@@ -497,7 +497,34 @@ function createWebSocketChatStore() {
 			}
 		} catch (error) {
 			console.error('Failed to send message:', error);
-			return { success: false, error: 'Failed to send message' };
+			
+			// Extract more useful error information for the user
+			let errorMessage = 'Failed to send message';
+			
+			// Check for KYBER header issues
+			if (error && error.message) {
+				if (error.message.includes('KYBER') && error.message.includes('Nuclear Key Reset')) {
+					errorMessage = 'Encryption failed due to key format issues. Both you and the recipient need to use the Nuclear Key Reset option in Settings.';
+				} else if (error.message.includes('invalid encapsulation key')) {
+					errorMessage = 'Encryption failed due to key compatibility issues. Both participants need to reset their encryption keys.';
+				} else if (error.message.includes('Failed to encrypt message for any participants')) {
+					errorMessage = 'Failed to encrypt message for any participants. Try using the Nuclear Key Reset option in Settings.';
+				}
+			}
+			
+			// Check if the multi-recipient service collected error details
+			if (multiRecipientEncryption.encryptionErrors && multiRecipientEncryption.encryptionErrors.length > 0) {
+				const kyberErrors = multiRecipientEncryption.encryptionErrors.filter(e =>
+					e.errorType === 'KYBER_HEADER' ||
+					e.message.includes('KYBER')
+				);
+				
+				if (kyberErrors.length > 0) {
+					errorMessage = 'Message encryption failed: Detected KYBER key format. Both participants must use the Nuclear Key Reset option in Settings.';
+				}
+			}
+			
+			return { success: false, error: errorMessage };
 		}
 	}
 

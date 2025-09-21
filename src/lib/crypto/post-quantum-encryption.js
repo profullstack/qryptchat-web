@@ -924,42 +924,12 @@ export class PostQuantumEncryptionService {
 			keyBytes[2] === 66 && keyBytes[3] === 69 &&
 			keyBytes[4] === 82) {
 			
-			console.log('🔐 [DEBUG] Detected "KYBER" header in key, stripping header');
+			console.log('🔐 [CRITICAL] Detected "KYBER" header in key - this key format cannot be repaired');
+			console.log('🔐 [CRITICAL] Please use the Nuclear Key Reset in settings to generate new clean keys');
 			
-			// Find where the header ends - typically after "KYBER102" or similar
-			// Look for a typical separator like a null byte, newline, or other control character
-			let headerEnd = 18; // Try 18 bytes first (common header size based on error logs)
-			
-			// Search for a clear separator - null byte, space, newline, etc.
-			for (let i = 8; i < Math.min(32, keyBytes.length); i++) {
-				if (keyBytes[i] === 0 || keyBytes[i] === 10 || keyBytes[i] === 13 || keyBytes[i] === 32) {
-					headerEnd = i + 1; // Include the separator in the header
-					break;
-				}
-			}
-			
-			console.log(`🔐 [DEBUG] Stripping ${headerEnd} bytes of header from key`);
-			
-			// Create a new Uint8Array without the header
-			const strippedKeyBytes = new Uint8Array(keyBytes.length - headerEnd);
-			strippedKeyBytes.set(keyBytes.subarray(headerEnd));
-			
-			// Log first few bytes of the stripped key for debugging
-			console.log('🔐 [DEBUG] Stripped key first bytes:', Array.from(strippedKeyBytes.slice(0, 8)));
-			
-			// After stripping header, ensure key is exactly the right size
-			const diff1024 = Math.abs(strippedKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE);
-			const diff768 = Math.abs(strippedKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE);
-			
-			if (diff1024 <= 32 && diff1024 <= diff768) {
-				console.log(`🔐 [DEBUG] Header stripped key length ${strippedKeyBytes.length} is close to ML-KEM-1024 (${this.ML_KEM_1024_PUBLIC_KEY_SIZE}), adjusting`);
-				return this.padKeyToExactSize(strippedKeyBytes, this.ML_KEM_1024_PUBLIC_KEY_SIZE);
-			} else if (diff768 <= 32) {
-				console.log(`🔐 [DEBUG] Header stripped key length ${strippedKeyBytes.length} is close to ML-KEM-768 (${this.ML_KEM_768_PUBLIC_KEY_SIZE}), adjusting`);
-				return this.padKeyToExactSize(strippedKeyBytes, this.ML_KEM_768_PUBLIC_KEY_SIZE);
-			}
-			
-			return strippedKeyBytes;
+			// Create a new empty array that will cause encryption to fail properly
+			// This is better than returning something that looks like it might work
+			return new Uint8Array(this.ML_KEM_1024_PUBLIC_KEY_SIZE);
 		}
 		
 		// Check if key is close to expected size but slightly off (might need padding/trimming)

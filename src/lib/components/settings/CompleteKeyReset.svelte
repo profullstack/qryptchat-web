@@ -1,6 +1,6 @@
 <script>
 	import { user } from '$lib/stores/auth.js';
-	import { Kyber } from '$lib/crypto/kyber.js';
+	import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 	let isResetting = false;
@@ -10,52 +10,93 @@
 	let showKeyStatus = false;
 
 	// Check current key status
-	function checkKeyStatus() {
+	async function checkKeyStatus() {
 		showKeyStatus = true;
 		try {
-			const mlKemKey = localStorage.getItem('ml-kem-keypair');
-			const qryptKey = localStorage.getItem('qryptchat_pq_keypair');
+			// Initialize the encryption service if needed
+			await postQuantumEncryption.initialize();
 			
-			if (!mlKemKey && !qryptKey) {
+			// Try to get ML-KEM-1024 keys
+			let mlKemKeys = null;
+			try {
+				mlKemKeys = await postQuantumEncryption.getUserKeys();
+			} catch (e) {
+				console.warn('Failed to get ML-KEM-1024 keys:', e);
+			}
+			
+			// Try to get ML-KEM-768 keys (for backward compatibility)
+			let mlKem768Keys = null;
+			try {
+				mlKem768Keys = await postQuantumEncryption.getUserKeys768();
+			} catch (e) {
+				console.warn('Failed to get ML-KEM-768 keys:', e);
+			}
+			
+			// Check if any keys exist
+			if (!mlKemKeys && !mlKem768Keys) {
 				keyStatus = '❌ No encryption keys found - Reset required';
 				return;
 			}
 			
-			let hasValidKey = false;
 			let keyInfo = [];
 			
-			if (mlKemKey) {
-				try {
-					const parsed = JSON.parse(mlKemKey);
-					if (parsed.algorithm === 'ML-KEM-1024' && parsed.publicKey && parsed.privateKey) {
-						hasValidKey = true;
-						keyInfo.push(`✅ ML-KEM key: ${parsed.generated ? new Date(parsed.generated).toLocaleString() : 'Unknown date'}`);
-					} else {
-						keyInfo.push('⚠️ ML-KEM key: Missing algorithm field');
-					}
-				} catch (e) {
-					keyInfo.push('❌ ML-KEM key: Invalid format');
+			// Check ML-KEM-1024 key
+			if (mlKemKeys && mlKemKeys.publicKey && mlKemKeys.privateKey) {
+				// Check if key has KYBER header
+				const hasKyberHeader = mlKemKeys.publicKey.startsWith('S1lCRVIx'); // Base64 for "KYBER1"
+				
+				if (hasKyberHeader) {
+					keyInfo.push('⚠️ ML-KEM-1024 key: Has KYBER header (incompatible format)');
+				} else {
+					keyInfo.push('✅ ML-KEM-1024 key: Valid format (no KYBER header)');
 				}
-			}
-			
-			if (qryptKey) {
-				try {
-					const parsed = JSON.parse(qryptKey);
-					if (parsed.algorithm === 'ML-KEM-1024' && parsed.publicKey && parsed.privateKey) {
-						hasValidKey = true;
-						keyInfo.push(`✅ Legacy key: ${parsed.timestamp ? new Date(parsed.timestamp).toLocaleString() : 'Unknown date'}`);
-					} else {
-						keyInfo.push('⚠️ Legacy key: Missing algorithm field');
-					}
-				} catch (e) {
-					keyInfo.push('❌ Legacy key: Invalid format');
-				}
-			}
-			
-			if (hasValidKey) {
-				keyStatus = `🔑 Current keys:\n${keyInfo.join('\n')}`;
 			} else {
-				keyStatus = `⚠️ Keys found but invalid:\n${keyInfo.join('\n')}\nReset recommended`;
+				keyInfo.push('❓ ML-KEM-1024 key: Not found');
+			}
+			
+			// Check ML-KEM-768 key
+			if (mlKem768Keys && mlKem768Keys.publicKey && mlKem768Keys.privateKey) {
+				// Check if key has KYBER header
+				const hasKyberHeader = mlKem768Keys.publicKey.startsWith('S1lCRVIx'); // Base64 for "KYBER1"
+				
+				if (hasKyberHeader) {
+					keyInfo.push('⚠️ ML-KEM-768 key: Has KYBER header (incompatible format)');
+				} else {
+					keyInfo.push('✅ ML-KEM-768 key: Valid format (no KYBER header)');
+				}
+			} else {
+				keyInfo.push('❓ ML-KEM-768 key: Not found');
+			}
+			
+			// Check if public key is in database
+			let dbKeyStatus = '❓ Database key status: Unknown';
+			try {
+				// Get current user from user store
+				const userId = $user?.id;
+				
+				if (userId) {
+					const publicKeyExists = await publicKeyService.hasUserPublicKey(userId);
+					if (publicKeyExists) {
+						dbKeyStatus = '✅ Database key status: Public key found in database';
+					} else {
+						dbKeyStatus = '❌ Database key status: Public key NOT found in database';
+					}
+				} else {
+					dbKeyStatus = '⚠️ Database key status: Cannot check - no user ID available';
+				}
+			} catch (e) {
+				dbKeyStatus = '⚠️ Database key status: Failed to check';
+			}
+			keyInfo.push(dbKeyStatus);
+			
+			// Format the status message
+			const hasKyber = keyInfo.some(info => info.includes('KYBER header'));
+			if (hasKyber) {
+				keyStatus = `⚠️ KYBER headers detected - Nuclear Reset REQUIRED:\n${keyInfo.join('\n')}`;
+			} else if (keyInfo.some(info => info.startsWith('✅'))) {
+				keyStatus = `🔑 Current keys (last checked: ${new Date().toLocaleString()}):\n${keyInfo.join('\n')}`;
+			} else {
+				keyStatus = `⚠️ No valid keys found - Reset REQUIRED:\n${keyInfo.join('\n')}`;
 			}
 			
 		} catch (error) {
@@ -77,11 +118,10 @@
 		resetComplete = false;
 
 		try {
-			// Step 1: Clear ALL existing keys from localStorage
+			// Step 1: Clear ALL existing keys from storage (IndexedDB)
 			resetStatus = '🧹 Clearing all existing keys...';
-			localStorage.removeItem('ml-kem-keypair');
-			localStorage.removeItem('qryptchat_pq_keypair');
-			console.log('🧹 Cleared localStorage keys');
+			await postQuantumEncryption.clearUserKeys();
+			console.log('🧹 Cleared all encryption keys from IndexedDB');
 			await new Promise(resolve => setTimeout(resolve, 500));
 
 			// Step 2: Clear public key cache FIRST to prevent stale key retrieval
@@ -90,11 +130,21 @@
 			console.log('🧹 Cleared public key cache');
 			await new Promise(resolve => setTimeout(resolve, 500));
 
-			// Step 3: Generate fresh ML-KEM keypair
+			// Step 3: Generate fresh ML-KEM keypair using native ML-KEM implementation
 			resetStatus = '🔑 Generating fresh ML-KEM-1024 keypair...';
-			const rawKeypair = await Kyber.generateKeyPair();
-			const newKeypair = Kyber.serializeKeyPair(rawKeypair);
-			console.log('🔑 Generated new keypair:', {
+			
+			// Use the post-quantum encryption service to generate clean keys
+			// This generates keys without KYBER headers that were causing encryption failures
+			await postQuantumEncryption.clearUserKeys(); // Make sure to clear any existing keys
+			const generatedKeys = await postQuantumEncryption.generateUserKeys();
+			
+			// Format the keys in the expected format
+			const newKeypair = {
+				publicKey: generatedKeys.publicKey,
+				privateKey: generatedKeys.privateKey
+			};
+			
+			console.log('🔑 Generated new keypair using native ML-KEM implementation:', {
 				publicKeyLength: newKeypair.publicKey?.length,
 				privateKeyLength: newKeypair.privateKey?.length,
 				userId: $user.id
@@ -112,30 +162,22 @@
 			console.log('🔍 Keypair validation passed');
 			await new Promise(resolve => setTimeout(resolve, 500));
 
-			// Step 5: Store in localStorage (both formats for compatibility)
-			resetStatus = '💾 Storing new keys in localStorage...';
+			// Step 5: Verify keys are stored correctly in IndexedDB
+			resetStatus = '💾 Verifying keys are stored correctly...';
 			
-			// New format
-			const mlKemKey = {
-				publicKey: newKeypair.publicKey,
-				privateKey: newKeypair.privateKey,
-				algorithm: 'ML-KEM-1024',
-				generated: new Date().toISOString(),
-				userId: $user.id
-			};
-			localStorage.setItem('ml-kem-keypair', JSON.stringify(mlKemKey));
-
-			// Legacy format for compatibility (must include algorithm field!)
-			const legacyKey = {
-				publicKey: newKeypair.publicKey,
-				privateKey: newKeypair.privateKey,
-				algorithm: 'ML-KEM-1024',
-				timestamp: Date.now(),
-				version: '3.0',
-				userId: $user.id
-			};
-			localStorage.setItem('qryptchat_pq_keypair', JSON.stringify(legacyKey));
-			console.log('💾 Stored keys in localStorage');
+			// The keys are already stored in IndexedDB by the postQuantumEncryption.generateUserKeys() method
+			// Let's verify they're there by trying to retrieve them
+			const storedKeys = await postQuantumEncryption.getUserKeys();
+			
+			if (!storedKeys || !storedKeys.publicKey || !storedKeys.privateKey) {
+				throw new Error('Failed to verify stored keys in IndexedDB');
+			}
+			
+			console.log('💾 Verified keys are correctly stored in IndexedDB:', {
+				publicKeyLength: storedKeys.publicKey.length,
+				storedTimestamp: new Date().toISOString()
+			});
+			
 			await new Promise(resolve => setTimeout(resolve, 500));
 
 			// Step 6: Force delete old database entry first

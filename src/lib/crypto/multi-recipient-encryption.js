@@ -20,6 +20,7 @@ export class MultiRecipientEncryptionService {
 		this.isInitialized = false;
 		this.successfulEncryptionCount = 0;
 		this.failedEncryptionCount = 0;
+		this.encryptionErrors = []; // Array to collect detailed error information
 	}
 
 	/**
@@ -46,6 +47,9 @@ export class MultiRecipientEncryptionService {
 				await this.initialize();
 			}
 
+			// Reset error collection for this encryption attempt
+			this.encryptionErrors = [];
+			
 			console.log(`🔐 [MULTI] Encrypting message for conversation: ${conversationId}`);
 			console.log(`🔐 [MULTI] Message content:`, {
 				type: typeof messageContent,
@@ -75,6 +79,7 @@ export class MultiRecipientEncryptionService {
 			const encryptedContents = Object.create(null);
 			this.successfulEncryptionCount = 0;
 			this.failedEncryptionCount = 0;
+			let kyberHeaderErrorDetected = false;
 			
 			for (const [userId, publicKey] of participantKeys.entries()) {
 				try {
@@ -87,6 +92,17 @@ export class MultiRecipientEncryptionService {
 						firstChars: publicKey?.substring(0, 20) || 'N/A'
 					});
 					
+					// Check for KYBER header in the first few characters (Base64 encoded)
+					if (publicKey && publicKey.startsWith('S1lCRVIxMDI')) {
+						console.error(`🔐 [MULTI] Detected KYBER header in key for ${userId} - this format is not compatible`);
+						kyberHeaderErrorDetected = true;
+						this.encryptionErrors.push({
+							userId,
+							errorType: 'KYBER_HEADER',
+							message: 'Key has KYBER header format that cannot be used with ML-KEM'
+						});
+					}
+					
 					// Only use ML-KEM encryption - no AES fallbacks
 					const encryptedContent = await postQuantumEncryption.encryptForRecipient(
 						messageContent,
@@ -97,13 +113,42 @@ export class MultiRecipientEncryptionService {
 					this.successfulEncryptionCount++;
 					console.log(`🔐 [MULTI] ✅ Encrypted for participant: ${userId} using ML-KEM`);
 				} catch (error) {
-					console.error(`🔐 [MULTI] ❌ Failed to validate or encrypt for participant ${userId}:`, error);
+					const errorMessage = error instanceof Error ? error.message : String(error);
 					this.failedEncryptionCount++;
+					
+					// Collect detailed error information
+					const errorInfo = {
+						userId,
+						errorType: 'UNKNOWN',
+						message: errorMessage,
+					};
+					
+					// Check for specific error types
+					if (errorMessage.includes('invalid encapsulation key')) {
+						errorInfo.errorType = 'INVALID_KEY';
+						console.error(`🔐 [MULTI] ❌ Invalid encapsulation key detected for user ${userId}`);
+					} else if (errorMessage.includes('KYBER')) {
+						errorInfo.errorType = 'KYBER_HEADER';
+						kyberHeaderErrorDetected = true;
+					}
+					
+					this.encryptionErrors.push(errorInfo);
+					console.error(`🔐 [MULTI] ❌ Failed to validate or encrypt for participant ${userId}:`, error);
 					// Continue with other participants - don't fail the entire operation
 				}
 			}
 
 			if (Object.keys(encryptedContents).length === 0) {
+				// Check if we detected KYBER header issues
+				if (kyberHeaderErrorDetected || this.encryptionErrors.some(e => e.errorType === 'KYBER_HEADER')) {
+					throw new Error('Failed to encrypt message: KYBER key format detected. Both participants must use Nuclear Key Reset in Settings.');
+				}
+				
+				// Check if we had invalid keys
+				if (this.encryptionErrors.some(e => e.errorType === 'INVALID_KEY')) {
+					throw new Error('Failed to encrypt message: Invalid encryption keys. Both participants must reset their keys in Settings.');
+				}
+				
 				throw new Error('Failed to encrypt message for any participants');
 			}
 

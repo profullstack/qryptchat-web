@@ -17,6 +17,7 @@
 	let showEncryptionError = $state(false);
 	let selectedFiles = $state(/** @type {File[]} */ ([]));
 	let uploadError = $state('');
+	let isEncryptionError = $state(false); // Track if error is encryption-related
 
 	const currentUser = $derived($user);
 
@@ -238,6 +239,14 @@
 		} catch (error) {
 			console.error('📁 ❌ Error sending message:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+			
+			// Check if this is an encryption-related error
+			isEncryptionError = errorMessage.includes('KYBER') ||
+				errorMessage.includes('encryption') ||
+				errorMessage.includes('encrypt') ||
+				errorMessage.includes('encapsulation key') ||
+				errorMessage.includes('Nuclear Key Reset');
+				
 			uploadError = errorMessage;
 			
 			// Restore message text on failure
@@ -286,11 +295,21 @@
 <div class="message-input-container">
 	<!-- File upload errors -->
 	{#if uploadError}
-		<div class="upload-error">
+		<div class="upload-error" class:encryption-error={isEncryptionError}>
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 				<path d="M12 2L2 7V10C2 16 6 20.5 12 22C18 20.5 22 16 22 10V7L12 2M12 7C12.5 7 13 7.5 13 8V12C13 12.5 12.5 13 12 13C11.5 13 11 12.5 11 8V12C11 11.5 11.5 11 12 11C12.5 11 13 11.5 13 12V8C13 7.5 12.5 7 12 7M12 17C11.2 17 10.5 16.3 10.5 15.5C10.5 14.7 11.2 14 12 14C12.8 14 13.5 14.7 13.5 15.5C13.5 16.3 12.8 17 12 17Z"/>
 			</svg>
-			{uploadError}
+			<span>
+				{#if isEncryptionError}
+					<strong>Encryption key issue detected:</strong> {uploadError}
+					<div class="error-action">
+						<a href="/settings#key-reset" class="key-reset-link">Go to Settings → Nuclear Key Reset</a>
+						<span class="guidance-note">Both you and the recipient need to reset keys</span>
+					</div>
+				{:else}
+					{uploadError}
+				{/if}
+			</span>
 		</div>
 	{/if}
 
@@ -398,7 +417,7 @@
 
 	.upload-error {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 0.5rem;
 		background: var(--color-error-background, #fee);
 		color: var(--color-error-text, #c53030);
@@ -407,6 +426,48 @@
 		padding: 0.75rem;
 		font-size: 0.875rem;
 		margin-bottom: 1rem;
+	}
+	
+	.upload-error.encryption-error {
+		background: var(--color-error-background, #fee);
+		border: 2px solid var(--color-error-border, #fed7d7);
+		padding: 1rem;
+	}
+	
+	.upload-error svg {
+		flex-shrink: 0;
+		margin-top: 2px;
+	}
+	
+	.error-action {
+		margin-top: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	
+	.key-reset-link {
+		display: inline-block;
+		background: var(--color-primary-500, #3b82f6);
+		color: white;
+		font-weight: 500;
+		padding: 0.4rem 0.75rem;
+		border-radius: 0.25rem;
+		text-decoration: none;
+		transition: all 0.2s ease;
+		font-size: 0.8rem;
+	}
+	
+	.key-reset-link:hover {
+		background: var(--color-primary-600, #2563eb);
+		transform: translateY(-1px);
+	}
+	
+	.guidance-note {
+		font-size: 0.75rem;
+		opacity: 0.9;
+		font-style: italic;
+		margin-top: 0.25rem;
 	}
 
 	.selected-files {
