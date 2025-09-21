@@ -126,7 +126,7 @@ export async function GET({ url, request }) {
 		const { data: publicKey, error } = await getServiceRoleClient()
 			.rpc('get_user_public_key', {
 				target_user_id: userData.auth_user_id,
-				key_type_param: 'ML-KEM-768'
+				key_type_param: 'ML-KEM-1024'
 			});
 
 		if (error) {
@@ -186,7 +186,7 @@ export async function POST({ request }) {
 				const { data: publicKey, error } = await getServiceRoleClient()
 					.rpc('get_user_public_key', {
 						target_user_id: userData.auth_user_id,
-						key_type_param: 'ML-KEM-768'
+						key_type_param: 'ML-KEM-1024'
 					});
 
 				if (error) {

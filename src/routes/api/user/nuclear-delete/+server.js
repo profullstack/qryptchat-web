@@ -5,11 +5,24 @@ export async function DELETE({ cookies, request }) {
 	try {
 		const supabase = createSupabaseClient();
 		
-		// Get the authenticated user from session
+		// Get the authenticated user from cookies/headers
+		const authHeader = request.headers.get('authorization');
+		const accessToken = authHeader?.replace('Bearer ', '') || cookies.get('sb-access-token');
+		
+		if (!accessToken) {
+			return json({ error: 'Not authenticated - no access token' }, { status: 401 });
+		}
+		
+		// Set the auth token for this request
+		await supabase.auth.setSession({
+			access_token: accessToken,
+			refresh_token: cookies.get('sb-refresh-token') || ''
+		});
+		
 		const { data: { user }, error: authError } = await supabase.auth.getUser();
 		
 		if (authError || !user) {
-			return json({ error: 'Not authenticated' }, { status: 401 });
+			return json({ error: 'Not authenticated - invalid session' }, { status: 401 });
 		}
 		
 		// Get user profile from database to get internal user ID
@@ -39,16 +52,16 @@ export async function DELETE({ cookies, request }) {
 			}, { status: 400 });
 		}
 		
-		console.log(`Nuclear delete initiated for user ${profile.id} (${profile.phone_number})`);
+		console.log(`Encrypted data delete initiated for user ${profile.id} (${profile.phone_number})`);
 		
-		// Call the nuclear delete function
+		// Call the encrypted data delete function (preserves account)
 		const { data: result, error: deleteError } = await supabase
-			.rpc('nuclear_delete_user_data', { 
-				target_user_id: profile.id 
+			.rpc('delete_encrypted_data_only', {
+				target_user_id: profile.id
 			});
 		
 		if (deleteError) {
-			console.error('Nuclear delete error:', deleteError);
+			console.error('Encrypted data delete error:', deleteError);
 			
 			// Handle specific error cases
 			if (deleteError.message?.includes('Users can only delete their own data')) {
@@ -61,22 +74,22 @@ export async function DELETE({ cookies, request }) {
 				return json({ error: 'User not found' }, { status: 404 });
 			}
 			
-			return json({ 
-				error: 'Nuclear delete failed', 
-				details: deleteError.message 
+			return json({
+				error: 'Encrypted data delete failed',
+				details: deleteError.message
 			}, { status: 500 });
 		}
 		
 		if (!result) {
-			return json({ error: 'Nuclear delete returned no result' }, { status: 500 });
+			return json({ error: 'Encrypted data delete returned no result' }, { status: 500 });
 		}
 		
-		console.log(`Nuclear delete completed for user ${profile.id}:`, result);
+		console.log(`Encrypted data delete completed for user ${profile.id}:`, result);
 		
 		// Return success with deletion summary
 		return json({
 			success: true,
-			message: 'All user data has been permanently deleted',
+			message: 'All encrypted data has been permanently deleted. Your account remains active.',
 			user_info: {
 				phone_number: profile.phone_number,
 				username: profile.username

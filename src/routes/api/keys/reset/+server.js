@@ -45,7 +45,7 @@ export async function POST(event) {
 		const { error: updateError } = await serviceSupabase.rpc('upsert_user_public_key', {
 			target_user_id: user.id,
 			public_key_param: publicKey,
-			key_type_param: 'ML-KEM-768'
+			key_type_param: 'ML-KEM-1024'
 		});
 
 		if (updateError) {

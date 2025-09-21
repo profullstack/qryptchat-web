@@ -137,10 +137,8 @@
 				showNuclearConfirm = false;
 				nuclearConfirmation = '';
 				
-				// After 3 seconds, redirect to home or login page
-				setTimeout(() => {
-					window.location.href = '/';
-				}, 3000);
+				// No redirect needed since account is preserved
+				// User can continue using the app
 				
 			} else {
 				deleteResult = {
@@ -253,21 +251,21 @@
 				<section class="settings-section danger-zone">
 					<div class="setting-group">
 						<h2>☢️ Danger Zone</h2>
-						<p>The following actions are <strong>irreversible</strong> and will permanently delete all your data.</p>
+						<p>The following actions are <strong>irreversible</strong> and will permanently delete your encrypted data.</p>
 						
 						<div class="nuclear-delete-container">
-							<h3>Nuclear Delete</h3>
-							<p>This will permanently delete <strong>ALL</strong> of your data including:</p>
+							<h3>Delete All Encrypted Data</h3>
+							<p>This will permanently delete your <strong>encrypted data</strong> including:</p>
 							<ul>
 								<li>All your messages and conversations</li>
 								<li>All your uploaded files and attachments</li>
 								<li>Your encryption keys and backups</li>
-								<li>Your account and profile information</li>
-								<li>All SMS notifications and history</li>
+								<li>Message history and read receipts</li>
+								<li>Voice call records</li>
 							</ul>
 							
 							<div class="warning-box">
-								<p><strong>⚠️ WARNING:</strong> This action cannot be undone. Your account and all associated data will be permanently removed from our servers.</p>
+								<p><strong>⚠️ WARNING:</strong> This action cannot be undone. Your encrypted data will be permanently removed. Your account will remain active but all messages and files will be lost.</p>
 							</div>
 							
 							{#if !showNuclearConfirm}
