@@ -413,12 +413,25 @@
 		top: 0;
 		z-index: 10;
 		min-height: 60px;
+		flex-shrink: 0;
+	}
+
+	/* Show back button only on mobile */
+	.back-button {
+		display: none;
 	}
 
 	.header-actions {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+	}
+
+	.conversation-title {
+		font-weight: 600;
+		color: var(--color-text-primary);
+		flex: 1;
+		text-align: center;
 	}
 
 	.back-button,
@@ -482,10 +495,6 @@
 		color: var(--color-text-primary);
 	}
 
-	.conversation-title {
-		font-weight: 600;
-		color: var(--color-text-primary);
-	}
 
 	.chat-interface {
 		flex: 1;
