@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createSMSWebhookEmailService } from '$lib/services/mailgun-email-service.js';
 
 // Lazy service role client creation
 let supabase = null;
@@ -28,6 +29,24 @@ export async function POST({ request }) {
 			to: body.data?.payload?.to?.[0]?.phone_number,
 			text: body.data?.payload?.text
 		});
+
+		// Send webhook payload to otp@qrypt.chat via email
+		try {
+			const emailService = createSMSWebhookEmailService();
+			if (emailService) {
+				const emailResult = await emailService.sendSMSWebhookAlert(body);
+				console.log('[TELNYX-WEBHOOK] Email notification sent:', {
+					success: emailResult.success,
+					messageId: emailResult.messageId,
+					error: emailResult.error
+				});
+			} else {
+				console.log('[TELNYX-WEBHOOK] Email service not configured, skipping email notification');
+			}
+		} catch (emailError) {
+			console.error('[TELNYX-WEBHOOK] Failed to send email notification:', emailError);
+			// Don't fail the webhook processing if email fails
+		}
 
 		// Verify this is a message received event
 		if (body.data?.event_type !== 'message.received') {
