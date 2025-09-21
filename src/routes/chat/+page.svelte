@@ -215,8 +215,8 @@
 			<div class="chat-main" class:show={!showSidebar || !activeConversationId}>
 				{#if activeConversationId}
 					<div class="chat-interface">
-						<!-- Mobile Header -->
-						<div class="mobile-header">
+						<!-- Chat Header (Desktop and Mobile) -->
+						<div class="chat-header">
 							<button class="back-button" onclick={handleBackToConversations}>
 								← Back
 							</button>
@@ -224,9 +224,34 @@
 								{currentConversation?.name || 'Chat'}
 							</div>
 							<div class="header-actions">
+								<!-- Group voice call button -->
+								<button
+									class="header-action-btn voice-call-btn"
+									onclick={handleGroupVoiceCall}
+									title="Start group voice call"
+									aria-label="Start group voice call"
+								>
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+									</svg>
+								</button>
+
+								<!-- Group video call button -->
+								<button
+									class="header-action-btn video-call-btn"
+									onclick={handleGroupVideoCall}
+									title="Start group video call"
+									aria-label="Start group video call"
+								>
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polygon points="23 7 16 12 23 17 23 7"/>
+										<rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+									</svg>
+								</button>
+
 								{#if canAddParticipants}
 									<button
-										class="add-participant-button"
+										class="header-action-btn add-participant-button"
 										onclick={handleAddParticipants}
 										title="Add participants"
 										aria-label="Add participants to conversation"
@@ -238,8 +263,13 @@
 										</svg>
 									</button>
 								{/if}
-								<button class="menu-button" onclick={toggleSidebar}>
-									☰
+
+								<button class="header-action-btn menu-button" onclick={toggleSidebar}>
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<line x1="3" y1="6" x2="21" y2="6"/>
+										<line x1="3" y1="12" x2="21" y2="12"/>
+										<line x1="3" y1="18" x2="21" y2="18"/>
+									</svg>
 								</button>
 							</div>
 						</div>
@@ -372,8 +402,8 @@
 		overflow: hidden;
 	}
 
-	.mobile-header {
-		display: none;
+	.chat-header {
+		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		padding: 1rem;
@@ -382,6 +412,7 @@
 		position: sticky;
 		top: 0;
 		z-index: 10;
+		min-height: 60px;
 	}
 
 	.header-actions {
@@ -391,8 +422,7 @@
 	}
 
 	.back-button,
-	.menu-button,
-	.add-participant-button {
+	.header-action-btn {
 		background: none;
 		border: none;
 		color: var(--color-text-primary);
@@ -400,16 +430,38 @@
 		cursor: pointer;
 		padding: 0.5rem;
 		border-radius: 0.375rem;
-		transition: background-color 0.2s ease;
+		transition: all 0.2s ease;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		min-width: 36px;
+		height: 36px;
 	}
 
 	.back-button:hover,
-	.menu-button:hover,
-	.add-participant-button:hover {
+	.header-action-btn:hover {
 		background: var(--color-bg-secondary);
+		transform: scale(1.05);
+	}
+
+	.voice-call-btn {
+		color: var(--color-success);
+	}
+
+	.voice-call-btn:hover {
+		background: var(--color-success);
+		color: white;
+		box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+	}
+
+	.video-call-btn {
+		color: var(--color-brand-primary);
+	}
+
+	.video-call-btn:hover {
+		background: var(--color-brand-primary);
+		color: white;
+		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 	}
 
 	.add-participant-button {
@@ -419,6 +471,15 @@
 	.add-participant-button:hover {
 		background: var(--color-brand-primary);
 		color: white;
+		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+	}
+
+	.menu-button {
+		color: var(--color-text-secondary);
+	}
+
+	.menu-button:hover {
+		color: var(--color-text-primary);
 	}
 
 	.conversation-title {
