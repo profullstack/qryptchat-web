@@ -12,22 +12,26 @@ export async function GET(event) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		// Call the original working function
+		// Get internal user ID first
+		const { data: internalUser } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (!internalUser) {
+			return json({ conversations: [] });
+		}
+
+		// Call the original working function with INTERNAL user ID
 		const { data, error } = await supabase.rpc('get_user_conversations_enhanced', {
-			user_uuid: user.id
+			user_uuid: internalUser.id // Use internal user ID, not auth user ID
 		});
 
 		if (error) {
 			console.error('Database error:', error);
 			return json({ error: 'Failed to load conversations' }, { status: 500 });
 		}
-
-		// Get internal user ID to check archive status
-		const { data: internalUser } = await supabase
-			.from('users')
-			.select('id')
-			.eq('auth_user_id', user.id)
-			.single();
 
 		// Simple transformation with proper archive status check
 		const conversationsWithArchive = [];
