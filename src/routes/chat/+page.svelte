@@ -403,7 +403,7 @@
 	}
 
 	.chat-header {
-		display: flex;
+		display: flex !important;
 		align-items: center;
 		justify-content: space-between;
 		padding: 1rem;
@@ -414,6 +414,7 @@
 		z-index: 10;
 		min-height: 60px;
 		flex-shrink: 0;
+		width: 100%;
 	}
 
 	/* Show back button only on mobile */
