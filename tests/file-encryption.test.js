@@ -115,8 +115,8 @@ describe('File Encryption', () => {
 
     it('should validate file size limits', () => {
       expect(fileEncryption.isValidFileSize(1024)).to.be.true; // 1KB
-      expect(fileEncryption.isValidFileSize(1024 * 1024 * 10)).to.be.true; // 10MB
-      expect(fileEncryption.isValidFileSize(1024 * 1024 * 100)).to.be.false; // 100MB (exceeds limit)
+      expect(fileEncryption.isValidFileSize(1024 * 1024 * 100)).to.be.true; // 100MB
+      expect(fileEncryption.isValidFileSize(1024 * 1024 * 1024 * 3)).to.be.false; // 3GB (exceeds 2GB limit)
     });
   });
 

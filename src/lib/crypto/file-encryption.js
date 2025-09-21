@@ -11,7 +11,7 @@ import { Base64 } from './index.js';
  */
 export class FileEncryptionService {
 	constructor() {
-		this.maxFileSize = 50 * 1024 * 1024; // 50MB max file size
+		this.maxFileSize = 2147483648; // 2GB max file size
 		this.allowedExtensions = [
 			// Documents
 			'.txt', '.pdf', '.doc', '.docx', '.rtf', '.odt',
