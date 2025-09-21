@@ -1,18 +1,20 @@
 // API endpoint to get files for a specific message
 import { json, error } from '@sveltejs/kit';
-import { supabase } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '$lib/supabase.js';
 
-/** @type {import('./$types').RequestHandler} */
-export async function GET({ params, locals }) {
+export async function GET(event) {
 	try {
+		// Create Supabase server client
+		const supabase = createSupabaseServerClient(event);
+		
 		// Check authentication
-		const session = await locals.getSession();
-		if (!session?.user) {
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
+		if (authError || !user) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = session.user.id;
-		const messageId = params.messageId;
+		const userId = user.id;
+		const messageId = event.params.messageId;
 
 		console.log(`📁 [FILES-BY-MESSAGE] Request from user: ${userId} for message: ${messageId}`);
 
@@ -68,4 +70,12 @@ export async function GET({ params, locals }) {
 		console.error('📁 [FILES-BY-MESSAGE] ❌ Unexpected error:', err);
 		return error(500, 'Internal server error');
 	}
+}
+
+function formatFileSize(bytes) {
+	if (bytes === 0) return '0 Bytes';
+	const k = 1024;
+	const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

@@ -1,19 +1,21 @@
 // API endpoint for encrypted file downloads
 import { json, error } from '@sveltejs/kit';
-import { supabase } from '$lib/supabase.js';
-import { fileEncryption } from '$lib/crypto/file-encryption.js';
+import { createSupabaseServerClient } from '$lib/supabase.js';
+import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 
-/** @type {import('./$types').RequestHandler} */
-export async function GET({ params, locals }) {
+export async function GET(event) {
 	try {
+		// Create Supabase server client
+		const supabase = createSupabaseServerClient(event);
+		
 		// Check authentication
-		const session = await locals.getSession();
-		if (!session?.user) {
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
+		if (authError || !user) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = session.user.id;
-		const fileId = params.fileId;
+		const userId = user.id;
+		const fileId = event.params.fileId;
 
 		console.log(`📁 [FILE-DOWNLOAD] Download request from user: ${userId} for file: ${fileId}`);
 
@@ -58,26 +60,28 @@ export async function GET({ params, locals }) {
 			return error(500, 'Failed to download file from storage');
 		}
 
-		// Convert blob to text (encrypted content)
-		const encryptedContent = await storageData.text();
+		// Parse the encrypted contents (multi-recipient format)
+		const encryptedContentsJson = await storageData.text();
+		const encryptedContents = JSON.parse(encryptedContentsJson);
 
-		// Get conversation ID for decryption
-		const conversationId = fileData.messages.conversation_id;
+		console.log(`📁 [FILE-DOWNLOAD] Decrypting file for user: ${userId}`);
 
-		console.log(`📁 [FILE-DOWNLOAD] Decrypting file for conversation: ${conversationId}`);
+		// Initialize post-quantum encryption
+		await postQuantumEncryption.initialize();
 
-		// Decrypt file
-		await fileEncryption.initialize();
-		const { fileContent } = await fileEncryption.decryptFile(
-			conversationId,
-			encryptedContent,
-			fileData.encrypted_metadata
+		// Decrypt the file using the user's encrypted copy
+		const decryptedContent = await postQuantumEncryption.decryptFromSender(
+			encryptedContents[userId], // User's encrypted copy
+			'' // Sender public key not needed for ML-KEM decryption
 		);
+
+		// Convert base64 back to binary
+		const fileBuffer = Buffer.from(decryptedContent, 'base64');
 
 		console.log(`📁 [FILE-DOWNLOAD] ✅ File decrypted successfully: ${fileData.original_filename}`);
 
 		// Return decrypted file
-		return new Response(fileContent, {
+		return new Response(fileBuffer, {
 			status: 200,
 			headers: {
 				'Content-Type': fileData.mime_type,
@@ -96,16 +100,19 @@ export async function GET({ params, locals }) {
 }
 
 // Get file info without downloading the actual file content
-export async function HEAD({ params, locals }) {
+export async function HEAD(event) {
 	try {
+		// Create Supabase server client
+		const supabase = createSupabaseServerClient(event);
+		
 		// Check authentication
-		const session = await locals.getSession();
-		if (!session?.user) {
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
+		if (authError || !user) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = session.user.id;
-		const fileId = params.fileId;
+		const userId = user.id;
+		const fileId = event.params.fileId;
 
 		// Get file metadata from database
 		const { data: fileData, error: fileError } = await supabase
@@ -148,16 +155,19 @@ export async function HEAD({ params, locals }) {
 }
 
 // Get file metadata as JSON
-export async function POST({ params, locals }) {
+export async function POST(event) {
 	try {
+		// Create Supabase server client
+		const supabase = createSupabaseServerClient(event);
+		
 		// Check authentication
-		const session = await locals.getSession();
-		if (!session?.user) {
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
+		if (authError || !user) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = session.user.id;
-		const fileId = params.fileId;
+		const userId = user.id;
+		const fileId = event.params.fileId;
 
 		console.log(`📁 [FILE-INFO] Info request from user: ${userId} for file: ${fileId}`);
 
@@ -193,11 +203,11 @@ export async function POST({ params, locals }) {
 		return json({
 			id: fileData.id,
 			messageId: fileData.message_id,
-			conversationId: fileData.messages.conversation_id,
+			conversationId: fileData.messages[0].conversation_id,
 			originalFilename: fileData.original_filename,
 			mimeType: fileData.mime_type,
 			fileSize: fileData.file_size,
-			formattedSize: fileEncryption.formatFileSize(fileData.file_size),
+			formattedSize: formatFileSize(fileData.file_size),
 			createdAt: fileData.created_at,
 			createdBy: fileData.created_by,
 			isOwner: fileData.created_by === userId
@@ -207,4 +217,12 @@ export async function POST({ params, locals }) {
 		console.error('📁 [FILE-INFO] ❌ Unexpected error:', err);
 		return error(500, 'Internal server error');
 	}
+}
+
+function formatFileSize(bytes) {
+	if (bytes === 0) return '0 Bytes';
+	const k = 1024;
+	const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

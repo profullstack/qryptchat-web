@@ -1,22 +1,24 @@
 // API endpoint for encrypted file uploads
 import { json, error } from '@sveltejs/kit';
-import { supabase } from '$lib/supabase.js';
-import { fileEncryption } from '$lib/crypto/file-encryption.js';
+import { createSupabaseServerClient } from '$lib/supabase.js';
+import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
 
-/** @type {import('./$types').RequestHandler} */
-export async function POST({ request, locals }) {
+export async function POST(event) {
 	try {
+		// Create Supabase server client
+		const supabase = createSupabaseServerClient(event);
+		
 		// Check authentication
-		const session = await locals.getSession();
-		if (!session?.user) {
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
+		if (authError || !user) {
 			return error(401, 'Unauthorized');
 		}
 
-		const userId = session.user.id;
+		const userId = user.id;
 		console.log(`📁 [FILE-UPLOAD] Upload request from user: ${userId}`);
 
 		// Parse the multipart form data
-		const formData = await request.formData();
+		const formData = await event.request.formData();
 		const file = formData.get('file');
 		const conversationId = formData.get('conversationId');
 		const messageId = formData.get('messageId');
@@ -60,41 +62,62 @@ export async function POST({ request, locals }) {
 		}
 
 		// Validate file type and size
-		if (!fileEncryption.isAllowedFileType(file.name)) {
+		const maxFileSize = 50 * 1024 * 1024; // 50MB
+		const allowedExtensions = [
+			'.txt', '.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', 
+			'.mp3', '.wav', '.mp4', '.webm', '.zip', '.rar'
+		];
+		const blockedExtensions = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
+		
+		const getFileExtension = (filename) => {
+			const lastDot = filename.lastIndexOf('.');
+			return lastDot !== -1 ? filename.substring(lastDot).toLowerCase() : '';
+		};
+		
+		const isAllowedFileType = (filename) => {
+			const extension = getFileExtension(filename);
+			return !blockedExtensions.includes(extension) && 
+				   (!extension || allowedExtensions.includes(extension));
+		};
+
+		if (!isAllowedFileType(file.name)) {
 			console.error(`📁 [FILE-UPLOAD] File type not allowed: ${file.name}`);
-			return error(400, `File type not allowed: ${fileEncryption.getFileExtension(file.name)}`);
+			return error(400, `File type not allowed: ${getFileExtension(file.name)}`);
 		}
 
-		if (!fileEncryption.isValidFileSize(file.size)) {
+		if (file.size > maxFileSize) {
 			console.error(`📁 [FILE-UPLOAD] File too large: ${file.size} bytes`);
-			return error(400, `File too large. Maximum size is ${Math.floor(fileEncryption.maxFileSize / (1024 * 1024))}MB`);
+			return error(400, `File too large. Maximum size is ${Math.floor(maxFileSize / (1024 * 1024))}MB`);
+		}
+
+		if (file.size === 0) {
+			return error(400, 'File cannot be empty');
 		}
 
 		console.log(`📁 [FILE-UPLOAD] Processing file: ${file.name} (${file.size} bytes)`);
 
 		// Read file content
 		const arrayBuffer = await file.arrayBuffer();
-		const fileContent = new Uint8Array(arrayBuffer);
+		const fileContent = Buffer.from(arrayBuffer).toString('base64');
 
-		// Encrypt file
-		await fileEncryption.initialize();
-		const { encryptedData, metadata } = await fileEncryption.encryptFile(
-			conversationId,
-			fileContent,
-			file.name,
-			file.type
-		);
+		// Initialize multi-recipient encryption
+		await multiRecipientEncryption.initialize();
 
-		// Generate storage path: userId/conversationId/fileId
-		const storagePath = `${userId}/${conversationId}/${metadata.id}`;
+		// Encrypt file for all conversation participants using multi-recipient encryption
+		console.log(`📁 [FILE-UPLOAD] Encrypting file for all participants in conversation: ${conversationId}`);
+		const encryptedContents = await multiRecipientEncryption.encryptForConversation(conversationId, fileContent);
+
+		// Generate file ID
+		const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+		const storagePath = `${userId}/${conversationId}/${fileId}`;
 
 		console.log(`📁 [FILE-UPLOAD] Uploading encrypted file to: ${storagePath}`);
 
-		// Upload encrypted file to Supabase storage
+		// Upload encrypted file contents to Supabase storage as JSON
 		const { data: uploadData, error: uploadError } = await supabase.storage
 			.from('encrypted-files')
-			.upload(storagePath, Buffer.from(encryptedData), {
-				contentType: 'application/octet-stream',
+			.upload(storagePath, JSON.stringify(encryptedContents), {
+				contentType: 'application/json',
 				cacheControl: '3600',
 				upsert: false
 			});
@@ -115,7 +138,14 @@ export async function POST({ request, locals }) {
 				original_filename: file.name,
 				mime_type: file.type,
 				file_size: file.size,
-				encrypted_metadata: metadata,
+				encrypted_metadata: {
+					id: fileId,
+					originalName: file.name,
+					mimeType: file.type,
+					size: file.size,
+					encryptedAt: new Date().toISOString(),
+					version: 2 // Version 2 = multi-recipient encryption
+				},
 				created_by: userId
 			})
 			.select()
@@ -143,7 +173,7 @@ export async function POST({ request, locals }) {
 				originalFilename: file.name,
 				mimeType: file.type,
 				fileSize: file.size,
-				formattedSize: fileEncryption.formatFileSize(file.size),
+				formattedSize: formatFileSize(file.size),
 				createdAt: dbData.created_at
 			}
 		});
@@ -152,4 +182,12 @@ export async function POST({ request, locals }) {
 		console.error('📁 [FILE-UPLOAD] ❌ Unexpected error:', err);
 		return error(500, 'Internal server error during file upload');
 	}
+}
+
+function formatFileSize(bytes) {
+	if (bytes === 0) return '0 Bytes';
+	const k = 1024;
+	const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

@@ -3,7 +3,7 @@
 	import { wsChat, activeConversation } from '$lib/stores/websocket-chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
-	import { fileEncryption } from '$lib/crypto/file-encryption.js';
+	import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
 
 	let { conversationId = null, disabled = false } = $props();
 
@@ -90,15 +90,38 @@
 	function handleFileSelection(/** @type {File[]} */ files) {
 		uploadError = '';
 		
+		// File validation utilities
+		const maxFileSize = 50 * 1024 * 1024; // 50MB
+		const allowedExtensions = [
+			'.txt', '.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif',
+			'.mp3', '.wav', '.mp4', '.webm', '.zip', '.rar'
+		];
+		const blockedExtensions = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
+		
+		const getFileExtension = (filename) => {
+			const lastDot = filename.lastIndexOf('.');
+			return lastDot !== -1 ? filename.substring(lastDot).toLowerCase() : '';
+		};
+		
+		const isAllowedFileType = (filename) => {
+			const extension = getFileExtension(filename);
+			return !blockedExtensions.includes(extension) &&
+				   (!extension || allowedExtensions.includes(extension));
+		};
+		
 		// Validate files
 		const validFiles = [];
 		for (const file of files) {
-			if (!fileEncryption.isAllowedFileType(file.name)) {
-				uploadError = `File type not allowed: ${fileEncryption.getFileExtension(file.name)}`;
+			if (!isAllowedFileType(file.name)) {
+				uploadError = `File type not allowed: ${getFileExtension(file.name)}`;
 				return;
 			}
-			if (!fileEncryption.isValidFileSize(file.size)) {
-				uploadError = `File too large. Maximum size is ${Math.floor(fileEncryption.maxFileSize / (1024 * 1024))}MB`;
+			if (file.size > maxFileSize) {
+				uploadError = `File too large. Maximum size is ${Math.floor(maxFileSize / (1024 * 1024))}MB`;
+				return;
+			}
+			if (file.size === 0) {
+				uploadError = 'File cannot be empty';
 				return;
 			}
 			validFiles.push(file);
@@ -110,6 +133,14 @@
 
 	function removeSelectedFile(/** @type {number} */ index) {
 		selectedFiles = selectedFiles.filter((_, i) => i !== index);
+	}
+
+	function formatFileSize(/** @type {number} */ bytes) {
+		if (bytes === 0) return '0 Bytes';
+		const k = 1024;
+		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
 	async function sendMessage() {
@@ -245,7 +276,7 @@
 							<path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
 						</svg>
 						<span class="file-name">{file.name}</span>
-						<span class="file-size">({fileEncryption.formatFileSize(file.size)})</span>
+						<span class="file-size">({formatFileSize(file.size)})</span>
 					</div>
 					<button 
 						type="button" 
