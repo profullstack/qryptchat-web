@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=QryptChat
+GenericName=Secure Messaging
+Comment=Quantum-resistant encrypted messaging app
+Categories=Network;Chat;InstantMessaging;Communication;
+Keywords=chat;messaging;encryption;quantum;secure;
+Icon=qryptchat
+Exec=google-chrome --app=https://qrypt.chat
+StartupNotify=true
+NoDisplay=false
+MimeType=x-scheme-handler/qryptchat;
+StartupWMClass=qryptchat

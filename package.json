@@ -21,7 +21,8 @@
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"icons:generate": "node scripts/generate-icons.js"
+		"icons:generate": "node scripts/generate-icons.js",
+		"icons:install": "scripts/install-desktop-icons.sh"
 	},
 	"devDependencies": {
 		"@railway/cli": "^4.8.0",

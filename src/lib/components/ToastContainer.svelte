@@ -26,9 +26,12 @@
 		}
 	}
 	
+	/**
+	 * @param {string} type
+	 */
 	function getIcon(type) {
 		switch (type) {
-			case 'install': return '📱';
+			case 'install': return null; // Will use custom app icon
 			case 'update': return '✨';
 			case 'success': return '✅';
 			case 'warning': return '⚠️';
@@ -50,7 +53,11 @@
 		<div class="toast-content">
 			<!-- Enhanced visual indicator for updates -->
 			<div class="toast-icon" class:pulse={type === 'update'}>
-				{getIcon(type)}
+				{#if type === 'install'}
+					<img src="/icons/icon-192x192.png" alt="QryptChat" class="app-icon" />
+				{:else}
+					{getIcon(type)}
+				{/if}
 			</div>
 			
 			<div class="toast-text">
