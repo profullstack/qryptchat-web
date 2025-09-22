@@ -50,7 +50,7 @@
       "type": "image/png"
     }
   ],
-  "start_url": "/",
+  "start_url": "https://qrypt.chat/",
   "theme_color": "#6366f1",
   "background_color": "#ffffff",
   "display": "standalone"
