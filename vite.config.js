@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
 		logLevel: 'warn', // Reduce log verbosity to suppress transformation messages
 	plugins: [
 		sveltekit(),
-		// websocketDev()
+		websocketDev()
 	],
 	test: {
 		include: ['src/**/*.{test,spec}.{js,ts}']
