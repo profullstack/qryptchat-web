@@ -4,7 +4,7 @@ Type=Application
 Name=QryptChat
 GenericName=Secure Messaging
 Comment=Quantum-resistant encrypted messaging app
-Categories=Network;Chat;InstantMessaging;Communication;
+Categories=Network;Chat;InstantMessaging;
 Keywords=chat;messaging;encryption;quantum;secure;
 Icon=qryptchat
 Exec=google-chrome --app=https://qrypt.chat

@@ -10,14 +10,15 @@ ICON_THEME_DIR="$HOME/.local/share/icons/hicolor"
 DESKTOP_DIR="$HOME/.local/share/applications"
 
 # Create icon theme directories
-mkdir -p "$ICON_THEME_DIR"/{16x16,32x32,48x48,64x64,128x128,256x256,512x512}/apps
+mkdir -p "$ICON_THEME_DIR"/{16x16,32x32,48x48,64x64,96x96,128x128,256x256,512x512}/apps
 
 # Copy icons to proper locations
 echo "📁 Installing icons to $ICON_THEME_DIR..."
 
-# Install various sizes
-cp ./static/icons/apple-touch-icon-57x57.png "$ICON_THEME_DIR/48x48/apps/qryptchat.png" 2>/dev/null || echo "⚠️  48x48 icon not found"
+# Install proper icon sizes for Linux desktop environments
+cp ./static/icons/icon-48x48.png "$ICON_THEME_DIR/48x48/apps/qryptchat.png" 2>/dev/null || echo "⚠️  48x48 icon not found"
 cp ./static/icons/apple-touch-icon-72x72.png "$ICON_THEME_DIR/64x64/apps/qryptchat.png" 2>/dev/null || echo "⚠️  64x64 icon not found"
+cp ./static/icons/icon-96x96.png "$ICON_THEME_DIR/96x96/apps/qryptchat.png" 2>/dev/null || echo "⚠️  96x96 icon not found"
 cp ./static/icons/apple-touch-icon-152x152.png "$ICON_THEME_DIR/128x128/apps/qryptchat.png" 2>/dev/null || echo "⚠️  128x128 icon not found"
 cp ./static/icons/icon-256x256.png "$ICON_THEME_DIR/256x256/apps/qryptchat.png" 2>/dev/null || echo "⚠️  256x256 icon not found"
 cp ./static/icons/icon-512x512.png "$ICON_THEME_DIR/512x512/apps/qryptchat.png" 2>/dev/null || echo "⚠️  512x512 icon not found"
@@ -41,6 +42,7 @@ mkdir -p "$DESKTOP_DIR"
 cp ./static/qryptchat.desktop "$DESKTOP_DIR/" 2>/dev/null || echo "⚠️  Desktop file not found"
 
 if [ -f "$DESKTOP_DIR/qryptchat.desktop" ]; then
+    chmod +x "$DESKTOP_DIR/qryptchat.desktop"
     echo "✅ Installed QryptChat desktop file"
 else
     echo "❌ Failed to install desktop file"
