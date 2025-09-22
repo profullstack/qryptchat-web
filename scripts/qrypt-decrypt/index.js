@@ -113,34 +113,16 @@ async function main() {
 	try {
 		// Check if file exists
 		const fileContent = readFileSync(filename, 'utf8');
-		
 		// Get password from user
 		const rl = createInterface({
 			input: process.stdin,
 			output: process.stdout
 		});
 		
-		// Hide password input
-		const originalWrite = process.stdout.write;
-		let hiddenInput = false;
+		const password = await rl.question('🔑 Enter password: ');
+		rl.close();
 		
-		process.stdout.write = function(...args) {
-			if (hiddenInput) return true;
-			return originalWrite.apply(process.stdout, args);
-		};
-		
-		const password = await new Promise((resolve) => {
-			rl.question('🔑 Enter password: ', (answer) => {
-				hiddenInput = false;
-				process.stdout.write = originalWrite;
-				rl.close();
-				resolve(answer);
-			});
-			hiddenInput = true;
-		});
-		
-		console.log(''); // New line after hidden input
-		console.log('🔓 Decrypting keys...');
+		console.log('\n🔓 Decrypting keys...');
 		
 		// Decrypt the keys
 		const keys = await decryptKeys(fileContent, password);

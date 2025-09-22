@@ -494,28 +494,24 @@ main().catch(console.error);`;
 			</div>
 
 			<div class="cli-content">
-				<p>To decrypt your exported keys from the command line, save this script as <code>decrypt-keys.js</code> and run it with Node.js:</p>
+				<p>Install the CLI tool and decrypt your keys with simple commands:</p>
 				
-				<div class="code-block">
-					<div class="code-header">
-						<span class="code-title">decrypt-keys.js</span>
-						<button class="copy-btn" onclick={() => copyToClipboard(cliScript)}>
+				<div class="simple-command">
+					<p><strong>🚀 Install CLI Tool:</strong></p>
+					<div class="command-block install">
+						<code>npm install -g @profullstack/qrypt-decrypt</code>
+						<button class="copy-btn" onclick={() => copyToClipboard('npm install -g @profullstack/qrypt-decrypt')}>
 							📋 Copy
 						</button>
 					</div>
-					<pre><code>{cliScript}</code></pre>
-				</div>
-
-				<div class="usage-instructions">
-					<p><strong>Usage:</strong></p>
-					<div class="command-examples">
-						<p>1. Save the script above as <code>decrypt-keys.js</code></p>
-						<p>2. Run with Node.js:</p>
-						<div class="command-block">
-							<code>node decrypt-keys.js your-key-file.json</code>
-						</div>
-						<p>3. Enter your password when prompted</p>
+					<p><strong>🔓 Decrypt Your Keys:</strong></p>
+					<div class="command-block usage">
+						<code>qrypt-decrypt your-key-file.json</code>
+						<button class="copy-btn" onclick={() => copyToClipboard('qrypt-decrypt your-key-file.json')}>
+							📋 Copy
+						</button>
 					</div>
+					<p class="cli-note">Replace <code>your-key-file.json</code> with your actual key file name. The tool will prompt for your password.</p>
 				</div>
 
 				<div class="cli-help">
@@ -529,6 +525,43 @@ main().catch(console.error);`;
 			</div>
 		</div>
 	{/if}
+
+	<!-- CLI Decryption Command Section - Always visible -->
+	<div class="key-section cli-section">
+		<div class="section-title">
+			<h4>💻 Command Line Decryption</h4>
+			<p>Decrypt your exported key files using a simple CLI tool</p>
+		</div>
+
+		<div class="cli-content">
+			<div class="simple-command">
+				<p><strong>🚀 Install CLI Tool:</strong></p>
+				<div class="command-block install">
+					<code>npm install -g @profullstack/qrypt-decrypt</code>
+					<button class="copy-btn" onclick={() => copyToClipboard('npm install -g @profullstack/qrypt-decrypt')}>
+						📋 Copy
+					</button>
+				</div>
+				<p><strong>🔓 Decrypt Your Keys:</strong></p>
+				<div class="command-block usage">
+					<code>qrypt-decrypt your-key-file.json</code>
+					<button class="copy-btn" onclick={() => copyToClipboard('qrypt-decrypt your-key-file.json')}>
+						📋 Copy
+					</button>
+				</div>
+				<p class="cli-note">Replace <code>your-key-file.json</code> with your actual key file name. The tool will prompt for your password.</p>
+			</div>
+
+			<div class="cli-help">
+				<p><strong>Requirements:</strong></p>
+				<ul>
+					<li>Node.js v20 or newer</li>
+					<li>Your exported key file (.json)</li>
+					<li>The password you used to export the keys</li>
+				</ul>
+			</div>
+		</div>
+	</div>
 	
 	<!-- Import Section -->
 	<div class="key-section">

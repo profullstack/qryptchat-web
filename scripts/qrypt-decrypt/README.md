@@ -1,11 +1,11 @@
-# qrypt-decrypt
+# @profullstack/qrypt-decrypt
 
 CLI tool to decrypt QryptChat encrypted key files.
 
 ## Installation
 
 ```bash
-npm install -g qrypt-decrypt
+npm install -g @profullstack/qrypt-decrypt
 ```
 
 ## Usage
