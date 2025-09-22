@@ -61,10 +61,42 @@ export default defineConfig(({ mode }) => {
 						type: 'image/x-icon',
 						purpose: 'any'
 					},
-					// Small icons for desktop environments
+					// Desktop environment standard sizes (matching zymo.tv pattern)
+					{
+						src: '/favicon-32.png',
+						sizes: '32x32',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
+						src: '/favicon-16.png',
+						sizes: '16x16',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					// Standard desktop icon sizes that KDE/Arch expect
+					{
+						src: '/icons/icon-36x36.png',
+						sizes: '36x36',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
+						src: '/icons/icon-48x48.png',
+						sizes: '48x48',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					// Apple Touch icons for iOS compatibility
 					{
 						src: '/icons/apple-touch-icon-57x57.png',
 						sizes: '57x57',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
+						src: '/icons/apple-touch-icon-60x60.png',
+						sizes: '60x60',
 						type: 'image/png',
 						purpose: 'any'
 					},
@@ -75,8 +107,26 @@ export default defineConfig(({ mode }) => {
 						purpose: 'any'
 					},
 					{
+						src: '/icons/apple-touch-icon-76x76.png',
+						sizes: '76x76',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
+						src: '/icons/icon-96x96.png',
+						sizes: '96x96',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
 						src: '/icons/apple-touch-icon-114x114.png',
 						sizes: '114x114',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
+						src: '/icons/apple-touch-icon-120x120.png',
+						sizes: '120x120',
 						type: 'image/png',
 						purpose: 'any'
 					},
@@ -98,7 +148,7 @@ export default defineConfig(({ mode }) => {
 						type: 'image/png',
 						purpose: 'any'
 					},
-					// PWA standard icons with white backgrounds
+					// PWA standard icons
 					{
 						src: '/icons/icon-192x192.png',
 						sizes: '192x192',
