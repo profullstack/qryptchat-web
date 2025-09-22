@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { auth, user, isAuthenticated } from '$lib/stores/auth.js';
 	import { wsChat, activeConversation, isConnected, isAuthenticated as wsAuthenticated } from '$lib/stores/websocket-chat.js';
+	import { chat } from '$lib/stores/chat.js';
 	import { t } from '$lib/stores/i18n.js';
 	import ChatSidebar from '$lib/components/ChatSidebar.svelte';
 	import MessageList from '$lib/components/chat/MessageList.svelte';
@@ -21,16 +22,32 @@
 	let currentConversation = $state(/** @type {any} */ (null));
 
 	// Handle conversation selection
-	function handleConversationSelect(/** @type {string} */ conversationId) {
-		activeConversationId = conversationId;
-		// Get conversation details from the store
-		currentConversation = $activeConversation;
-		// On mobile, hide sidebar when a conversation is selected
-		if (window.innerWidth <= 768) {
-			showSidebar = false;
+	async function handleConversationSelect(/** @type {string} */ conversationId) {
+		try {
+			activeConversationId = conversationId;
+			
+			// Use the chat store to properly set active conversation
+			// This will load messages AND mark them as read, fixing the red dot issue
+			if ($user?.id) {
+				await chat.setActiveConversation(conversationId, $user.id);
+				console.log(`✅ Set active conversation ${conversationId} and marked messages as read`);
+			}
+			
+			// Get conversation details from the store
+			currentConversation = $activeConversation;
+			
+			// On mobile, hide sidebar when a conversation is selected
+			if (window.innerWidth <= 768) {
+				showSidebar = false;
+			}
+			
+			// Still join the conversation via WebSocket for real-time updates
+			if ($user?.id) {
+				wsChat.joinConversation(conversationId);
+			}
+		} catch (error) {
+			console.error('Failed to select conversation:', error);
 		}
-		// The ChatSidebar already handles joining the conversation via wsChat.joinConversation()
-		// so we don't need to duplicate that logic here
 	}
 
 	// Toggle sidebar visibility on mobile

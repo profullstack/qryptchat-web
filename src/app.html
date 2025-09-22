@@ -2,7 +2,8 @@
 <html lang="en" data-theme="light">
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.svg?v=2" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.ico" />
+		<link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		
 		<!-- PWA Meta Tags -->
@@ -13,25 +14,22 @@
 		<meta name="description" content="Secure, quantum-resistant end-to-end encrypted messaging" />
 		<meta name="format-detection" content="telephone=no" />
 		<meta name="mobile-web-app-capable" content="yes" />
-		<meta name="msapplication-config" content="%sveltekit.assets%/icons/browserconfig.xml" />
 		<meta name="msapplication-TileColor" content="#6366f1" />
 		<meta name="msapplication-tap-highlight" content="no" />
 		<meta name="theme-color" content="#6366f1" />
 
-		<!-- Apple Touch Icons - with cache busting -->
-		<link rel="apple-touch-icon" href="%sveltekit.assets%/favicon.svg?v=2" />
-		<link rel="apple-touch-icon" sizes="152x152" href="%sveltekit.assets%/favicon.svg?v=2" />
-		<link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/favicon.svg?v=2" />
-		<link rel="apple-touch-icon" sizes="192x192" href="%sveltekit.assets%/favicon.svg?v=2" />
+		<!-- Apple Touch Icons - PNG for iOS compatibility -->
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon-180x180.png" />
+		<link rel="apple-touch-icon" sizes="57x57" href="%sveltekit.assets%/icons/apple-touch-icon-57x57.png" />
+		<link rel="apple-touch-icon" sizes="60x60" href="%sveltekit.assets%/icons/apple-touch-icon-60x60.png" />
+		<link rel="apple-touch-icon" sizes="72x72" href="%sveltekit.assets%/icons/apple-touch-icon-72x72.png" />
+		<link rel="apple-touch-icon" sizes="76x76" href="%sveltekit.assets%/icons/apple-touch-icon-76x76.png" />
+		<link rel="apple-touch-icon" sizes="114x114" href="%sveltekit.assets%/icons/apple-touch-icon-114x114.png" />
+		<link rel="apple-touch-icon" sizes="120x120" href="%sveltekit.assets%/icons/apple-touch-icon-120x120.png" />
+		<link rel="apple-touch-icon" sizes="144x144" href="%sveltekit.assets%/icons/apple-touch-icon-144x144.png" />
+		<link rel="apple-touch-icon" sizes="152x152" href="%sveltekit.assets%/icons/apple-touch-icon-152x152.png" />
+		<link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/apple-touch-icon-180x180.png" />
 
-		<!-- Splash Screens -->
-		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-2048-2732.jpg" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1668-2224.jpg" media="(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1536-2048.jpg" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1125-2436.jpg" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-1242-2208.jpg" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-750-1334.jpg" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="%sveltekit.assets%/splash/apple-splash-640-1136.jpg" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
 
 		<!-- Security Headers -->
 		<meta http-equiv="Content-Security-Policy" content="
