@@ -8,6 +8,14 @@
 import { readFileSync } from 'fs';
 import { createInterface } from 'readline/promises';
 import { webcrypto } from 'crypto';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get package.json for version info
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
+const VERSION = packageJson.version;
 
 const { subtle } = webcrypto;
 
@@ -98,17 +106,39 @@ async function decryptKeys(exportedData, password) {
  * Main CLI function
  */
 async function main() {
-	console.log('🔐 QryptChat Key Decryption Tool v1.0.0');
-	console.log('');
+	const args = process.argv.slice(2);
 	
-	const filename = process.argv[2];
-	if (!filename) {
-		console.error('❌ Usage: qrypt-decrypt <key-file.json>');
+	// Handle CLI flags
+	if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+		console.log(`🔐 QryptChat Key Decryption Tool v${VERSION}`);
+		console.log('');
+		console.log('Usage: qrypt-decrypt <key-file.json>');
+		console.log('');
+		console.log('Options:');
+		console.log('  --version, -v    Show version number');
+		console.log('  --help, -h       Show this help message');
 		console.log('');
 		console.log('Example:');
 		console.log('  qrypt-decrypt qryptchat-pq-keys-2025-01-20T12-30-45-123Z.json');
+		process.exit(0);
+	}
+	
+	if (args.includes('--version') || args.includes('-v')) {
+		console.log(`v${VERSION}`);
+		process.exit(0);
+	}
+	
+	const filename = args[0];
+	if (!filename) {
+		console.error('❌ Error: No file specified');
+		console.log('');
+		console.log('Usage: qrypt-decrypt <key-file.json>');
+		console.log('Use --help for more information');
 		process.exit(1);
 	}
+	
+	console.log(`🔐 QryptChat Key Decryption Tool v${VERSION}`);
+	console.log('');
 	
 	try {
 		// Check if file exists
