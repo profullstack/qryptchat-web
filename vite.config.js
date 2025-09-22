@@ -74,15 +74,15 @@ export default defineConfig(({ mode }) => {
 						type: 'image/png',
 						purpose: 'any'
 					},
-					// Standard desktop icon sizes that KDE/Arch expect
+					// Standard desktop icon sizes that KDE/Arch expect (android-chrome naming)
 					{
-						src: '/icons/icon-36x36.png',
+						src: '/icons/android-chrome-36x36.png',
 						sizes: '36x36',
 						type: 'image/png',
 						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-48x48.png',
+						src: '/icons/android-chrome-48x48.png',
 						sizes: '48x48',
 						type: 'image/png',
 						purpose: 'any'
@@ -113,7 +113,7 @@ export default defineConfig(({ mode }) => {
 						purpose: 'any'
 					},
 					{
-						src: '/icons/icon-96x96.png',
+						src: '/icons/android-chrome-96x96.png',
 						sizes: '96x96',
 						type: 'image/png',
 						purpose: 'any'
