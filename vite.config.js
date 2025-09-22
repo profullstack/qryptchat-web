@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
 			strategies: 'generateSW',
 			scope: '/',
 			base: '/',
-			disable: mode === 'development', // Disable PWA in development to avoid conflicts
+			disable: false, // Enable PWA in all modes
 			manifest: {
 				short_name: 'QryptChat',
 				name: 'QryptChat - Quantum-Resistant Messaging',
@@ -80,6 +80,12 @@ export default defineConfig(({ mode }) => {
 					},
 					{
 						src: '/favicon.svg',
+						sizes: '180x180',
+						type: 'image/svg+xml',
+						purpose: 'any'
+					},
+					{
+						src: '/favicon.svg',
 						sizes: '192x192',
 						type: 'image/svg+xml',
 						purpose: 'any'
@@ -95,31 +101,6 @@ export default defineConfig(({ mode }) => {
 						sizes: '512x512',
 						type: 'image/svg+xml',
 						purpose: 'any'
-					}
-				],
-				shortcuts: [
-					{
-						name: 'New Chat',
-						short_name: 'New Chat',
-						description: 'Start a new conversation',
-						url: '/chat/new',
-						icons: [{ src: '/icons/shortcut-new-chat.png', sizes: '96x96' }]
-					}
-				],
-				screenshots: [
-					{
-						src: '/screenshots/desktop-1.png',
-						sizes: '1280x720',
-						type: 'image/png',
-						form_factor: 'wide',
-						label: 'QryptChat Desktop View'
-					},
-					{
-						src: '/screenshots/mobile-1.png',
-						sizes: '375x812',
-						type: 'image/png',
-						form_factor: 'narrow',
-						label: 'QryptChat Mobile View'
 					}
 				]
 			},
