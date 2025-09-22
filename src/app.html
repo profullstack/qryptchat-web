@@ -97,14 +97,9 @@
 				}
 			});
 
-			// Service Worker Registration and Update Handling (Production only)
-			// Only register service worker in production (not on localhost or dev servers)
-			const isProduction = !window.location.hostname.includes('localhost') &&
-								  !window.location.hostname.includes('127.0.0.1') &&
-								  !window.location.hostname.includes('0.0.0.0') &&
-								  window.location.protocol === 'https:';
-			
-			if ('serviceWorker' in navigator && isProduction) {
+			// Service Worker Registration and Update Handling
+			// Register service worker in all environments for PWA testing
+			if ('serviceWorker' in navigator) {
 				window.addEventListener('load', async () => {
 					try {
 						const registration = await navigator.serviceWorker.register('/sw.js');
