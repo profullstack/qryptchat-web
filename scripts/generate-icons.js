@@ -45,10 +45,15 @@ async function generateIcons() {
     for (const { size, name } of ICON_SIZES) {
       const outputPath = path.join(ICONS_DIR, name);
       
+      // Determine if this is a PWA icon that needs solid background
+      const needsSolidBackground = name.includes('icon-') && (size >= 192);
+      
       await sharp(svgBuffer)
         .resize(size, size, {
           fit: 'contain',
-          background: { r: 255, g: 255, b: 255, alpha: 0 } // Transparent background
+          background: needsSolidBackground
+            ? { r: 255, g: 255, b: 255, alpha: 1 } // White background for PWA icons
+            : { r: 255, g: 255, b: 255, alpha: 0 } // Transparent for Apple touch icons
         })
         .png({
           quality: 95,
