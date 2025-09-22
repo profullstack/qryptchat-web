@@ -143,7 +143,7 @@ async function main() {
 	try {
 		// Check if file exists
 		const fileContent = readFileSync(filename, 'utf8');
-		// Get password from user
+		// Get password from user (simple, no masking to avoid complexity)
 		const rl = createInterface({
 			input: process.stdin,
 			output: process.stdout
@@ -152,9 +152,9 @@ async function main() {
 		const password = await rl.question('🔑 Enter password: ');
 		rl.close();
 		
-		console.log('\n🔓 Decrypting keys...');
+		console.log('🔓 Decrypting keys...');
 		
-		// Decrypt the keys
+		// Decrypt the keys with better error handling
 		const keys = await decryptKeys(fileContent, password);
 		
 		console.log('');
@@ -188,14 +188,16 @@ async function main() {
 		console.log('');
 		if (error.code === 'ENOENT') {
 			console.error(`❌ File not found: ${filename}`);
-		} else if (error.message.includes('Invalid password')) {
+		} else if (error.message.includes('Invalid password') || error.message.includes('operation failed')) {
 			console.error('❌ Invalid password or corrupted data');
+			console.error('   Make sure you entered the correct password used during export');
 		} else if (error.message.includes('Invalid export format')) {
 			console.error('❌ Invalid file format. Make sure this is a QryptChat key export file.');
 		} else if (error.message.includes('Unsupported version')) {
 			console.error('❌ Unsupported file version. Please export your keys again with the latest version.');
 		} else {
 			console.error(`❌ Error: ${error.message}`);
+			console.error('   Debug info: This might be a password or file format issue');
 		}
 		console.log('');
 		process.exit(1);

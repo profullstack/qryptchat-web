@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/qrypt-decrypt",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "CLI tool to decrypt QryptChat encrypted key files",
   "main": "index.js",
   "type": "module",
