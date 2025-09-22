@@ -4,7 +4,7 @@ export async function GET() {
       name: "QryptChat - Quantum-Resistant Messaging",
       short_name: "QryptChat",
       description: "Secure, quantum-resistant end-to-end encrypted messaging",
-      start_url: "https://qrypt.chat/",
+      start_url: "/",
       scope: "/",
       display: "standalone",
       background_color: "#ffffff",
