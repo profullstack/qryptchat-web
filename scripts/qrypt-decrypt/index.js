@@ -6,10 +6,10 @@
  */
 
 import { readFileSync } from 'fs';
-import { createInterface } from 'readline/promises';
 import { webcrypto } from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import passwordPrompt from '@inquirer/password';
 
 // Get package.json for version info
 const __filename = fileURLToPath(import.meta.url);
@@ -43,7 +43,7 @@ async function deriveKeyFromPassword(password, salt, info, keyLength) {
 			name: 'HKDF',
 			hash: 'SHA-256',
 			salt: salt,
-			info: encoder.encode(`PostQuantumKeyExport-${info}`)
+			info: encoder.encode(`QryptChat-v1-${info}`) // Must match web interface exactly
 		},
 		passwordKey,
 		{ name: 'AES-GCM', length: 256 },
@@ -78,8 +78,8 @@ async function decryptKeys(exportedData, password) {
 	const salt = Base64.decode(data.salt);
 	const iv = Base64.decode(data.iv);
 	
-	// Derive key from password
-	const keyBytes = await deriveKeyFromPassword(password, salt, '', 32);
+	// Derive key from password (must match web interface exactly)
+	const keyBytes = await deriveKeyFromPassword(password, salt, 'PostQuantumKeyExport', 32);
 	
 	// Import key for decryption
 	const cryptoKey = await subtle.importKey(
@@ -143,14 +143,10 @@ async function main() {
 	try {
 		// Check if file exists
 		const fileContent = readFileSync(filename, 'utf8');
-		// Get password from user (simple, no masking to avoid complexity)
-		const rl = createInterface({
-			input: process.stdin,
-			output: process.stdout
+		// Get password from user with proper masking
+		const password = await passwordPrompt({
+			message: '🔑 Enter password:'
 		});
-		
-		const password = await rl.question('🔑 Enter password: ');
-		rl.close();
 		
 		console.log('🔓 Decrypting keys...');
 		
