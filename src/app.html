@@ -31,15 +31,33 @@
 		<div style="display: contents">%sveltekit.body%</div>
 
 		<script>
-			// Simple PWA Install Prompt (zymo.tv style)
+			// PWA Install Prompt
 			let deferredPrompt;
 			
 			window.addEventListener('beforeinstallprompt', (e) => {
 				e.preventDefault();
 				deferredPrompt = e;
+				
+				// Show install prompt if not already installed
+				if (!window.matchMedia('(display-mode: standalone)').matches) {
+					// Dispatch custom event for Svelte components to handle
+					window.dispatchEvent(new CustomEvent('pwa-install-available', {
+						detail: {
+							prompt: deferredPrompt,
+							install: async () => {
+								if (deferredPrompt) {
+									deferredPrompt.prompt();
+									const { outcome } = await deferredPrompt.userChoice;
+									console.log(`User response to install prompt: ${outcome}`);
+									deferredPrompt = null;
+								}
+							}
+						}
+					}));
+				}
 			});
 
-			// Simple Service Worker Registration
+			// Service Worker Registration
 			if ('serviceWorker' in navigator) {
 				window.addEventListener('load', async () => {
 					try {
@@ -50,6 +68,12 @@
 					}
 				});
 			}
+
+			// Handle app installed event
+			window.addEventListener('appinstalled', () => {
+				console.log('QryptChat was installed');
+				window.dispatchEvent(new CustomEvent('pwa-installed'));
+			});
 
 			// Simple dark mode detection
 			if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
