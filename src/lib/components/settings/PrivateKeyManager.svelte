@@ -221,6 +221,165 @@
 			loading = false;
 		}
 	}
+
+	/**
+	 * Copy text to clipboard
+	 */
+	async function copyToClipboard(text) {
+		try {
+			await navigator.clipboard.writeText(text);
+			success = 'CLI script copied to clipboard!';
+			setTimeout(() => { success = ''; }, 3000);
+		} catch (err) {
+			console.error('Failed to copy to clipboard:', err);
+			error = 'Failed to copy to clipboard';
+		}
+	}
+
+	// CLI decryption script
+	const cliScript = `#!/usr/bin/env node
+import { readFileSync } from 'fs';
+import { createInterface } from 'readline';
+import { webcrypto } from 'crypto';
+
+// Polyfill for Node.js crypto
+const { subtle } = webcrypto;
+
+// Base64 utilities
+const Base64 = {
+	encode: (bytes) => Buffer.from(bytes).toString('base64'),
+	decode: (str) => new Uint8Array(Buffer.from(str, 'base64'))
+};
+
+// HKDF implementation
+async function hkdfDerive(password, salt, info, keyLength) {
+	const encoder = new TextEncoder();
+	const passwordKey = await subtle.importKey(
+		'raw',
+		encoder.encode(password),
+		{ name: 'HKDF' },
+		false,
+		['deriveKey']
+	);
+	
+	const derivedKey = await subtle.deriveKey(
+		{
+			name: 'HKDF',
+			hash: 'SHA-256',
+			salt: salt,
+			info: encoder.encode(info)
+		},
+		passwordKey,
+		{ name: 'AES-GCM', length: 256 },
+		true,
+		['decrypt']
+	);
+	
+	return await subtle.exportKey('raw', derivedKey);
+}
+
+// Decrypt function
+async function decryptKeys(exportedData, password) {
+	const data = JSON.parse(exportedData);
+	
+	// Validate format
+	if (!data.version || !data.encryptedKeys || !data.salt || !data.iv) {
+		throw new Error('Invalid export format');
+	}
+	
+	if (data.version !== '2.0') {
+		throw new Error(\`Unsupported version: \${data.version}\`);
+	}
+	
+	// Decode components
+	const encryptedKeys = Base64.decode(data.encryptedKeys);
+	const salt = Base64.decode(data.salt);
+	const iv = Base64.decode(data.iv);
+	
+	// Derive key from password
+	const keyBytes = await hkdfDerive(password, salt, 'PostQuantumKeyExport', 32);
+	
+	// Import key for decryption
+	const cryptoKey = await subtle.importKey(
+		'raw',
+		keyBytes,
+		{ name: 'AES-GCM', length: 256 },
+		false,
+		['decrypt']
+	);
+	
+	// Decrypt
+	const decryptedBuffer = await subtle.decrypt(
+		{ name: 'AES-GCM', iv: iv },
+		cryptoKey,
+		encryptedKeys
+	);
+	
+	// Convert to string and parse
+	const decryptedJson = new TextDecoder().decode(decryptedBuffer);
+	return JSON.parse(decryptedJson);
+}
+
+// Main function
+async function main() {
+	const filename = process.argv[2];
+	if (!filename) {
+		console.error('Usage: node decrypt-keys.js <key-file.json>');
+		process.exit(1);
+	}
+	
+	try {
+		// Read file
+		const fileContent = readFileSync(filename, 'utf8');
+		
+		// Get password
+		const rl = createInterface({
+			input: process.stdin,
+			output: process.stdout
+		});
+		
+		const password = await new Promise((resolve) => {
+			rl.question('Enter password: ', (answer) => {
+				rl.close();
+				resolve(answer);
+			});
+		});
+		
+		// Decrypt
+		const keys = await decryptKeys(fileContent, password);
+		
+		console.log('\\n✅ Keys decrypted successfully!');
+		console.log('\\n📊 Key Information:');
+		console.log(\`Version: \${keys.version}\`);
+		console.log(\`Timestamp: \${new Date(keys.timestamp).toISOString()}\`);
+		
+		if (keys.keys1024) {
+			console.log('\\n🔐 ML-KEM-1024 Keys:');
+			console.log(\`Algorithm: \${keys.keys1024.algorithm}\`);
+			console.log(\`Public Key: \${keys.keys1024.publicKey.substring(0, 50)}...\`);
+			console.log(\`Private Key: [HIDDEN - \${keys.keys1024.privateKey.length} characters]\`);
+		}
+		
+		if (keys.keys768) {
+			console.log('\\n🔐 ML-KEM-768 Keys:');
+			console.log(\`Algorithm: \${keys.keys768.algorithm}\`);
+			console.log(\`Public Key: \${keys.keys768.publicKey.substring(0, 50)}...\`);
+			console.log(\`Private Key: [HIDDEN - \${keys.keys768.privateKey.length} characters]\`);
+		}
+		
+		console.log('\\n⚠️  Keep your private keys secure!');
+		
+	} catch (error) {
+		if (error.message.includes('Invalid password')) {
+			console.error('❌ Invalid password or corrupted data');
+		} else {
+			console.error(\`❌ Error: \${error.message}\`);
+		}
+		process.exit(1);
+	}
+}
+
+main().catch(console.error);`;
 </script>
 
 <div class="private-key-manager">
@@ -409,6 +568,49 @@
 						<li>GPG encrypted files require both passwords and GPG software to decrypt</li>
 					{/if}
 				</ul>
+			</div>
+		</div>
+
+		<!-- CLI Decryption Command Section -->
+		<div class="key-section cli-section">
+			<div class="section-title">
+				<h4>💻 Command Line Decryption</h4>
+				<p>Decrypt your exported key files using Node.js on Mac, Windows, or Linux</p>
+			</div>
+
+			<div class="cli-content">
+				<p>To decrypt your exported keys from the command line, save this script as <code>decrypt-keys.js</code> and run it with Node.js:</p>
+				
+				<div class="code-block">
+					<div class="code-header">
+						<span class="code-title">decrypt-keys.js</span>
+						<button class="copy-btn" onclick={() => copyToClipboard(cliScript)}>
+							📋 Copy
+						</button>
+					</div>
+					<pre><code>{cliScript}</code></pre>
+				</div>
+
+				<div class="usage-instructions">
+					<p><strong>Usage:</strong></p>
+					<div class="command-examples">
+						<p>1. Save the script above as <code>decrypt-keys.js</code></p>
+						<p>2. Run with Node.js:</p>
+						<div class="command-block">
+							<code>node decrypt-keys.js your-key-file.json</code>
+						</div>
+						<p>3. Enter your password when prompted</p>
+					</div>
+				</div>
+
+				<div class="cli-help">
+					<p><strong>Requirements:</strong></p>
+					<ul>
+						<li>Node.js v20 or newer</li>
+						<li>Your exported key file (.json)</li>
+						<li>The password you used to export the keys</li>
+					</ul>
+				</div>
 			</div>
 		</div>
 	{/if}

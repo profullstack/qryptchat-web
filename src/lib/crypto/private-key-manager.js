@@ -59,28 +59,41 @@ export class PrivateKeyManager {
 			const salt = SecureRandom.generateSalt();
 			const encryptionKey = await this._deriveKeyFromPassword(password, salt);
 
-			// Use post-quantum encryption to encrypt the keys
-			// Create a temporary public key for encryption
-			const tempKeyPair = await postQuantumEncryption.kemAlgorithm.generateKeyPair();
-			const tempPublicKey = Base64.encode(tempKeyPair[0]);
-			
-			// Encrypt using post-quantum encryption
-			const encryptedKeys = await postQuantumEncryption.encryptForRecipient(keysJson, tempPublicKey);
+			// Generate IV for AES-GCM encryption
+			const iv = SecureRandom.generateBytes(12); // 12 bytes for GCM
+
+			// Import key for WebCrypto API
+			const cryptoKey = await crypto.subtle.importKey(
+				'raw',
+				encryptionKey,
+				{ name: 'AES-GCM', length: 256 },
+				false,
+				['encrypt']
+			);
+
+			// Encrypt the keys using AES-GCM with the password-derived key
+			const encryptedBuffer = await crypto.subtle.encrypt(
+				{
+					name: 'AES-GCM',
+					iv: iv,
+				},
+				cryptoKey,
+				keysBytes
+			);
 
 			// Create export data structure
 			const exportData = {
 				version: EXPORT_VERSION,
-				algorithm: 'ML-KEM-1024',
+				algorithm: 'AES-GCM-256',
 				timestamp: Date.now(),
-				encryptedKeys: encryptedKeys,
+				encryptedKeys: Base64.encode(new Uint8Array(encryptedBuffer)),
 				salt: Base64.encode(salt),
-				tempPrivateKey: Base64.encode(tempKeyPair[1]) // Store temp private key for decryption
+				iv: Base64.encode(iv)
 			};
 
 			// Clear sensitive data from memory
 			CryptoUtils.secureClear(encryptionKey);
 			CryptoUtils.secureClear(keysBytes);
-			CryptoUtils.secureClear(tempKeyPair[1]);
 
 			return JSON.stringify(exportData);
 
@@ -117,44 +130,48 @@ export class PrivateKeyManager {
 			// Validate export data structure
 			this._validateExportData(parsedData);
 
-			// Check version compatibility
+			// Check version compatibility - only support secure version 2.0
 			if (parsedData.version !== EXPORT_VERSION) {
-				// Support legacy version 1.0 for backward compatibility
-				if (parsedData.version === '1.0') {
-					throw new Error('Legacy key format not supported. Please use post-quantum keys.');
-				}
-				throw new Error(`Unsupported export version: ${parsedData.version}`);
+				throw new Error(`Insecure or unsupported export version: ${parsedData.version}. Please export keys again with the current secure version.`);
 			}
 
 			// Initialize post-quantum encryption service
 			await postQuantumEncryption.initialize();
 
-			// Decode base64 data
-			const encryptedKeys = parsedData.encryptedKeys;
-			const salt = Base64.decode(parsedData.salt);
-			const tempPrivateKey = Base64.decode(parsedData.tempPrivateKey);
+			// Decode base64 data and ensure proper ArrayBuffer backing
+			const encryptedKeysBuffer = new Uint8Array(Base64.decode(parsedData.encryptedKeys));
+			const salt = new Uint8Array(Base64.decode(parsedData.salt));
+			const iv = new Uint8Array(Base64.decode(parsedData.iv));
 
-			// Derive decryption key from password (for additional security)
+			// Derive decryption key from password
 			const decryptionKey = await this._deriveKeyFromPassword(password, salt);
 
-			// Decrypt the keys using post-quantum decryption
-			let decryptedJson;
-			try {
-				// Temporarily set the private key for decryption
-				const originalKeys = postQuantumEncryption.userKeys;
-				postQuantumEncryption.userKeys = {
-					privateKey: Base64.encode(tempPrivateKey),
-					publicKey: '' // Not needed for decryption
-				};
+			// Import key for WebCrypto API
+			const cryptoKey = await crypto.subtle.importKey(
+				'raw',
+				new Uint8Array(decryptionKey),
+				{ name: 'AES-GCM', length: 256 },
+				false,
+				['decrypt']
+			);
 
-				// Decrypt using post-quantum encryption
-				decryptedJson = await postQuantumEncryption.decryptFromSender(encryptedKeys, '');
-				
-				// Restore original keys
-				postQuantumEncryption.userKeys = originalKeys;
+			// Decrypt the keys using AES-GCM with the password-derived key
+			let decryptedBuffer;
+			try {
+				decryptedBuffer = await crypto.subtle.decrypt(
+					{
+						name: 'AES-GCM',
+						iv: iv,
+					},
+					cryptoKey,
+					encryptedKeysBuffer
+				);
 			} catch (decryptError) {
 				throw new Error('Invalid password or corrupted data');
 			}
+
+			// Convert decrypted buffer to JSON string
+			const decryptedJson = new TextDecoder().decode(decryptedBuffer);
 
 			// Parse decrypted keys
 			const importedKeys = JSON.parse(decryptedJson);
@@ -192,12 +209,11 @@ export class PrivateKeyManager {
 
 			// Clear sensitive data from memory
 			CryptoUtils.secureClear(decryptionKey);
-			CryptoUtils.secureClear(tempPrivateKey);
 
 			console.log('🔑 Post-quantum private keys imported successfully');
 
 		} catch (error) {
-			throw new Error(`Failed to import post-quantum private keys: ${error.message}`);
+			throw new Error(`Failed to import post-quantum private keys: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -233,14 +249,7 @@ export class PrivateKeyManager {
 	 * @private
 	 */
 	_validateExportData(data) {
-		const requiredFields = ['version', 'timestamp', 'encryptedKeys', 'salt'];
-		
-		// For version 2.0, we need tempPrivateKey instead of nonce
-		if (data.version === '2.0') {
-			requiredFields.push('algorithm', 'tempPrivateKey');
-		} else {
-			requiredFields.push('nonce'); // Legacy support
-		}
+		const requiredFields = ['version', 'timestamp', 'encryptedKeys', 'salt', 'algorithm', 'iv'];
 		
 		for (const field of requiredFields) {
 			if (!data.hasOwnProperty(field)) {
@@ -261,13 +270,21 @@ export class PrivateKeyManager {
 		if (typeof data.salt !== 'string') {
 			throw new Error('Invalid export format: salt must be a string');
 		}
-		if (data.version === '2.0') {
-			if (typeof data.algorithm !== 'string') {
-				throw new Error('Invalid export format: algorithm must be a string');
-			}
-			if (typeof data.tempPrivateKey !== 'string') {
-				throw new Error('Invalid export format: tempPrivateKey must be a string');
-			}
+		if (typeof data.algorithm !== 'string') {
+			throw new Error('Invalid export format: algorithm must be a string');
+		}
+		if (typeof data.iv !== 'string') {
+			throw new Error('Invalid export format: iv must be a string');
+		}
+
+		// Validate that we only support the secure AES-GCM format
+		if (data.algorithm !== 'AES-GCM-256') {
+			throw new Error(`Unsupported or insecure algorithm: ${data.algorithm}. Only AES-GCM-256 is supported.`);
+		}
+
+		// Reject any exports that contain insecure tempPrivateKey
+		if (data.hasOwnProperty('tempPrivateKey')) {
+			throw new Error('Insecure export format detected. Please re-export your keys with the current secure version.');
 		}
 	}
 
@@ -404,7 +421,7 @@ export class PrivateKeyManager {
 			return gpgEncryptedData;
 
 		} catch (error) {
-			throw new Error(`Failed to export private keys with GPG: ${error.message}`);
+			throw new Error(`Failed to export private keys with GPG: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -433,7 +450,7 @@ export class PrivateKeyManager {
 			await this.importPrivateKeys(exportedData, password);
 
 		} catch (error) {
-			throw new Error(`Failed to import private keys from GPG: ${error.message}`);
+			throw new Error(`Failed to import private keys from GPG: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -459,7 +476,7 @@ export class PrivateKeyManager {
 			return encrypted;
 
 		} catch (error) {
-			throw new Error(`GPG encryption failed: ${error.message}`);
+			throw new Error(`GPG encryption failed: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -486,7 +503,7 @@ export class PrivateKeyManager {
 			return decrypted;
 
 		} catch (error) {
-			throw new Error(`GPG decryption failed: ${error.message}`);
+			throw new Error(`GPG decryption failed: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
