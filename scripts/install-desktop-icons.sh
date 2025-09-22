@@ -12,6 +12,56 @@ DESKTOP_DIR="$HOME/.local/share/applications"
 # Create icon theme directories
 mkdir -p "$ICON_THEME_DIR"/{16x16,32x32,48x48,64x64,96x96,128x128,256x256,512x512}/apps
 
+# Create hicolor theme index file (CRITICAL for desktop environments)
+cat > "$ICON_THEME_DIR/index.theme" << 'EOF'
+[Icon Theme]
+Name=Hicolor
+Comment=Fallback icon theme
+Hidden=true
+Directories=16x16/apps,32x32/apps,48x48/apps,64x64/apps,96x96/apps,128x128/apps,256x256/apps,512x512/apps
+
+[16x16/apps]
+Size=16
+Context=Applications
+Type=Fixed
+
+[32x32/apps]
+Size=32
+Context=Applications
+Type=Fixed
+
+[48x48/apps]
+Size=48
+Context=Applications
+Type=Fixed
+
+[64x64/apps]
+Size=64
+Context=Applications
+Type=Fixed
+
+[96x96/apps]
+Size=96
+Context=Applications
+Type=Fixed
+
+[128x128/apps]
+Size=128
+Context=Applications
+Type=Fixed
+
+[256x256/apps]
+Size=256
+Context=Applications
+Type=Fixed
+
+[512x512/apps]
+Size=512
+Context=Applications
+Type=Fixed
+EOF
+echo "✅ Created hicolor theme index file"
+
 # Copy icons to proper locations
 echo "📁 Installing icons to $ICON_THEME_DIR..."
 
