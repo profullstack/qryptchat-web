@@ -102,8 +102,8 @@
 			if ('serviceWorker' in navigator) {
 				window.addEventListener('load', async () => {
 					try {
-						const registration = await navigator.serviceWorker.register('/sw.js');
-						console.log('SW registered: ', registration);
+						const registration = await navigator.serviceWorker.register('/service-worker.js');
+						console.log('✅ Service Worker registered successfully: ', registration);
 
 						// Handle service worker updates
 						registration.addEventListener('updatefound', () => {
@@ -138,7 +138,14 @@
 						});
 
 					} catch (error) {
-						console.log('SW registration failed: ', error);
+						console.error('❌ Service Worker registration failed: ', error);
+						// Try alternative path
+						try {
+							const fallbackRegistration = await navigator.serviceWorker.register('/sw.js');
+							console.log('✅ Service Worker registered with fallback path: ', fallbackRegistration);
+						} catch (fallbackError) {
+							console.error('❌ Service Worker fallback registration also failed: ', fallbackError);
+						}
 					}
 				});
 			}
