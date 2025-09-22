@@ -20,7 +20,8 @@
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
-		"format:check": "prettier --check ."
+		"format:check": "prettier --check .",
+		"icons:generate": "node scripts/generate-icons.js"
 	},
 	"devDependencies": {
 		"@railway/cli": "^4.8.0",

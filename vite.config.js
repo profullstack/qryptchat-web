@@ -48,9 +48,35 @@ export default defineConfig(({ mode }) => {
 				dir: 'ltr',
 				orientation: 'portrait-primary',
 				icons: [
+					// Favicon fallbacks
+					{
+						src: '/favicon.svg',
+						sizes: 'any',
+						type: 'image/svg+xml',
+						purpose: 'any'
+					},
+					{
+						src: '/favicon.ico',
+						sizes: '48x48',
+						type: 'image/x-icon',
+						purpose: 'any'
+					},
+					// Small icons for desktop environments
+					{
+						src: '/icons/apple-touch-icon-57x57.png',
+						sizes: '57x57',
+						type: 'image/png',
+						purpose: 'any'
+					},
 					{
 						src: '/icons/apple-touch-icon-72x72.png',
 						sizes: '72x72',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
+						src: '/icons/apple-touch-icon-114x114.png',
+						sizes: '114x114',
 						type: 'image/png',
 						purpose: 'any'
 					},
@@ -72,11 +98,12 @@ export default defineConfig(({ mode }) => {
 						type: 'image/png',
 						purpose: 'any'
 					},
+					// PWA standard icons with white backgrounds
 					{
 						src: '/icons/icon-192x192.png',
 						sizes: '192x192',
 						type: 'image/png',
-						purpose: 'any maskable'
+						purpose: 'any'
 					},
 					{
 						src: '/icons/icon-256x256.png',
@@ -94,7 +121,20 @@ export default defineConfig(({ mode }) => {
 						src: '/icons/icon-512x512.png',
 						sizes: '512x512',
 						type: 'image/png',
-						purpose: 'any maskable'
+						purpose: 'any'
+					},
+					// Maskable icons for better mobile/desktop integration
+					{
+						src: '/icons/icon-192x192.png',
+						sizes: '192x192',
+						type: 'image/png',
+						purpose: 'maskable'
+					},
+					{
+						src: '/icons/icon-512x512.png',
+						sizes: '512x512',
+						type: 'image/png',
+						purpose: 'maskable'
 					}
 				]
 			},
