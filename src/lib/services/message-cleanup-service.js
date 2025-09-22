@@ -76,7 +76,8 @@ export class MessageCleanupService {
       console.log('🧹 Running message cleanup...');
 
       // Call the database function to clean up expired messages
-      const { data, error } = await supabaseServiceRole
+      const supabase = getServiceRoleClient();
+      const { data, error } = await supabase
         .rpc('fn_cleanup_expired_messages');
 
       if (error) {
@@ -105,7 +106,8 @@ export class MessageCleanupService {
     try {
       console.log(`🧹 Running cleanup for user: ${userId}`);
 
-      const { data, error } = await supabaseServiceRole
+      const supabase = getServiceRoleClient();
+      const { data, error } = await supabase
         .rpc('fn_cleanup_expired_messages', { p_user_id: userId });
 
       if (error) {
