@@ -41,7 +41,7 @@
       "purpose": "maskable any"
     }
   ],
-  "start_url": "https://qrypt.chat/",
+  "start_url": "/",
   "theme_color": "#6366f1",
   "background_color": "#ffffff",
   "display": "standalone"
