@@ -2,28 +2,61 @@
 <html lang="en" data-theme="light">
 	<head>
 		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.ico" />
+		<link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/favicon.svg" />
+		
+		<!-- Desktop Environment Icon Links (KDE/Arch compatibility) - Exact zymo.tv structure -->
+		<link rel="icon" type="image/png" sizes="16x16" href="%sveltekit.assets%/icons/favicon-16x16.png" />
+		<link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icons/favicon-32x32.png" />
+		<link rel="icon" type="image/png" sizes="194x194" href="%sveltekit.assets%/icons/favicon-194x194.png" />
+		<link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icons/android-chrome-192x192.png" />
+		<link rel="shortcut icon" href="%sveltekit.assets%/favicon.ico" />
+		
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		
-		<!-- Icons from zymo.tv structure -->
-		<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180x180.png" />
-		<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
-		<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-		<link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48x48.png" />
-		<link rel="icon" type="image/png" sizes="64x64" href="/icons/favicon-64x64.png" />
-		<link rel="icon" type="image/png" sizes="128x128" href="/icons/favicon-128x128.png" />
-		<link rel="icon" type="image/png" sizes="256x256" href="/icons/favicon-256x256.png" />
-		<link rel="icon" type="image/png" sizes="512x512" href="/icons/favicon-512x512.png" />
-		<link rel="manifest" href="/manifest.json" />
-		<link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#6366f1" />
-		<link rel="shortcut icon" href="/favicon.ico" />
-		
 		<!-- PWA Meta Tags -->
-		<meta name="apple-mobile-web-app-title" content="QryptChat" />
 		<meta name="application-name" content="QryptChat" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+		<meta name="apple-mobile-web-app-title" content="QryptChat" />
+		<meta name="description" content="Secure, quantum-resistant end-to-end encrypted messaging" />
+		<meta name="format-detection" content="telephone=no" />
+		<meta name="mobile-web-app-capable" content="yes" />
 		<meta name="msapplication-TileColor" content="#6366f1" />
-		<meta name="msapplication-TileImage" content="/icons/mstile-144x144.png" />
-		<meta name="msapplication-config" content="/icons/browserconfig.xml" />
+		<meta name="msapplication-tap-highlight" content="no" />
 		<meta name="theme-color" content="#6366f1" />
+
+		<!-- Apple Touch Icons - PNG for iOS compatibility -->
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon-180x180.png" />
+		<link rel="apple-touch-icon" sizes="57x57" href="%sveltekit.assets%/icons/apple-touch-icon-57x57.png" />
+		<link rel="apple-touch-icon" sizes="60x60" href="%sveltekit.assets%/icons/apple-touch-icon-60x60.png" />
+		<link rel="apple-touch-icon" sizes="72x72" href="%sveltekit.assets%/icons/apple-touch-icon-72x72.png" />
+		<link rel="apple-touch-icon" sizes="76x76" href="%sveltekit.assets%/icons/apple-touch-icon-76x76.png" />
+		<link rel="apple-touch-icon" sizes="114x114" href="%sveltekit.assets%/icons/apple-touch-icon-114x114.png" />
+		<link rel="apple-touch-icon" sizes="120x120" href="%sveltekit.assets%/icons/apple-touch-icon-120x120.png" />
+		<link rel="apple-touch-icon" sizes="144x144" href="%sveltekit.assets%/icons/apple-touch-icon-144x144.png" />
+		<link rel="apple-touch-icon" sizes="152x152" href="%sveltekit.assets%/icons/apple-touch-icon-152x152.png" />
+		<link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/apple-touch-icon-180x180.png" />
+
+
+		<!-- Security Headers -->
+		<meta http-equiv="Content-Security-Policy" content="
+			default-src 'self';
+			script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co;
+			style-src 'self' 'unsafe-inline';
+			img-src 'self' data: https: blob:;
+			font-src 'self' data:;
+			connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+			media-src 'self' blob:;
+			worker-src 'self';
+			frame-src 'none';
+			object-src 'none';
+			base-uri 'self';
+			form-action 'self';
+		" />
+
+		<!-- PWA Manifest -->
+		<link rel="manifest" href="/manifest.json" />
 		
 		<!-- Preload critical resources -->
 		<link rel="preload" href="%sveltekit.assets%/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
@@ -32,6 +65,10 @@
 	</head>
 	<body data-sveltekit-preload-data="hover" class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
 		<div style="display: contents">%sveltekit.body%</div>
+
+		<!-- PWA Toast Notifications will be handled by Svelte components -->
+		<div id="pwa-install-toast" class="hidden"></div>
+		<div id="pwa-update-toast" class="hidden"></div>
 
 		<script>
 			// PWA Install Prompt
@@ -60,14 +97,53 @@
 				}
 			});
 
-			// Service Worker Registration
-			if ('serviceWorker' in navigator) {
+			// Service Worker Registration and Update Handling (Production only)
+			// Only register service worker in production (not on localhost or dev servers)
+			const isProduction = !window.location.hostname.includes('localhost') &&
+								  !window.location.hostname.includes('127.0.0.1') &&
+								  !window.location.hostname.includes('0.0.0.0') &&
+								  window.location.protocol === 'https:';
+			
+			if ('serviceWorker' in navigator && isProduction) {
 				window.addEventListener('load', async () => {
 					try {
-						const registration = await navigator.serviceWorker.register('/service-worker.js');
-						console.log('✅ Service Worker registered');
+						const registration = await navigator.serviceWorker.register('/sw.js');
+						console.log('SW registered: ', registration);
+
+						// Handle service worker updates
+						registration.addEventListener('updatefound', () => {
+							const newWorker = registration.installing;
+							
+							newWorker.addEventListener('statechange', () => {
+								if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+									// New service worker is available
+									window.dispatchEvent(new CustomEvent('pwa-update-available', {
+										detail: {
+											registration,
+											update: () => {
+												// Tell the new service worker to skip waiting
+												if (registration.waiting) {
+													registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+												}
+												// Reload the page to use the new service worker
+												window.location.reload();
+											}
+										}
+									}));
+								}
+							});
+						});
+
+						// Listen for messages from service worker
+						navigator.serviceWorker.addEventListener('message', (event) => {
+							if (event.data && event.data.type === 'NAVIGATE') {
+								// Handle navigation from notification click
+								window.location.href = event.data.url;
+							}
+						});
+
 					} catch (error) {
-						console.error('❌ Service Worker registration failed:', error);
+						console.log('SW registration failed: ', error);
 					}
 				});
 			}
@@ -78,17 +154,13 @@
 				window.dispatchEvent(new CustomEvent('pwa-installed'));
 			});
 
-			// Prevent FOUC (Flash of Unstyled Content) - minimal theme detection
-			// Use same key as +layout.svelte and avoid DOM manipulation before hydration
-			try {
-				const theme = localStorage.getItem('qrypt-theme');
-				const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-				if (isDark) {
-					document.documentElement.setAttribute('data-theme', 'dark');
-					document.documentElement.classList.add('dark');
-				}
-			} catch (e) {
-				// Silently handle localStorage access errors
+			// Dark mode detection
+			if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.classList.add('dark');
+				document.documentElement.setAttribute('data-theme', 'dark');
+			} else {
+				document.documentElement.classList.remove('dark');
+				document.documentElement.setAttribute('data-theme', 'light');
 			}
 		</script>
 	</body>
