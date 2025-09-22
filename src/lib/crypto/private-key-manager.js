@@ -60,7 +60,7 @@ export class PrivateKeyManager {
 			const encryptionKey = await this._deriveKeyFromPassword(password, salt);
 
 			// Generate IV for AES-GCM encryption
-			const iv = SecureRandom.generateBytes(12); // 12 bytes for GCM
+			const iv = SecureRandom.getRandomBytes(12); // 12 bytes for GCM
 
 			// Import key for WebCrypto API
 			const cryptoKey = await crypto.subtle.importKey(

@@ -61,49 +61,21 @@
 			return;
 		}
 
-		// Validate GPG password if GPG encryption is enabled
-		if (useGPGEncryption) {
-			if (!gpgPassword || gpgPassword.trim().length === 0) {
-				error = 'Please enter a GPG password for additional encryption';
-				return;
-			}
-			
-			if (gpgPassword !== confirmGPGPassword) {
-				error = 'GPG passwords do not match';
-				return;
-			}
-			
-			if (gpgPassword.length < 8) {
-				error = 'GPG password must be at least 8 characters long';
-				return;
-			}
-		}
-		
 		try {
 			loading = true;
 			error = '';
 			success = '';
 			
-			let exportedData;
-			if (useGPGEncryption) {
-				// Export with GPG encryption
-				exportedData = await privateKeyManager.exportPrivateKeysWithGPG(exportPassword, gpgPassword);
-				privateKeyManager.downloadGPGEncryptedKeys(exportedData);
-				success = 'Private keys exported with GPG encryption! Keep both passwords safe - you\'ll need them to import your keys.';
-			} else {
-				// Standard export
-				exportedData = await privateKeyManager.exportPrivateKeys(exportPassword);
-				privateKeyManager.downloadExportedKeys(exportedData);
-				success = 'Private keys exported successfully! Keep your password safe - you\'ll need it to import your keys.';
-			}
+			// Export with secure AES-GCM-256 encryption
+			const exportedData = await privateKeyManager.exportPrivateKeys(exportPassword);
+			privateKeyManager.downloadExportedKeys(exportedData);
+			success = 'Private keys exported successfully! Keep your password safe - you\'ll need it to import your keys.';
 			
 			// Clear passwords
 			exportPassword = '';
 			confirmExportPassword = '';
-			gpgPassword = '';
-			confirmGPGPassword = '';
 			
-			dispatch('exported', { timestamp: Date.now(), gpgEncrypted: useGPGEncryption });
+			dispatch('exported', { timestamp: Date.now() });
 			
 		} catch (err) {
 			console.error('Failed to export private keys:', err);
@@ -235,6 +207,8 @@
 			error = 'Failed to copy to clipboard';
 		}
 	}
+
+	// No longer needed - using npm package instead
 
 	// CLI decryption script
 	const cliScript = `#!/usr/bin/env node
@@ -483,66 +457,7 @@ main().catch(console.error);`;
 				</div>
 			</div>
 
-			<!-- GPG Encryption Option -->
-			<div class="form-group">
-				<label class="checkbox-label">
-					<input
-						type="checkbox"
-						bind:checked={useGPGEncryption}
-						disabled={loading}
-					/>
-					<span class="checkbox-text">🔐 Enable GPG encryption (recommended)</span>
-				</label>
-				<p class="help-text-inline">
-					Adds an additional layer of GPG encryption to your exported keys for maximum security
-				</p>
-			</div>
-
-			{#if useGPGEncryption}
-				<div class="gpg-section">
-					<div class="form-group">
-						<label for="gpg-password">GPG Password</label>
-						<div class="password-input">
-							<input
-								id="gpg-password"
-								type={showGPGPassword ? 'text' : 'password'}
-								bind:value={gpgPassword}
-								placeholder="Enter a strong GPG password"
-								disabled={loading}
-							/>
-							<button
-								type="button"
-								class="toggle-password"
-								onclick={() => showGPGPassword = !showGPGPassword}
-								disabled={loading}
-							>
-								{showGPGPassword ? '👁️' : '👁️‍🗨️'}
-							</button>
-						</div>
-					</div>
-					
-					<div class="form-group">
-						<label for="confirm-gpg-password">Confirm GPG Password</label>
-						<div class="password-input">
-							<input
-								id="confirm-gpg-password"
-								type={showGPGPassword ? 'text' : 'password'}
-								bind:value={confirmGPGPassword}
-								placeholder="Confirm your GPG password"
-								disabled={loading}
-							/>
-							<button
-								type="button"
-								class="toggle-password"
-								onclick={() => showGPGPassword = !showGPGPassword}
-								disabled={loading}
-							>
-								{showGPGPassword ? '👁️' : '👁️‍🗨️'}
-							</button>
-						</div>
-					</div>
-				</div>
-			{/if}
+			<!-- AES-GCM-256 encryption is already secure - no additional GPG needed -->
 			
 			<button
 				type="button"
@@ -1006,47 +921,101 @@ main().catch(console.error);`;
 		margin-bottom: 0;
 	}
 
-	/* GPG-specific styles */
-	.checkbox-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		cursor: pointer;
+	/* CLI section styling */
+	.cli-section {
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-secondary);
+	}
+
+	.cli-content {
 		font-size: 0.875rem;
-		font-weight: 500;
+		line-height: 1.5;
+	}
+
+	.simple-command {
+		padding: 1.5rem;
+		background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+		border: 2px solid rgba(99, 102, 241, 0.2);
+		border-radius: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.simple-command p {
+		margin: 0 0 1rem 0;
+		font-weight: 600;
 		color: var(--color-text-primary);
 	}
 
-	.checkbox-label input[type="checkbox"] {
-		margin: 0;
+	.command-block.install,
+	.command-block.usage {
+		position: relative;
+		background: #1a1a1a;
+		border: 2px solid rgba(99, 102, 241, 0.3);
+		padding: 1rem;
+		margin: 0.5rem 0 1rem 0;
+		border-radius: 0.375rem;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.command-block.install code,
+	.command-block.usage code {
+		color: #00ff88;
+		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+
+	.command-block .copy-btn {
+		background: rgba(99, 102, 241, 0.8);
+		backdrop-filter: blur(4px);
+		font-size: 0.75rem;
+		padding: 0.375rem 0.75rem;
+		margin-left: 1rem;
+		color: white;
+		border: none;
+		border-radius: 0.25rem;
 		cursor: pointer;
+		transition: background-color 0.2s ease;
 	}
 
-	.checkbox-text {
-		user-select: none;
+	.command-block .copy-btn:hover {
+		background: rgba(99, 102, 241, 1);
 	}
 
-	.help-text-inline {
-		margin: 0.5rem 0 0 0;
+	.cli-note {
+		margin: 0.75rem 0 0 0;
 		font-size: 0.8125rem;
 		color: var(--color-text-secondary);
-		line-height: 1.4;
+		font-style: italic;
 	}
 
-	.gpg-section {
+	.cli-help {
 		margin-top: 1rem;
 		padding: 1rem;
-		background: var(--color-bg-secondary);
+		background: rgba(251, 191, 36, 0.05);
+		border: 1px solid rgba(251, 191, 36, 0.2);
 		border-radius: 0.375rem;
-		border: 1px solid var(--color-border);
 	}
 
-	.gpg-section .form-group {
-		margin-bottom: 0.75rem;
+	.cli-help p {
+		margin: 0 0 0.5rem 0;
+		color: #d97706;
+		font-weight: 500;
+		font-size: 0.875rem;
 	}
 
-	.gpg-section .form-group:last-child {
-		margin-bottom: 0;
+	.cli-help ul {
+		margin: 0;
+		padding-left: 1.25rem;
+		font-size: 0.8125rem;
+		color: #92400e;
+		line-height: 1.5;
+	}
+
+	.cli-help li {
+		margin-bottom: 0.25rem;
 	}
 
 	/* Warning box for key generation */

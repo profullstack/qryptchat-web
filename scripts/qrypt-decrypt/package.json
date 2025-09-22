@@ -1,0 +1,32 @@
+{
+  "name": "@profullstack/qrypt-decrypt",
+  "version": "1.0.0",
+  "description": "CLI tool to decrypt QryptChat encrypted key files",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "qrypt-decrypt": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "qryptchat",
+    "encryption",
+    "decrypt",
+    "keys",
+    "post-quantum",
+    "aes-gcm"
+  ],
+  "author": "ProFullStack",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/profullstack/qrypt-decrypt.git"
+  },
+  "homepage": "https://qrypt.chat",
+  "dependencies": {}
+}
