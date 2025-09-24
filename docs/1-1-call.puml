@@ -1,45 +1,65 @@
 @startuml
-title Signal-style 1:1 E2EE Call (messages + WebRTC)
+title 1:1 E2EE Call (ML-KEM-1024 + WebRTC DTLS/SRTP + SFrame)
 
 skinparam sequenceMessageAlign center
-skinparam ParticipantPadding 20
+skinparam ParticipantPadding 18
 skinparam BoxPadding 10
 
 actor Alice
-participant "Signal Service\n(signaling relay)" as Server
+participant "Signaling Server\n(untrusted relay)" as Signal
 actor Bob
-collections "TURN/STUN" as Turn
+collections "STUN/TURN" as Turn
 
-== Bootstrap trust / shared secret ==
-Alice -> Server : Signal message: X3DH init (Alice→Bob)
-Server -> Bob : Deliver encrypted init
-Bob -> Server : Signal message: X3DH response
-Server -> Alice : Deliver encrypted response
+== Capability & Identity ==
+Alice -> Signal : Offer caps { ML-KEM-1024, ML-KEM-768 }
+Signal -> Bob : Relay offer
+Bob -> Signal : Answer caps { ML-KEM-1024 } (prefer 1024)
+Signal -> Alice : Relay answer
 note over Alice,Bob
-Both sides run Double Ratchet → derive shared secret SK_AB\n(also verify safety numbers / identities)
+Both sides now know highest common KEM:\n→ ML-KEM-1024 (fallback to 768 if needed)
 end note
 
-== Call setup signaling ==
-Alice -> Server : Encrypted signaling: INVITE (SDP offer, ICE candidates)
-Server -> Bob : Relay encrypted INVITE
-Bob -> Server : Encrypted signaling: ANSWER (SDP answer, ICE)
-Server -> Alice : Relay encrypted ANSWER
+== PQ Key Distribution over E2EE Signaling ==
+Alice -> Signal : E2EE msg: Alice_PK_KEM(1568B) + identity
+Signal -> Bob : Relay (opaque)
+Bob -> Signal : E2EE msg: Bob_PK_KEM(1568B) + identity
+Signal -> Alice : Relay (opaque)
 
-== DTLS-SRTP key agreement ==
-Alice -> Bob : DTLS handshake over selected ICE path
-Bob --> Alice : DTLS handshake complete
+== Encapsulation / Decapsulation ==
+Alice -> Alice : ct, ss_A = ML-KEM-1024.encap(Bob_PK_KEM)
+Alice -> Signal : E2EE msg: ct   (ciphertext)
+Signal -> Bob : Relay ct (opaque)
+Bob -> Bob : ss_B = ML-KEM-1024.decap(ct, Bob_SK_KEM)
 note over Alice,Bob
-Bind DTLS identity to SK_AB context (authenticated channel binding).
-Derive SRTP keys K(A→B), K(B→A) from DTLS exporter.
+ss_A == ss_B  (shared secret from ML-KEM-1024)
+end note
+
+== WebRTC Setup (ICE/SDP/DTLS) ==
+Alice -> Signal : E2EE signaling: SDP offer + ICE
+Signal -> Bob : Relay (opaque)
+Bob -> Signal : E2EE signaling: SDP answer + ICE
+Signal -> Alice : Relay (opaque)
+Alice -> Turn : ICE (if needed)
+Bob -> Turn : ICE (if needed)
+
+== Media Key Derivation ==
+Alice -> Alice : SRTP/SFrame keys = KDF(ss, context, nonces)
+Bob -> Bob : SRTP/SFrame keys = KDF(ss, context, nonces)
+note over Alice,Bob
+• Use DTLS-SRTP for transport framing\n• Apply Insertable Streams (SFrame) for app-layer E2EE\n  (media opaque to SFU/TURN/servers)
 end note
 
 == Media ==
-Alice -> Bob : SRTP media (A→B), possibly via TURN
-Alice -> Turn : SRTP packets (if relay needed)
-Turn -> Bob : SRTP packets (opaque to relay)
-Bob -> Alice : SRTP media (B→A)
-note over Server
-Server only relays signaling.\nNo access to DTLS/SRTP keys or media.
-end note
+Alice -> Bob : Encrypted media (SFrame-over-SRTP), P2P or via TURN
+Alice -> Turn : SRTP packets (opaque)
+Turn -> Bob : SRTP packets (opaque)
+Bob -> Alice : Encrypted media
+
+== Fallback ==
+alt If 1024 not supported by one side
+  note over Alice,Bob
+  Negotiate ML-KEM-768 (1184B pub, 2400B priv)\nLog downgrade; allow session (compat mode)
+  end note
+end
 
 @enduml

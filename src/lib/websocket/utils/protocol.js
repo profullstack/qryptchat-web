@@ -68,7 +68,14 @@ export const MESSAGE_TYPES = {
 	CALL_ICE_CANDIDATE: 'call_ice_candidate',
 	CALL_SDP_OFFER: 'call_sdp_offer',
 	CALL_SDP_ANSWER: 'call_sdp_answer',
-	CALL_STATUS: 'call_status'
+	CALL_STATUS: 'call_status',
+
+	// ML-KEM Post-Quantum Encrypted Calling
+	ML_KEM_CALL_OFFER: 'ml_kem_call_offer',
+	ML_KEM_CALL_ANSWER: 'ml_kem_call_answer',
+	ML_KEM_KEY_ROTATION: 'ml_kem_key_rotation',
+	ML_KEM_KEY_ROTATION_RESPONSE: 'ml_kem_key_rotation_response',
+	ML_KEM_KEY_ROTATION_COMPLETE: 'ml_kem_key_rotation_complete'
 };
 
 /**

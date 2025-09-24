@@ -50,11 +50,16 @@
 			</div>
 			<div class="feature-item">
 				<div class="feature-number">03</div>
+				<h3>🔐 Encrypted Voice & Video Calls</h3>
+				<p>Crystal-clear 1:1 and group calls protected with ML-KEM-1024 post-quantum encryption. Your conversations stay private, even against future quantum computers.</p>
+			</div>
+			<div class="feature-item">
+				<div class="feature-number">04</div>
 				<h3>Real-time Messaging</h3>
 				<p>Instant message delivery with typing indicators and read receipts.</p>
 			</div>
 			<div class="feature-item">
-				<div class="feature-number">04</div>
+				<div class="feature-number">05</div>
 				<h3>Multi-language Support</h3>
 				<p>Available in multiple languages with full internationalization support.</p>
 			</div>

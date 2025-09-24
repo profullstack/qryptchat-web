@@ -1,0 +1,9 @@
+.git
+node_modules
+.build
+dist
+.svelte-kit
+Dockerfile
+entrypoint.sh
+.env*
+

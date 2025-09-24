@@ -39,6 +39,12 @@ import {
 	handleSdpOffer,
 	handleSdpAnswer
 } from './handlers/voice-calls.js';
+import {
+	handleMLKEMCallOffer,
+	handleMLKEMCallAnswer,
+	handleMLKEMKeyRotation,
+	handleMLKEMKeyRotationResponse
+} from './handlers/ml-kem-voice-calls.js';
 
 /**
  * WebSocket server class
@@ -310,6 +316,27 @@ export class ChatWebSocketServer {
 				case MESSAGE_TYPES.CALL_SDP_ANSWER:
 					console.log('📥 [SERVER] Routing to CALL_SDP_ANSWER handler');
 					await handleSdpAnswer(ws, message, context);
+					break;
+
+				// ML-KEM Post-Quantum Encrypted Calls
+				case MESSAGE_TYPES.ML_KEM_CALL_OFFER:
+					console.log('📥 [SERVER] Routing to ML_KEM_CALL_OFFER handler');
+					await handleMLKEMCallOffer(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.ML_KEM_CALL_ANSWER:
+					console.log('📥 [SERVER] Routing to ML_KEM_CALL_ANSWER handler');
+					await handleMLKEMCallAnswer(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.ML_KEM_KEY_ROTATION:
+					console.log('📥 [SERVER] Routing to ML_KEM_KEY_ROTATION handler');
+					await handleMLKEMKeyRotation(ws, message, context);
+					break;
+
+				case MESSAGE_TYPES.ML_KEM_KEY_ROTATION_RESPONSE:
+					console.log('📥 [SERVER] Routing to ML_KEM_KEY_ROTATION_RESPONSE handler');
+					await handleMLKEMKeyRotationResponse(ws, message, context);
 					break;
 
 				default:

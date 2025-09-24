@@ -1,0 +1,34 @@
+@startuml
+title PWA Calling: ML-KEM-1024, WebRTC DTLS/SRTP, Insertable Streams (SFrame)
+
+skinparam componentStyle rectangle
+skinparam wrapWidth 200
+skinparam maxMessageSize 200
+
+package "Clients (PWA: Desktop & Mobile Browsers)" {
+  component "App UI\n(Call controls, roster, indicators)" as UI
+  component "Crypto Engine\n• ML-KEM-1024/768 (FIPS 203)\n• KDF for SRTP/SFrame keys" as Crypto
+  component "E2EE Signaling Layer\n(WebSocket over TLS + app E2EE)" as SigE2EE
+  component "WebRTC Stack\n• ICE/DTLS-SRTP\n• Insertable Streams (SFrame)" as RTC
+  database "Local Key Store\n• Identity & device keys\n• KEM pub/priv (1568/3168B for 1024)\n• Sessions & GCK (ephemeral)" as Store
+}
+
+package "Service Plane (Untrusted for content)" {
+  component "Signaling Server\n(relay only; never sees plaintext)" as Signal
+  component "STUN/TURN\n(NAT traversal)" as Turn
+  component "SFU\n(Selective Forwarding Unit)\n• Routes ciphertext only" as SFU
+}
+
+UI -down-> SigE2EE : start/join/leave call\nparticipant actions
+SigE2EE -right-> Signal : Encrypted signaling frames
+SigE2EE -down-> Crypto : Exchange KEM public keys\nEncap/decap → shared secrets
+Crypto -down-> Store : Save ephemeral session state
+Crypto -right-> RTC : Provide SRTP/SFrame keys (per direction/sender)
+RTC -right-> Turn : ICE (as needed)
+RTC -down-> SFU : Encrypted media (SFrame-over-SRTP)
+SFU -up-> RTC : Forward encrypted streams
+note right of SFU
+No access to ML-KEM secrets,\nGCK, or media keys
+end note
+
+@enduml

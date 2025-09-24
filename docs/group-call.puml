@@ -1,67 +1,66 @@
 @startuml
-title Signal-style Group Call (E2EE via shared Group Call Key + SFU)
+title Group E2EE Call (GCK via E2EE signaling with ML-KEM + SFU routing)
 
 skinparam sequenceMessageAlign center
-skinparam ParticipantPadding 18
+skinparam ParticipantPadding 16
 skinparam BoxPadding 10
 
 actor A as Creator
-participant "Signal Service\n(E2EE message relay)" as Server
+participant "Signaling Server\n(untrusted relay)" as Signal
 actor B
 actor C
 actor D
-participant "SFU\n(Selective Forwarding Unit)" as SFU
+participant "SFU (router only)\n(no decrypt)" as SFU
 
-== Create and distribute Group Call Key (GCK) ==
-Creator -> Creator : Generate random GCK (per-call)
-Creator -> Server : Signal message (E2EE) : {GCK} to B
-Server -> B : Deliver {GCK} (only B can decrypt)
-Creator -> Server : Signal message (E2EE) : {GCK} to C
-Server -> C : Deliver {GCK}
-Creator -> Server : Signal message (E2EE) : {GCK} to D
-Server -> D : Deliver {GCK}
+== Per-Participant KEM Sessions ==
+Creator -> Signal : Offer caps { ML-KEM-1024, 768 }
+Signal -> B : Relay; B answers { 1024 }
+Signal -> C : Relay; C answers { 1024 }
+Signal -> D : Relay; D answers { 1024 }
+
 note over Creator,B,C,D
-Each participant now holds GCK.
-They will derive SRTP keys from GCK (with per-sender salts/labels).
+For each participant X:\n1) Exchange PK_KEM(1568B)\n2) ss_X = ML-KEM-1024 shared secret\n3) Establish E2EE signaling channel Creator↔X\n(Fallback to 768 only if required)
 end note
 
-== Join WebRTC room via SFU ==
-Creator -> SFU : Join + publish track(s) (encrypted)
-B -> SFU : Join + publish track(s) (encrypted)
-C -> SFU : Join + publish track(s) (encrypted)
-D -> SFU : Join + publish track(s) (encrypted)
+== Group Call Key (GCK) ==
+Creator -> Creator : Generate GCK (ephemeral per-call)
+Creator -> Signal : E2EE msg: {GCK}→B  (encrypted with ss_B)
+Signal -> B : Deliver {GCK}
+Creator -> Signal : E2EE msg: {GCK}→C  (encrypted with ss_C)
+Signal -> C : Deliver {GCK}
+Creator -> Signal : E2EE msg: {GCK}→D  (encrypted with ss_D)
+Signal -> D : Deliver {GCK}
 
-== Key derivation ==
+== WebRTC Join ==
+Creator -> SFU : Join + publish tracks (encrypted)
+B -> SFU : Join + publish tracks (encrypted)
+C -> SFU : Join + publish tracks (encrypted)
+D -> SFU : Join + publish tracks (encrypted)
+
+== Media Key Derivation (per-sender) ==
 note over Creator,B,C,D
-For each sender S:
-K_S = KDF(GCK, "SRTP", sender_id, direction, nonce)
-Clients encrypt outbound frames with K_S.
-Receivers derive same K_S to decrypt.
+For each sender S:\nK_S = KDF(GCK, "SFrame", sender_id, direction, nonce)\nClients encrypt frames with Insertable Streams (SFrame)\nSRTP carries the encrypted frames; SFU sees only ciphertext
 end note
 
-== Media routing ==
-Creator -> SFU : SRTP media (opaque)
-B -> SFU : SRTP media (opaque)
-C -> SFU : SRTP media (opaque)
-D -> SFU : SRTP media (opaque)
-SFU -> Creator : Forwards others' SRTP streams
-SFU -> B : Forwards others' SRTP streams
-SFU -> C : Forwards others' SRTP streams
-SFU -> D : Forwards others' SRTP streams
-note over SFU
-SFU switches/routes packets only.
-No access to GCK or SRTP keys - cannot decrypt.
-end note
+== Routing ==
+Creator -> SFU : SFrame-over-SRTP (opaque)
+B -> SFU : SFrame-over-SRTP (opaque)
+C -> SFU : SFrame-over-SRTP (opaque)
+D -> SFU : SFrame-over-SRTP (opaque)
+SFU -> Creator : Forward others' encrypted frames
+SFU -> B : Forward others' encrypted frames
+SFU -> C : Forward others' encrypted frames
+SFU -> D : Forward others' encrypted frames
 
-== Membership change ==
+== Membership Change ==
 alt New participant E joins
-Creator -> Server : Signal message (E2EE) : {GCK or new GCK'} to E
-else Member leaves / is removed
-Creator -> Creator : Rotate GCK to GCK'
-Creator -> Server : E2EE redistribute GCK’ to remaining members
-note over Creator,B,C,D
-Clients re-derive SRTP keys from GCK’ and rekey streams.
-end note
+  Creator -> Signal : E2EE msg: {GCK or GCK′}→E (over KEM session with E)
+else Participant leaves / removed
+  Creator -> Creator : Rotate GCK′
+  Creator -> Signal : E2EE msg: {GCK′}→remaining members
+  note over Creator,B,C,D
+  All clients re-derive K_S with GCK′ and rekey streams
+  end note
 end
 
 @enduml

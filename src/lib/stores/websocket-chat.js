@@ -758,7 +758,10 @@ function createWebSocketChatStore() {
 			let currentState;
 			subscribe(state => currentState = state)();
 			return currentState;
-		}
+		},
+		
+		// Expose WebSocket connection for ML-KEM calls
+		getWebSocket: () => ws
 	};
 }
 
