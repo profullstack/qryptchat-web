@@ -451,7 +451,8 @@
 		right: 0;
 		padding: 1rem;
 		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
+		background: var(--color-bg-primary);
+		box-shadow: 2px 0 12px rgba(0, 0, 0, 0.4), 2px 0 24px rgba(0, 0, 0, 0.3), 2px 0 36px rgba(0, 0, 0, 0.2);
 		z-index: 100;
 	}
 
