@@ -342,7 +342,7 @@
 
 <style>
 	.chat-container {
-		height: 100vh;
+		height: calc(100vh - 4rem); /* Account for main app header */
 		display: flex;
 		flex-direction: column;
 		background: var(--color-surface);
@@ -524,7 +524,7 @@
 		height: 100%;
 		background: var(--color-background);
 		position: relative;
-		padding-bottom: 140px; /* Reserve space for fixed input */
+		padding-bottom: 100px; /* Reserve space for fixed input */
 	}
 
 	.chat-welcome {
