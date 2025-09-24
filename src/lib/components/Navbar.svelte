@@ -380,13 +380,9 @@
 		left: 0;
 		right: 0;
 		z-index: 40;
-		/* Solid background fallback for iOS/Safari */
-		background-color: #ffffff;
 		background-color: var(--color-bg-primary);
 		border-bottom: 1px solid var(--color-border-primary);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-		/* Ensure full coverage on iOS/Safari */
+		/* Remove backdrop-filter which may interfere with child transparency */
 		padding-top: env(safe-area-inset-top);
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 	}
