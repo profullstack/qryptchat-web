@@ -102,8 +102,8 @@ fi
 
 # Ensure production environment and start app in background
 echo "Starting Node.js application on ${HOST}:${PORT} in production mode"
-export NODE_ENV=production
-pnpm start &
+echo "Forcing NODE_ENV=production (Railway may have set it to development)"
+NODE_ENV=production pnpm start &
 APP_PID=$!
 
 # Wait for either the app or Tor to exit
