@@ -382,8 +382,6 @@
 		z-index: 40;
 		background-color: var(--color-bg-primary);
 		border-bottom: 1px solid var(--color-border-primary);
-		/* Remove backdrop-filter which may interfere with child transparency */
-		padding-top: env(safe-area-inset-top);
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 	}
 	

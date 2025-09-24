@@ -743,7 +743,11 @@
 		.message-input-container {
 			position: fixed;
 			padding: 0.75rem;
-			padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+			padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+			/* Solid background to prevent PWA blur */
+			background: var(--color-surface) !important;
+			-webkit-backdrop-filter: none !important;
+			backdrop-filter: none !important;
 		}
 
 		.input-wrapper {
