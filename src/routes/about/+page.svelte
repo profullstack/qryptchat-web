@@ -18,6 +18,8 @@
 			role: 'Founder & Developer',
 			bio: 'Experienced developer focused on creating secure, user-friendly applications. Passionate about privacy technology and building tools that protect user data.',
 			socialLinks: [
+				{ type: 'github', url: 'https://github.com/profullstack' },
+				{ type: 'twitter', url: 'https://x.com/profullstackinc' },
 				{ type: 'bluesky', url: 'https://bsky.app/profile/chovy.bsky.social' },
 				{ type: 'nostr', url: 'https://primal.net/p/nprofile1qqsd3xe2yc2whqtzkck22l80kst9wgk25ud90lv9mc7fwg7ynwdv53c465es2' }
 			]

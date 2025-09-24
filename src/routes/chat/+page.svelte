@@ -49,7 +49,7 @@
 				showSidebar = false;
 			}
 			
-			// Still join the conversation via WebSocket for real-time updates
+			// Join conversation via WebSocket for real-time updates
 			if ($user?.id) {
 				wsChat.joinConversation(conversationId);
 			}
@@ -107,12 +107,12 @@
 				console.log('🔐 Participants:', currentConversation.participants);
 				
 				// For any conversation, find the first participant that isn't the current user
-				const otherParticipant = currentConversation.participants.find(p => p && p.id && p.id !== $user?.id);
+				const otherParticipant = currentConversation.participants.find((/** @type {any} */ p) => p && p.id && p.id !== $user?.id);
 				targetUserId = otherParticipant?.id;
 				console.log('🔐 Found other participant:', otherParticipant);
 				
 				// If multiple participants (group), show group call info
-				const otherParticipants = currentConversation.participants.filter(p => p && p.id && p.id !== $user?.id);
+				const otherParticipants = currentConversation.participants.filter((/** @type {any} */ p) => p && p.id && p.id !== $user?.id);
 				if (otherParticipants.length > 1) {
 					console.log('🔐 Multiple participants detected, treating as group call');
 					await handleGroupCall(false);
@@ -160,11 +160,11 @@
 			
 			if (currentConversation.participants && Array.isArray(currentConversation.participants)) {
 				// For any conversation, find the first participant that isn't the current user
-				const otherParticipant = currentConversation.participants.find(p => p && p.id && p.id !== $user?.id);
+				const otherParticipant = currentConversation.participants.find((/** @type {any} */ p) => p && p.id && p.id !== $user?.id);
 				targetUserId = otherParticipant?.id;
 				
 				// If multiple participants (group), show group call info
-				const otherParticipants = currentConversation.participants.filter(p => p && p.id && p.id !== $user?.id);
+				const otherParticipants = currentConversation.participants.filter((/** @type {any} */ p) => p && p.id && p.id !== $user?.id);
 				if (otherParticipants.length > 1) {
 					console.log('🔐 Multiple participants detected, treating as group video call');
 					await handleGroupCall(true);
@@ -221,7 +221,7 @@
 	function setupCallManagerSubscription() {
 		if (!mlkemCallManager) return;
 		
-		mlkemCallManager.callState.subscribe(state => {
+		mlkemCallManager.callState.subscribe((/** @type {any} */ state) => {
 			callState = state;
 			
 			// Handle ringing sound
@@ -250,7 +250,6 @@
 		}
 
 		// Initialize WebSocket connection when authenticated
-		// Use the same token source as frontend auth system (localStorage) to avoid token mismatch
 		if (!$isConnected) {
 			try {
 				// Get token from localStorage (same as frontend auth system)

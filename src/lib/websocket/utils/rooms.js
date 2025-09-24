@@ -3,6 +3,8 @@
  * Handles conversation rooms, user presence, and message broadcasting
  */
 
+import { supabaseRealtimeBridge } from '../supabase-realtime-bridge.js';
+
 /**
  * Room manager for WebSocket connections
  */

@@ -45,6 +45,7 @@ import {
 	handleMLKEMKeyRotation,
 	handleMLKEMKeyRotationResponse
 } from './handlers/ml-kem-voice-calls.js';
+import { supabaseRealtimeBridge } from './supabase-realtime-bridge.js';
 
 /**
  * WebSocket server class
