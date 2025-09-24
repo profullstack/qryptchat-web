@@ -47,9 +47,11 @@ export async function GET(event) {
 
 			conversationsWithArchive.push({
 				...conv,
-				id: conv.conversation_id, // Add 'id' field for frontend compatibility
-				name: conv.conversation_name, // Add 'name' field for frontend compatibility
-				type: conv.conversation_type, // Add 'type' field for frontend compatibility
+				id: conv.conversation_id,
+				// preserve name if present, otherwise let frontend derive correctly
+				name: conv.conversation_name ?? null,
+				type: conv.conversation_type,
+				participants: conv.participants ?? [], // include participants if available
 				is_archived: participantData?.archived_at !== null,
 				archived_at: participantData?.archived_at
 			});

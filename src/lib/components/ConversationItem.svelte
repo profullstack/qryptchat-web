@@ -26,6 +26,7 @@
 		dispatch('contextmenu', event);
 	}
 
+
 	// Format last message time
 	function formatTime(/** @type {string | null | undefined} */ timestamp) {
 		if (!timestamp) return '';
@@ -96,7 +97,10 @@
 				{#if isRoom}
 					<span class="room-prefix">#</span>
 				{/if}
-				{conversation.name || 'Unknown'}
+				{conversation.name
+					|| (conversation.participants && conversation.participants.length > 0
+						? conversation.participants.map(p => (p && p.username ? p.username : '')).filter(Boolean).join(', ')
+						: 'Unknown')}
 				{#if conversation.unread_count > 0}
 					<div class="unread-indicator" title="{conversation.unread_count} unread messages"></div>
 				{/if}
