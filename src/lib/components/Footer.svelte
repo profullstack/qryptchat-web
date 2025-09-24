@@ -133,7 +133,7 @@
 				</div>
 				
 				{#if onionUrl && !isOnionSite}
-					<a href="http://{onionUrl}" class="badge tor-available" title="Access via Tor Browser">
+					<a href="{onionUrl}" class="badge tor-available" title="Access via Tor Browser">
 						<div class="badge-dot"></div>
 						<span>🧅 Tor Available</span>
 					</a>
