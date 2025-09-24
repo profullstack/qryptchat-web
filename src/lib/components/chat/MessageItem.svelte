@@ -518,6 +518,40 @@
 		font-size: 0.875rem;
 	}
 
+	/* Fix link styling in message bubbles */
+	.message-text :global(a) {
+		color: inherit;
+		text-decoration: underline;
+		text-decoration-color: rgba(255, 255, 255, 0.6);
+		text-underline-offset: 2px;
+		transition: all 0.2s ease;
+	}
+
+	.message-text :global(a:hover) {
+		text-decoration-color: rgba(255, 255, 255, 0.9);
+		opacity: 0.8;
+	}
+
+	/* For non-own messages (light background), use theme colors */
+	.message-bubble:not(.own-bubble) .message-text :global(a) {
+		color: var(--color-brand-primary);
+		text-decoration-color: var(--color-brand-primary);
+	}
+
+	.message-bubble:not(.own-bubble) .message-text :global(a:hover) {
+		color: var(--color-brand-secondary);
+		text-decoration-color: var(--color-brand-secondary);
+		opacity: 1;
+	}
+
+	.message-bubble:not(.own-bubble) .message-text :global(a:visited) {
+		color: var(--color-text-secondary);
+	}
+
+	.message-bubble:not(.own-bubble) .message-text :global(a:visited:hover) {
+		color: var(--color-brand-primary);
+	}
+
 	.own-time {
 		text-align: right;
 		margin-top: 0.25rem;
