@@ -100,41 +100,43 @@
 			console.log('🔐 Current conversation:', currentConversation);
 			console.log('🔐 Current user:', $user);
 			
-			if (currentConversation.type === 'direct') {
-				// For 1:1 calls, get the other participant
-				let targetUserId = null;
+			// Find participants regardless of conversation type
+			let targetUserId = null;
+			
+			if (currentConversation.participants && Array.isArray(currentConversation.participants)) {
+				console.log('🔐 Participants:', currentConversation.participants);
 				
-				if (currentConversation.participants && Array.isArray(currentConversation.participants)) {
-					console.log('🔐 Participants:', currentConversation.participants);
-					const otherParticipant = currentConversation.participants.find(p => p.id !== $user?.id);
-					targetUserId = otherParticipant?.id;
-					console.log('🔐 Found other participant:', otherParticipant);
-				} else {
-					console.error('🔐 No participants array found in conversation');
-				}
+				// For any conversation, find the first participant that isn't the current user
+				const otherParticipant = currentConversation.participants.find(p => p && p.id && p.id !== $user?.id);
+				targetUserId = otherParticipant?.id;
+				console.log('🔐 Found other participant:', otherParticipant);
 				
-				if (!targetUserId) {
-					console.error('🔐 No target user ID found');
-					alert(`Cannot start call: No valid participant found\n\nDebug info:\n- Conversation type: ${currentConversation.type}\n- Has participants: ${!!currentConversation.participants}\n- Participants count: ${currentConversation.participants?.length || 0}\n- Current user ID: ${$user?.id}`);
+				// If multiple participants (group), show group call info
+				const otherParticipants = currentConversation.participants.filter(p => p && p.id && p.id !== $user?.id);
+				if (otherParticipants.length > 1) {
+					console.log('🔐 Multiple participants detected, treating as group call');
+					await handleGroupCall(false);
 					return;
 				}
-				
-				// Initialize ML-KEM call manager if not already done
-				if (!mlkemCallManager && wsChat.getWebSocket()) {
-					mlkemCallManager = new MLKEMCallManager(wsChat.getWebSocket());
-					setupCallManagerSubscription();
-				}
-				
-				if (mlkemCallManager) {
-					console.log('🔐 Initiating call to:', targetUserId);
-					await mlkemCallManager.initiateCall(targetUserId, false);
-				}
-			} else if (currentConversation.type === 'group') {
-				// Group voice call
-				await handleGroupCall(false);
 			} else {
-				console.log('🔐 Conversation type not supported for calls:', currentConversation.type);
-				alert(`Cannot start call: Conversation type "${currentConversation.type}" not supported for calls`);
+				console.error('🔐 No participants array found in conversation');
+			}
+			
+			if (!targetUserId) {
+				console.error('🔐 No target user ID found');
+				alert(`Cannot start call: No valid participant found\n\nDebug info:\n- Conversation type: ${currentConversation.type || 'undefined'}\n- Has participants: ${!!currentConversation.participants}\n- Participants count: ${currentConversation.participants?.length || 0}\n- Current user ID: ${$user?.id}\n- Participants: ${JSON.stringify(currentConversation.participants, null, 2)}`);
+				return;
+			}
+			
+			// Initialize ML-KEM call manager if not already done
+			if (!mlkemCallManager && wsChat.getWebSocket()) {
+				mlkemCallManager = new MLKEMCallManager(wsChat.getWebSocket());
+				setupCallManagerSubscription();
+			}
+			
+			if (mlkemCallManager) {
+				console.log('🔐 Initiating 1:1 call to:', targetUserId);
+				await mlkemCallManager.initiateCall(targetUserId, false);
 			}
 			
 		} catch (error) {
@@ -153,26 +155,37 @@
 		try {
 			console.log('🔐 Starting ML-KEM encrypted video call');
 			
-			if (currentConversation.type === 'direct') {
-				// 1:1 video call
-				const otherParticipant = currentConversation.participants?.find(p => p.id !== $user?.id);
-				if (!otherParticipant?.id) {
-					alert('Cannot start call: No valid participant found');
+			// Find participants regardless of conversation type
+			let targetUserId = null;
+			
+			if (currentConversation.participants && Array.isArray(currentConversation.participants)) {
+				// For any conversation, find the first participant that isn't the current user
+				const otherParticipant = currentConversation.participants.find(p => p && p.id && p.id !== $user?.id);
+				targetUserId = otherParticipant?.id;
+				
+				// If multiple participants (group), show group call info
+				const otherParticipants = currentConversation.participants.filter(p => p && p.id && p.id !== $user?.id);
+				if (otherParticipants.length > 1) {
+					console.log('🔐 Multiple participants detected, treating as group video call');
+					await handleGroupCall(true);
 					return;
 				}
-				
-				// Initialize ML-KEM call manager if not already done
-				if (!mlkemCallManager && wsChat.getWebSocket()) {
-					mlkemCallManager = new MLKEMCallManager(wsChat.getWebSocket());
-					setupCallManagerSubscription();
-				}
-				
-				if (mlkemCallManager) {
-					await mlkemCallManager.initiateCall(otherParticipant.id, true);
-				}
-			} else if (currentConversation.type === 'group') {
-				// Group video call
-				await handleGroupCall(true);
+			}
+			
+			if (!targetUserId) {
+				alert('Cannot start call: No valid participant found');
+				return;
+			}
+			
+			// Initialize ML-KEM call manager if not already done
+			if (!mlkemCallManager && wsChat.getWebSocket()) {
+				mlkemCallManager = new MLKEMCallManager(wsChat.getWebSocket());
+				setupCallManagerSubscription();
+			}
+			
+			if (mlkemCallManager) {
+				console.log('🔐 Initiating 1:1 video call to:', targetUserId);
+				await mlkemCallManager.initiateCall(targetUserId, true);
 			}
 			
 		} catch (error) {
