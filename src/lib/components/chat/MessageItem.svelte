@@ -1,31 +1,43 @@
 <script>
-	import { user } from '$lib/stores/auth.js';
-	import { convertUrlsToLinks } from '$lib/utils/url-link-converter.js';
-	import { decryptFileContent, downloadDecryptedFile, createDecryptedMediaUrl } from '$lib/utils/file-decryption.js';
-	import { onMount } from 'svelte';
+ 	import { user } from '$lib/stores/auth.js';
+ 	import { convertUrlsToLinks } from '$lib/utils/url-link-converter.js';
+ 	import { decryptFileContent, downloadDecryptedFile, createDecryptedMediaUrl } from '$lib/utils/file-decryption.js';
+ 	import { onMount } from 'svelte';
+ 
+ 	let {
+ 		message,
+ 		isOwn = false,
+ 		showAvatar = true,
+ 		showTimestamp = true
+ 	} = $props();
+ 
+ 	const currentUser = $derived(/** @type {any} */ ($user));
+ 	
+ 	// Use the already-decrypted content from WebSocket store
+ 	const decryptedContent = $derived(message.content || '');
+ 	
+ 	// Convert URLs to clickable links
+ 	const contentWithLinks = $derived(convertUrlsToLinks(decryptedContent));
+ 	
+ 	// File attachment state
+ 	let files = $state(/** @type {any[]} */ ([]));
+ 	let isLoadingFiles = $state(false);
+ 	let fileLoadError = $state('');
+ 	let decryptedFilenames = $state(/** @type {Map<string, string>} */ (new Map()));
 
-	let {
-		message,
-		isOwn = false,
-		showAvatar = true,
-		showTimestamp = true
-	} = $props();
+  // Track expanded/collapsed state for text previews
+  let expandedFiles = $state(new Set());
 
-	const currentUser = $derived(/** @type {any} */ ($user));
-	
-	// Use the already-decrypted content from WebSocket store
-	const decryptedContent = $derived(message.content || '');
-	
-	// Convert URLs to clickable links
-	const contentWithLinks = $derived(convertUrlsToLinks(decryptedContent));
-	
-	// File attachment state
-	let files = $state(/** @type {any[]} */ ([]));
-	let isLoadingFiles = $state(false);
-	let fileLoadError = $state('');
-	let decryptedFilenames = $state(/** @type {Map<string, string>} */ (new Map()));
-
-	function formatTime(/** @type {string} */ timestamp) {
+  function toggleExpand(/** @type {string} */ fileId) {
+    if (expandedFiles.has(fileId)) {
+      expandedFiles.delete(fileId);
+    } else {
+      expandedFiles.add(fileId);
+    }
+    expandedFiles = new Set(expandedFiles);
+  }
+ 
+ 	function formatTime(/** @type {string} */ timestamp) {
 		const date = new Date(timestamp);
 		return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	}
@@ -314,23 +326,45 @@
 									{/await}
 								</div>
 							{:else}
-								<!-- Regular file attachment -->
-								<button type="button" class="file-attachment" onclick={() => downloadFile(file)} aria-label="Download {file.originalFilename}">
-									<div class="file-info">
-										<div class="file-icon">
-											{getFileIcon(file.mimeType)}
-										</div>
-										<div class="file-details">
-											<div class="file-name">{file.originalFilename}</div>
-											<div class="file-size">{formatFileSize(file.fileSize)}</div>
-										</div>
+								<!-- Detect and preview text-based files -->
+								{#if file.mimeType?.startsWith('text/') || file.originalFilename.match(/\.(json|txt|md|csv|log|js)$/i)}
+									<div class="text-preview">
+										<pre>
+											{#if file.originalFilename.endsWith('.js')}
+												{file.decryptedContent?.slice(0, 2000)}
+												{file.decryptedContent && file.decryptedContent.length > 2000 ? "\n[JavaScript files are limited to snippet view]" : ""}
+											{:else if expandedFiles?.has(file.id)}
+												{file.decryptedContent}
+											{:else}
+												{file.decryptedContent?.slice(0, 2000)}
+												{file.decryptedContent && file.decryptedContent.length > 2000 ? "\n... (read more below)" : ""}
+											{/if}
+										</pre>
+										{#if !file.originalFilename.endsWith('.js') && file.decryptedContent && file.decryptedContent.length > 2000}
+											<button class="read-more-btn" onclick={() => toggleExpand(file.id)}>
+												{expandedFiles.has(file.id) ? "Show less" : "Read more"}
+											</button>
+										{/if}
 									</div>
-									<div class="download-icon">
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-											<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
-										</svg>
-									</div>
-								</button>
+								{:else}
+									<!-- Default download-only display for non-text files -->
+									<button type="button" class="file-attachment" onclick={() => downloadFile(file)} aria-label="Download {file.originalFilename}">
+										<div class="file-info">
+											<div class="file-icon">
+												{getFileIcon(file.mimeType)}
+											</div>
+											<div class="file-details">
+												<div class="file-name">{file.originalFilename}</div>
+												<div class="file-size">{formatFileSize(file.fileSize)}</div>
+											</div>
+										</div>
+										<div class="download-icon">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+											</svg>
+										</div>
+									</button>
+								{/if}
 							{/if}
 						{/each}
 					{/if}
