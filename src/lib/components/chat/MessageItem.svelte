@@ -22,6 +22,7 @@
 	let files = $state(/** @type {any[]} */ ([]));
 	let isLoadingFiles = $state(false);
 	let fileLoadError = $state('');
+	let decryptedFilenames = $state(/** @type {Map<string, string>} */ (new Map()));
 
 	function formatTime(/** @type {string} */ timestamp) {
 		const date = new Date(timestamp);
