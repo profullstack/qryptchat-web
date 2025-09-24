@@ -901,40 +901,6 @@
 		font-size: 0.875rem;
 	}
 
-	.checkbox-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--color-text-primary);
-	}
-
-	.checkbox-label input[type="checkbox"] {
-		margin: 0;
-		cursor: pointer;
-		width: auto;
-	}
-
-	.checkbox-text {
-		user-select: none;
-	}
-
-	.help-text-small {
-		margin: 0.5rem 0 0 0;
-		font-size: 0.8125rem;
-		color: var(--color-text-secondary);
-		line-height: 1.4;
-	}
-
-	.gpg-backup-section {
-		margin-top: 1rem;
-		padding: 1rem;
-		background: rgba(99, 102, 241, 0.05);
-		border-radius: 0.375rem;
-		border: 1px solid rgba(99, 102, 241, 0.2);
-	}
 
 	.button-group {
 		display: flex;

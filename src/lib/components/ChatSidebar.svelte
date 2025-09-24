@@ -597,10 +597,6 @@
 		text-overflow: ellipsis;
 	}
 
-	.user-status {
-		font-size: 0.75rem;
-		color: var(--color-success);
-	}
 
 	.connection-status {
 		display: flex;

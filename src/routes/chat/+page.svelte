@@ -10,6 +10,7 @@
 	import MessageList from '$lib/components/chat/MessageList.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
 	import AddParticipantModal from '$lib/components/chat/AddParticipantModal.svelte';
+	import EncryptionWarning from '$lib/components/EncryptionWarning.svelte';
 	import { voiceCallManager } from '$lib/stores/voice-call.js';
 	import { MLKEMCallManager, CALL_STATES } from '$lib/webrtc/ml-kem-call-manager.js';
 	import { callAudioManager } from '$lib/audio/call-sounds.js';
@@ -321,6 +322,9 @@
 				</button>
 			</div>
 		{/if}
+
+		<!-- Encryption Warning -->
+		<EncryptionWarning />
 
 		<!-- Chat Interface -->
 		<div class="chat-layout">

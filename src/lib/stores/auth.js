@@ -332,35 +332,21 @@ function createAuthStore() {
 
 				update(state => ({ ...state, user, loading: false }));
 				
-				// For new users, run onboarding flow after user creation is complete
-				if (data.isNewUser) {
+				// Auto-sync keys for all users (new and existing) if they have local keys
+				// This is non-blocking and only syncs if keys exist locally
+				setTimeout(async () => {
 					try {
-						console.log('🔑 Running onboarding flow for new user...');
+						console.log('🔑 Checking if key sync is needed...');
 						const syncResult = await keySyncService.autoSyncOnLogin();
 						if (syncResult.success) {
-							console.log('🔑 ✅ Public keys synced successfully during onboarding');
+							console.log('🔑 ✅ Public keys synced successfully');
 						} else {
-							console.warn('🔑 ⚠️ Public key sync failed during onboarding:', syncResult.error);
+							console.warn('🔑 ⚠️ Public key sync skipped or failed:', syncResult.error);
 						}
 					} catch (syncError) {
-						console.error('🔑 ❌ Error during onboarding key sync:', syncError);
+						console.error('🔑 ❌ Error during key sync:', syncError);
 					}
-				} else {
-					// For existing users, schedule key sync (non-blocking)
-					setTimeout(async () => {
-						try {
-							console.log('🔑 Auto-syncing public keys for existing user...');
-							const syncResult = await keySyncService.autoSyncOnLogin();
-							if (syncResult.success) {
-								console.log('🔑 ✅ Public keys synced successfully for existing user');
-							} else {
-								console.warn('🔑 ⚠️ Public key sync failed for existing user:', syncResult.error);
-							}
-						} catch (syncError) {
-							console.error('🔑 ❌ Error during existing user key sync:', syncError);
-						}
-					}, 100);
-				}
+				}, 100);
 				
 				return { success: true, user, isNewUser: data.isNewUser, session };
 
