@@ -257,7 +257,7 @@
 									{/await}
 								</div>
 							{:else if file.mimeType?.startsWith('video/')}
-								<!-- Inline video display -->
+								<!-- Enhanced video display with PWA support -->
 								<div class="media-attachment">
 									<div class="media-header">
 										<div class="media-info">
@@ -280,15 +280,49 @@
 										</div>
 									{:then mediaUrl}
 										{#if mediaUrl}
-											<video src={mediaUrl} controls class="inline-video">
-												<track kind="captions" src="" srclang="en" label="English" default />
-												Your browser does not support video playback.
-											</video>
+											<!-- Enhanced video player with PWA optimizations -->
+											<div class="video-wrapper">
+												<video
+													src={mediaUrl}
+													controls
+													class="inline-video"
+													preload="metadata"
+													playsinline
+													onerror={(e) => {
+														console.error('Video playback error:', e);
+														const target = e.currentTarget;
+														// Try to reload the video once
+														if (target && target instanceof HTMLVideoElement && !target.hasAttribute('data-retried')) {
+															target.setAttribute('data-retried', 'true');
+															setTimeout(() => target.load(), 1000);
+														}
+													}}
+												>
+													<track kind="captions" src="" srclang="en" label="English" default />
+													Your browser does not support video playback.
+												</video>
+												<div class="video-fallback" style="display: none;">
+													<p>Video playback not supported in this browser.</p>
+													<button onclick={() => downloadFile(file)} class="fallback-download-btn">
+														Download Video
+													</button>
+												</div>
+											</div>
 										{:else}
-											<div class="media-error">Failed to load video</div>
+											<div class="media-error">
+												<p>Failed to load video</p>
+												<button onclick={() => downloadFile(file)} class="error-download-btn">
+													Download Instead
+												</button>
+											</div>
 										{/if}
 									{:catch error}
-										<div class="media-error">Error loading video</div>
+										<div class="media-error">
+											<p>Error loading video: {error.message || 'Unknown error'}</p>
+											<button onclick={() => downloadFile(file)} class="error-download-btn">
+												Download Instead
+											</button>
+										</div>
 									{/await}
 								</div>
 							{:else if file.mimeType?.startsWith('audio/')}
@@ -776,10 +810,42 @@
 		display: block;
 	}
 
+	.video-wrapper {
+		position: relative;
+		width: 100%;
+	}
+
 	.inline-video {
 		width: 100%;
 		max-width: 400px;
 		max-height: 300px;
+		/* PWA-specific optimizations */
+		transform: translateZ(0); /* Enable hardware acceleration */
+	}
+
+	.video-fallback {
+		padding: 2rem;
+		text-align: center;
+		background: var(--color-surface);
+		border-radius: 0.5rem;
+	}
+
+	.fallback-download-btn,
+	.error-download-btn {
+		padding: 0.5rem 1rem;
+		background: var(--color-brand-primary);
+		color: white;
+		border: none;
+		border-radius: 0.25rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		margin-top: 0.5rem;
+		transition: background 0.2s ease;
+	}
+
+	.fallback-download-btn:hover,
+	.error-download-btn:hover {
+		background: var(--color-brand-secondary);
 	}
 
 	.inline-audio {
