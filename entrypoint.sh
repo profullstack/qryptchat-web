@@ -5,72 +5,13 @@ set -euo pipefail
 export HOST="${HOST:-0.0.0.0}"
 export PORT="${PORT:-8080}"
 
-# Generate .env file from Railway environment variables
-echo "Generating .env file from Railway environment variables..."
-cat > /app/.env <<'EOF'
-# Generated from Railway environment variables
-# Supabase Configuration
-PUBLIC_SUPABASE_URL=${PUBLIC_SUPABASE_URL}
-PUBLIC_SUPABASE_ANON_KEY=${PUBLIC_SUPABASE_ANON_KEY}
-SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
-SUPABASE_ACCESS_TOKEN=${SUPABASE_ACCESS_TOKEN}
-SUPABASE_PROJECT_REF=${SUPABASE_PROJECT_REF}
-PROJECT_REF=${PROJECT_REF}
-SUPABASE_JWT_DISCOVERY_URL=${SUPABASE_JWT_DISCOVERY_URL}
-GOTRUE_OTP_EXPIRY=${GOTRUE_OTP_EXPIRY}
-GOTRUE_DISABLE_SIGNUP=${GOTRUE_DISABLE_SIGNUP}
+# Ensure production environment
+echo "Setting up production environment..."
+export NODE_ENV=production
+export HOST="${HOST:-0.0.0.0}"
+export PORT="${PORT:-8080}"
 
-# Application Configuration
-PUBLIC_APP_URL=${PUBLIC_APP_URL}
-PUBLIC_APP_NAME=${PUBLIC_APP_NAME}
-PUBLIC_APP_VERSION=${PUBLIC_APP_VERSION}
-SITE_URL=${SITE_URL}
-
-# AI Configuration (OpenAI)
-OPENAI_API_KEY=${OPENAI_API_KEY}
-
-# Email Configuration
-SMTP_HOST=${SMTP_HOST}
-SMTP_PORT=${SMTP_PORT}
-SMTP_USER=${SMTP_USER}
-SMTP_PASS=${SMTP_PASS}
-
-# Mailgun Configuration
-MAILGUN_API_KEY=${MAILGUN_API_KEY}
-MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
-FROM_EMAIL=${FROM_EMAIL}
-OTP_TO_EMAIL=${OTP_TO_EMAIL}
-
-# SMS (Twilio) Configuration
-TWILIO_SID=${TWILIO_SID}
-TWILIO_SECRET=${TWILIO_SECRET}
-TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
-TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
-TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
-TWILIO_MESSAGE_SERVICE_SID=${TWILIO_MESSAGE_SERVICE_SID}
-
-# SMS Configuration
-ENABLE_PHONE_CONFIRMATIONS=${ENABLE_PHONE_CONFIRMATIONS}
-ENABLE_PHONE_CHANGE_CONFIRMATIONS=${ENABLE_PHONE_CHANGE_CONFIRMATIONS}
-SMS_TEMPLATE=${SMS_TEMPLATE}
-
-# Development Configuration
-NODE_ENV=production
-VITE_LOG_LEVEL=${VITE_LOG_LEVEL}
-
-# Security Configuration
-ENCRYPTION_KEY=${ENCRYPTION_KEY}
-
-# Runtime Configuration
-HOST=${HOST}
-PORT=${PORT}
-EOF
-
-# Now substitute the actual environment variable values
-envsubst < /app/.env > /app/.env.tmp && mv /app/.env.tmp /app/.env
-
-echo ".env file generated successfully"
+echo "Environment configured for production mode"
 
 # Write tor config (points onion:80 -> your local app on $PORT)
 cat >/etc/tor/torrc <<EOF
@@ -143,10 +84,10 @@ if [ -f /var/lib/tor/hidden_service/hostname ] && [ -s /var/lib/tor/hidden_servi
   echo "   PUBLIC_ONION_URL=${ONION_URL}"
   echo ""
   
-  # Add to current .env file for this session
-  echo "ONION_URL=${ONION_URL}" >> /app/.env
-  echo "PUBLIC_ONION_URL=${ONION_URL}" >> /app/.env
-  echo "📝 Added ONION_URL and PUBLIC_ONION_URL to current .env file"
+  # Export for current session
+  export ONION_URL="${ONION_URL}"
+  export PUBLIC_ONION_URL="${ONION_URL}"
+  echo "📝 Exported ONION_URL and PUBLIC_ONION_URL for current session"
   
 else
   echo "❌ Failed to generate onion hostname" >&2
@@ -159,9 +100,10 @@ else
   tail -10 /var/log/tor/notices.log 2>/dev/null || echo "No logs available"
 fi
 
-# Start your app with production environment in background
-echo "Starting Node.js application on ${HOST}:${PORT}"
-NODE_ENV=production pnpm start &
+# Ensure production environment and start app in background
+echo "Starting Node.js application on ${HOST}:${PORT} in production mode"
+export NODE_ENV=production
+pnpm start &
 APP_PID=$!
 
 # Wait for either the app or Tor to exit
