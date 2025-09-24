@@ -1,5 +1,6 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
+	import { user } from '$lib/stores/auth.js';
 
 	// Props
 	let {
@@ -99,7 +100,10 @@
 				{/if}
 				{conversation.name
 					|| (conversation.participants && conversation.participants.length > 0
-						? conversation.participants.map(p => (p && p.username ? p.username : '')).filter(Boolean).join(', ')
+						? conversation.participants
+							.filter(p => p && p.username && p.id !== $user?.id)
+							.map(p => p.username)
+							.join(', ') || 'Chat'
 						: 'Unknown')}
 				{#if conversation.unread_count > 0}
 					<div class="unread-indicator" title="{conversation.unread_count} unread messages"></div>
