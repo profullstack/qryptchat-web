@@ -1,31 +1,20 @@
 <script>
   import { onMount } from 'svelte';
+  import { t } from '$lib/stores/i18n';
   let lastUpdated = 'September 24, 2025'; // Update this regularly
 </script>
 
 <svelte:head>
-  <title>Warrant Canary - QryptChat</title>
-  <meta name="description" content="QryptChat Warrant Canary" />
+  <title>{$t('warrantCanary.title')}</title>
+  <meta name="description" content="{$t('warrantCanary.heading')}" />
 </svelte:head>
 
 <section class="canary">
-  <h1>Warrant Canary</h1>
-  <p>
-    This page serves as QryptChat's Warrant Canary. If this message is ever removed, altered,
-    or not updated within the expected time frame, it may indicate that we have received a secret
-    government order that we are legally forbidden from disclosing.
-  </p>
-
-  <p><strong>Last Updated:</strong> {lastUpdated}</p>
-
-  <p>
-    As of the date above, QryptChat has <strong>not</strong> received any National Security Letters,
-    FISA orders, or other classified requests for user data.
-  </p>
-
-  <p>
-    This document will be updated regularly. The absence of an update may be cause for concern.
-  </p>
+  <h1>{$t('warrantCanary.heading')}</h1>
+  <p>{$t('warrantCanary.intro')}</p>
+  <p><strong>{$t('warrantCanary.lastUpdatedLabel')}</strong> {lastUpdated}</p>
+  <p>{$t('warrantCanary.statement')}</p>
+  <p>{$t('warrantCanary.regularUpdateNote')}</p>
 </section>
 
 <style>

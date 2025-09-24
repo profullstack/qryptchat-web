@@ -1,4 +1,11 @@
 export default {
+	'footer.warrantCanary': 'Canario de Garantía',
+	'warrantCanary.title': 'Canario de Garantía - QryptChat',
+	'warrantCanary.heading': 'Canario de Garantía',
+	'warrantCanary.intro': 'Esta página sirve como el Canario de Garantía de QryptChat. Si este mensaje se elimina, altera o no se actualiza en el plazo esperado, puede indicar que hemos recibido una orden secreta del gobierno que estamos legalmente impedidos de revelar.',
+	'warrantCanary.lastUpdatedLabel': 'Última actualización:',
+	'warrantCanary.statement': 'A la fecha anterior, QryptChat no ha recibido ninguna Carta de Seguridad Nacional (NSL), órdenes FISA u otras solicitudes clasificadas de datos de usuarios.',
+	'warrantCanary.regularUpdateNote': 'Este documento se actualizará periódicamente. La ausencia de una actualización puede ser motivo de preocupación.',
 	// Navigation
 	'nav.home': 'Inicio',
 	'nav.chat': 'Chat',

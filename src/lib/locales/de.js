@@ -53,5 +53,12 @@ export default {
 	'status.processing': 'Verarbeitung...',
 	'aria.closeModal': 'Modal schließen',
 	'aria.newChat': 'Neuen Chat erstellen',
-	'aria.joinGroup': 'Bestehender Gruppe beitreten'
+	'aria.joinGroup': 'Bestehender Gruppe beitreten',
+	'footer.warrantCanary': 'Warrant Canary',
+	'warrantCanary.title': 'Warrant Canary - QryptChat',
+	'warrantCanary.heading': 'Warrant Canary',
+	'warrantCanary.intro': 'Diese Seite dient als QryptChats Warrant Canary. Wenn diese Nachricht jemals entfernt, geändert oder nicht innerhalb des erwarteten Zeitrahmens aktualisiert wird, könnte dies bedeuten, dass wir eine geheime Regierungsanordnung erhalten haben, die wir gesetzlich nicht offenlegen dürfen.',
+	'warrantCanary.lastUpdatedLabel': 'Zuletzt aktualisiert:',
+	'warrantCanary.statement': 'Zum oben genannten Datum hat QryptChat keine National Security Letters, FISA-Beschlüsse oder andere geheime Anfragen nach Benutzerdaten erhalten.',
+	'warrantCanary.regularUpdateNote': 'Dieses Dokument wird regelmäßig aktualisiert. Das Ausbleiben einer Aktualisierung könnte Anlass zur Sorge geben.'
 };

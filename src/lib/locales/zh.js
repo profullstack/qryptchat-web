@@ -1,4 +1,11 @@
 export default {
+	'footer.warrantCanary': '金丝雀声明',
+	'warrantCanary.title': '金丝雀声明 - QryptChat',
+	'warrantCanary.heading': '金丝雀声明',
+	'warrantCanary.intro': '此页面作为 QryptChat 的金丝雀声明。如果此消息被删除、修改或未在预期时间范围内更新，这可能表明我们已收到一份无法依法披露的政府秘密命令。',
+	'warrantCanary.lastUpdatedLabel': '最后更新：',
+	'warrantCanary.statement': '截至上述日期，QryptChat 尚未收到任何国家安全信函、FISA 命令或其他针对用户数据的机密请求。',
+	'warrantCanary.regularUpdateNote': '本文档将定期更新。缺少更新可能值得关注。',
 	'nav.home': '首页',
 	'nav.chat': '聊天',
 	'nav.settings': '设置',

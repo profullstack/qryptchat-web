@@ -1,4 +1,11 @@
 export default {
+	'footer.warrantCanary': 'Canari de mandat',
+	'warrantCanary.title': 'Canari de mandat - QryptChat',
+	'warrantCanary.heading': 'Canari de mandat',
+	'warrantCanary.intro': 'Cette page sert de canari de mandat de QryptChat. Si ce message est supprimé, modifié ou non mis à jour dans le délai prévu, cela peut indiquer que nous avons reçu un ordre gouvernemental secret que la loi nous interdit de divulguer.',
+	'warrantCanary.lastUpdatedLabel': 'Dernière mise à jour :',
+	'warrantCanary.statement': 'À la date ci-dessus, QryptChat n’a reçu aucune lettre de sécurité nationale, aucun ordre FISA ou aucune autre demande classifiée de données utilisateur.',
+	'warrantCanary.regularUpdateNote': 'Ce document sera mis à jour régulièrement. L’absence de mise à jour peut être préoccupante.',
 	// Navigation
 	'nav.home': 'Accueil',
 	'nav.chat': 'Chat',
