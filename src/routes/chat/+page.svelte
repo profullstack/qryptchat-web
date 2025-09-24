@@ -231,11 +231,7 @@
 			<!-- Main Chat Area -->
 			<div class="chat-main" class:show={!showSidebar || !activeConversationId}>
 				{#if activeConversationId}
-					<div class="chat-interface" style="border: 2px solid red; /* DEBUG: Layout visualization */">
-						<!-- DEBUG: Log layout dimensions -->
-						<div style="position: absolute; top: 0; right: 0; background: yellow; padding: 4px; font-size: 10px; z-index: 999;">
-							DEBUG: Chat Interface
-						</div>
+					<div class="chat-interface">
 						<!-- Chat Header (Desktop and Mobile) -->
 						<div class="chat-header">
 							<button class="back-button" onclick={handleBackToConversations}>
@@ -296,8 +292,10 @@
 						</div>
 						
 						<MessageList conversationId={activeConversationId} />
-						<MessageInput conversationId={activeConversationId} />
 					</div>
+					
+					<!-- Fixed MessageInput outside the scrolling area -->
+					<MessageInput conversationId={activeConversationId} />
 				{:else}
 					<div class="chat-welcome">
 						<div class="welcome-icon">🔐</div>
@@ -421,6 +419,7 @@
 		justify-content: center;
 		background: var(--color-background);
 		overflow: hidden;
+		position: relative; /* Required for absolute positioning of MessageInput */
 	}
 
 	.chat-header {
@@ -524,6 +523,8 @@
 		flex-direction: column;
 		height: 100%;
 		background: var(--color-background);
+		position: relative;
+		padding-bottom: 140px; /* Reserve space for fixed input */
 	}
 
 	.chat-welcome {

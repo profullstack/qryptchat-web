@@ -304,42 +304,6 @@
 			textareaElement.focus();
 		}
 
-		// DEBUG: Track when MessageInput is visible/invisible
-		console.log('🐛 DEBUG MessageInput mounted for conversation:', conversationId);
-		
-		// Use Intersection Observer to detect when input goes out of view
-		let messageInputContainer;
-		const elements = document.getElementsByClassName('message-input-container');
-		if (elements.length > 0) {
-			messageInputContainer = elements[0];
-			
-			const observer = new IntersectionObserver((entries) => {
-				entries.forEach(entry => {
-					console.log('🐛 DEBUG MessageInput visibility:', {
-						isIntersecting: entry.isIntersecting,
-						intersectionRatio: entry.intersectionRatio,
-						boundingClientRect: entry.boundingClientRect,
-						target: entry.target.className
-					});
-				});
-			}, {
-				threshold: [0, 0.25, 0.5, 0.75, 1.0]
-			});
-			
-			observer.observe(messageInputContainer);
-			
-			// Cleanup observer on unmount
-			return () => {
-				observer.disconnect();
-				if (typingTimeout) {
-					clearTimeout(typingTimeout);
-				}
-				if (conversationId && currentUser?.id) {
-					wsChat.stopTyping(conversationId);
-				}
-			};
-		}
-
 		// Cleanup typing indicator on unmount
 		return () => {
 			if (typingTimeout) {
@@ -481,9 +445,15 @@
 
 <style>
 	.message-input-container {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
 		padding: 1rem;
 		border-top: 1px solid var(--color-border);
 		background: var(--color-surface);
+		z-index: 100;
+		box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 	}
 
 	.upload-error {
@@ -760,10 +730,22 @@
 		100% { transform: rotate(360deg); }
 	}
 
-	/* Responsive adjustments */
+	/* Desktop: Position within chat interface, accounting for sidebar */
+	@media (min-width: 769px) {
+		.message-input-container {
+			position: absolute;
+			left: 0;
+			right: 0;
+		}
+	}
+
+	/* Mobile: Position fixed to viewport since chat takes full width */
 	@media (max-width: 768px) {
 		.message-input-container {
+			position: fixed;
 			padding: 0.75rem;
+			/* Account for mobile safari viewport issues */
+			padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 		}
 
 		.input-wrapper {
