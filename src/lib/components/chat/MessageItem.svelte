@@ -354,7 +354,7 @@
 												{getFileIcon(file.mimeType)}
 											</div>
 											<div class="file-details">
-												<div class="file-name">{file.originalFilename}</div>
+												<div class="file-name">{decryptedFilenames.get(file.id)}</div>
 												<div class="file-size">{formatFileSize(file.fileSize)}</div>
 											</div>
 										</div>
