@@ -77,11 +77,39 @@ class VoiceCallManager {
 	}
 
 	/**
+	 * Detect if running in Tor Browser
+	 * @returns {boolean}
+	 */
+	isTorBrowser() {
+		// Tor Browser detection
+		return (
+			typeof window !== 'undefined' &&
+			(window.location.hostname.endsWith('.onion') ||
+			 navigator.userAgent.includes('Tor Browser') ||
+			 !navigator.permissions) // Tor Browser often disables Permissions API
+		);
+	}
+
+	/**
 	 * Check and request media permissions
 	 */
 	async checkPermissions() {
 		try {
-			// Check microphone permission
+			// Skip Permissions API check in Tor Browser
+			if (this.isTorBrowser()) {
+				console.log('📞 Tor Browser detected - skipping Permissions API check');
+				console.log('📞 Media permissions will be checked when actually requesting media');
+				
+				// Set permissions as unknown for Tor Browser
+				callPermissions.set({
+					microphone: false,
+					camera: false
+				});
+				
+				return { microphone: false, camera: false };
+			}
+
+			// Check microphone permission (regular browsers)
 			const micPermission = await navigator.permissions.query({ name: 'microphone' });
 			const micGranted = micPermission.state === 'granted';
 
@@ -103,6 +131,13 @@ class VoiceCallManager {
 			return { microphone: micGranted, camera: cameraGranted };
 		} catch (error) {
 			console.error('📞 Permission check failed:', error);
+			
+			// Fallback for browsers that don't support Permissions API
+			callPermissions.set({
+				microphone: false,
+				camera: false
+			});
+			
 			return { microphone: false, camera: false };
 		}
 	}
