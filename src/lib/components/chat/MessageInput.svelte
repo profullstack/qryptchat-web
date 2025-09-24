@@ -747,8 +747,8 @@
 			/* Account for mobile safari viewport issues */
 			padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 			/* Ensure solid background on mobile */
-			background: var(--color-surface) !important;
-			backdrop-filter: blur(10px);
+			background: #ffffff !important;
+			border-top: 1px solid #e5e7eb !important;
 		}
 
 		.input-wrapper {

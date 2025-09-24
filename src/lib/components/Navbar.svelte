@@ -378,10 +378,15 @@
 		position: sticky;
 		top: 0;
 		z-index: 40;
+		/* Solid background fallback for iOS/Safari */
+		background-color: #ffffff;
 		background-color: var(--color-bg-primary);
 		border-bottom: 1px solid var(--color-border-primary);
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
+		/* Fix iOS/Safari gap at top */
+		padding-top: env(safe-area-inset-top);
+		margin-top: calc(-1 * env(safe-area-inset-top));
 	}
 	
 	.navbar-content {
