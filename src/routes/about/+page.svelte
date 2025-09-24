@@ -6,16 +6,16 @@
 	
 	// Define team member roles and social links
 	const teamMemberInfo = {
-		profullstack: {
-			role: 'Sponsoring Company',
-			bio: 'Full-stack developer passionate about privacy, security, and building tools that empower users. Committed to creating a quantum-safe future for digital communication.',
-			socialLinks: [
-				{ type: 'github', url: 'https://github.com/profullstack' },
-				{ type: 'twitter', url: 'https://x.com/profullstackinc' },
-			]
-		},
+		// profullstack: {
+		// 	role: 'Sponsoring Company',
+		// 	bio: 'Full-stack developer passionate about privacy, security, and building tools that empower users. Committed to creating a quantum-safe future for digital communication.',
+		// 	socialLinks: [
+		// 		{ type: 'github', url: 'https://github.com/profullstack' },
+		// 		{ type: 'twitter', url: 'https://x.com/profullstackinc' },
+		// 	]
+		// },
 		chovy: {
-			role: 'Co-Founder & Developer',
+			role: 'Founder & Developer',
 			bio: 'Experienced developer focused on creating secure, user-friendly applications. Passionate about privacy technology and building tools that protect user data.',
 			socialLinks: [
 				{ type: 'bluesky', url: 'https://bsky.app/profile/chovy.bsky.social' },
