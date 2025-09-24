@@ -56,16 +56,15 @@
 	 * @param {string} value
 	 */
 	function formatPhoneNumber(value) {
-		// Remove all non-digits
-		const digits = value.replace(/\D/g, '');
+		// Remove all non-digits except the leading +
+		const cleanValue = value.replace(/[^\d+]/g, '');
 		
-		// Add country code if not present
-		if (digits.length > 0 && !digits.startsWith('1')) {
-			return '+1' + digits;
-		} else if (digits.length > 0) {
-			return '+' + digits;
+		// If it starts with digits (no +), add the + prefix
+		if (cleanValue.length > 0 && !cleanValue.startsWith('+')) {
+			return '+' + cleanValue;
 		}
-		return value;
+		
+		return cleanValue;
 	}
 
 	/**
@@ -323,7 +322,8 @@
 			goto('/chat?welcome=true');
 		} catch (error) {
 			console.error('Failed to download key backup:', error);
-			messages.error('Failed to download key backup: ' + (error.message || 'Unknown error'));
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			messages.error('Failed to download key backup: ' + errorMessage);
 		}
 	}
 	
