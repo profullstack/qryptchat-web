@@ -1,5 +1,5 @@
 # Use an official Node image with Corepack (pnpm) available
-FROM node:20-bookworm-slim
+FROM node:24-bookworm-slim
 
 # System deps: tor + tini for clean PID 1 + gettext for envsubst
 RUN apt-get update && apt-get install -y --no-install-recommends \
