@@ -185,6 +185,40 @@
 				// Store user ID for potential avatar upload
 				createdUserId = data.user.id;
 				
+				// Handle avatar upload if user uploaded one during profile setup
+				if (avatarUrl && avatarUrl.startsWith('blob:')) {
+					try {
+						console.log('📸 Uploading avatar after user creation...');
+						// Get the file from the blob URL and upload it properly
+						const response = await fetch(avatarUrl);
+						const blob = await response.blob();
+						const file = new File([blob], 'avatar.jpg', { type: blob.type });
+						
+						// Create FormData for upload
+						const formData = new FormData();
+						formData.append('avatar', file);
+						
+						// Upload avatar now that user exists
+						const uploadResponse = await fetch('/api/auth/upload-avatar', {
+							method: 'POST',
+							headers: {
+								'Authorization': `Bearer ${verifiedSession.access_token}`
+							},
+							body: formData
+						});
+						
+						if (uploadResponse.ok) {
+							const uploadResult = await uploadResponse.json();
+							avatarUrl = uploadResult.avatarUrl;
+							console.log('📸 ✅ Avatar uploaded successfully after user creation');
+						} else {
+							console.warn('📸 ⚠️ Avatar upload failed after user creation');
+						}
+					} catch (avatarError) {
+						console.error('📸 ❌ Avatar upload error:', avatarError);
+					}
+				}
+				
 				// Generate encryption keys for new user
 				try {
 					await keyManager.generateUserKeys();
@@ -238,7 +272,11 @@
 	 */
 	function handleAvatarUploaded(event) {
 		avatarUrl = event.detail.avatarUrl;
-		messages.success('Profile picture uploaded successfully!');
+		if (createdUserId) {
+			messages.success('Profile picture uploaded successfully!');
+		} else {
+			console.log('📸 Avatar preview ready for upload after user creation');
+		}
 	}
 
 	/**
@@ -454,10 +492,11 @@
 						<div class="avatar-label">Profile Picture (Optional)</div>
 						<div class="avatar-upload-container">
 							<AvatarUpload
-								userId={createdUserId ? undefined : null}
-								currentAvatarUrl={avatarUrl ? undefined : null}
+								userId={createdUserId}
+								currentAvatarUrl={avatarUrl}
 								size="medium"
 								disabled={$isLoading}
+								previewOnly={!createdUserId}
 								on:uploaded={handleAvatarUploaded}
 								on:error={handleAvatarError}
 								on:removed={handleAvatarRemoved}

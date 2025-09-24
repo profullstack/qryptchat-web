@@ -4,10 +4,11 @@
 	
 	const dispatch = createEventDispatcher();
 	
-	export const userId = null; // Used for external reference
+	export const userId = null; // Used for external reference only
 	export let currentAvatarUrl = null;
 	export let size = 'large'; // 'small', 'medium', 'large'
 	export let disabled = false;
+	export let previewOnly = false; // If true, only shows preview without uploading
 	
 	let fileInput;
 	let uploading = false;
@@ -28,7 +29,13 @@
 	async function handleFileSelect(event) {
 		const file = event.target.files?.[0];
 		if (file) {
-			await uploadAvatar(file);
+			if (previewOnly) {
+				// Just create a preview URL without uploading
+				previewUrl = URL.createObjectURL(file);
+				dispatch('uploaded', { avatarUrl: previewUrl });
+			} else {
+				await uploadAvatar(file);
+			}
 		}
 	}
 	
@@ -49,7 +56,13 @@
 		
 		const files = event.dataTransfer.files;
 		if (files.length > 0) {
-			await uploadAvatar(files[0]);
+			if (previewOnly) {
+				// Just create a preview URL without uploading
+				previewUrl = URL.createObjectURL(files[0]);
+				dispatch('uploaded', { avatarUrl: previewUrl });
+			} else {
+				await uploadAvatar(files[0]);
+			}
 		}
 	}
 	
