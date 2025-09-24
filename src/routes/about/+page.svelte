@@ -463,7 +463,7 @@
 		gap: 0.75rem;
 		padding: 0.75rem 1.5rem;
 		background: linear-gradient(135deg, #6366f1, #8b5cf6);
-		color: white;
+		color: #ffffff;
 		text-decoration: none;
 		border-radius: 0.75rem;
 		font-weight: 600;
@@ -476,25 +476,27 @@
 	.community-link:hover {
 		transform: translateY(-2px);
 		box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
-		color: white;
+		color: #ffffff;
 	}
 
 	.community-link.discord {
 		background: linear-gradient(135deg, #5865f2, #7289da);
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+		color: #ffffff;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 	}
 
 	.community-link.discord:hover {
-		color: white;
+		color: #ffffff;
 	}
 
 	.community-link.github {
 		background: linear-gradient(135deg, #24292f, #4a5568);
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+		color: #ffffff;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 	}
 
 	.community-link.github:hover {
-		color: white;
+		color: #ffffff;
 	}
 
 	@media (max-width: 768px) {
