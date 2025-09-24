@@ -87,7 +87,7 @@ export async function POST(event) {
 			.maybeSingle();
 
 		// Validate input
-		if (!type || !['direct', 'group', 'room'].includes(type)) {
+		if (!type || !['direct', 'group', 'room', 'note_to_self'].includes(type)) {
 			return json({ error: 'Invalid conversation type' }, { status: 400 });
 		}
 
@@ -224,6 +224,19 @@ export async function PATCH(event) {
 
 		if (!action || !['archive', 'unarchive'].includes(action)) {
 			return json({ error: 'action must be "archive" or "unarchive"' }, { status: 400 });
+		}
+
+		// Check if this is a note-to-self conversation and prevent archiving
+		const { data: conversationData } = await supabase
+			.from('conversations')
+			.select('type')
+			.eq('id', conversation_id)
+			.single();
+
+		if (conversationData?.type === 'note_to_self') {
+			return json({
+				error: 'Cannot archive or modify note-to-self conversations'
+			}, { status: 403 });
 		}
 
 		let success, error;

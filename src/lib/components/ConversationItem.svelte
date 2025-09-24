@@ -2,10 +2,11 @@
 	import { createEventDispatcher } from 'svelte';
 
 	// Props
-	let { 
-		conversation, 
-		active = false, 
-		isRoom = false 
+	let {
+		conversation,
+		active = false,
+		isRoom = false,
+		isNoteToSelf = false
 	} = $props();
 
 	const dispatch = createEventDispatcher();
@@ -18,6 +19,10 @@
 	// Handle right-click context menu
 	function handleContextMenu(event) {
 		event.preventDefault();
+		// Don't show context menu for note-to-self conversations
+		if (isNoteToSelf) {
+			return;
+		}
 		dispatch('contextmenu', event);
 	}
 
@@ -58,12 +63,19 @@
 	class="conversation-item"
 	class:active
 	class:is-room={isRoom}
+	class:is-note-to-self={isNoteToSelf}
 	class:archived={conversation.is_archived}
 	onclick={handleClick}
 	oncontextmenu={handleContextMenu}
 >
 	<div class="conversation-avatar">
-		{#if conversation.avatar_url}
+		{#if isNoteToSelf}
+			<div class="note-to-self-icon">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M14,2A8,8 0 0,0 6,10A8,8 0 0,0 14,18A8,8 0 0,0 22,10A8,8 0 0,0 14,2M14,16A6,6 0 0,1 8,10A6,6 0 0,1 14,4A6,6 0 0,1 20,10A6,6 0 0,1 14,16M14,7A3,3 0 0,0 11,10A3,3 0 0,0 14,13A3,3 0 0,0 17,10A3,3 0 0,0 14,7M14,11A1,1 0 0,1 13,10A1,1 0 0,1 14,9A1,1 0 0,1 15,10A1,1 0 0,1 14,11Z M4,6V9H2V4A2,2 0 0,1 4,2H9V4H4V6Z M2,15V20A2,2 0 0,0 4,22H9V20H4V15H2Z"/>
+				</svg>
+			</div>
+		{:else if conversation.avatar_url}
 			<img src={conversation.avatar_url} alt={conversation.name} />
 		{:else if isRoom}
 			<div class="room-icon">

@@ -41,6 +41,7 @@
 		return matchesArchiveFilter && matchesSearch;
 	}));
 
+	const noteToSelfConversations = $derived(filteredConversations.filter(conv => conv.type === 'note_to_self'));
 	const directMessages = $derived(filteredConversations.filter(conv => conv.type === 'direct'));
 	const groupConversations = $derived(filteredConversations.filter(conv => conv.type === 'group'));
 	const roomConversations = $derived(filteredConversations.filter(conv => conv.type === 'room'));
@@ -111,6 +112,12 @@
 	// Handle conversation right-click
 	function handleConversationContextMenu(event, conversation) {
 		event.preventDefault();
+		
+		// Don't show context menu for note-to-self conversations
+		if (conversation.type === 'note_to_self') {
+			return;
+		}
+		
 		contextMenu = {
 			show: true,
 			x: event.clientX,
@@ -132,6 +139,12 @@
 	// Handle archive/unarchive action
 	async function handleArchiveToggle(conversation) {
 		contextMenu.show = false;
+		
+		// Prevent archiving note-to-self conversations
+		if (conversation.type === 'note_to_self') {
+			console.log('Cannot archive note-to-self conversations');
+			return;
+		}
 		
 		try {
 			let result;
@@ -304,6 +317,20 @@
 				<p>Loading conversations...</p>
 			</div>
 		{:else}
+			<!-- Note to Self Section -->
+			{#if noteToSelfConversations.length > 0}
+				<div class="section note-to-self-section">
+					{#each noteToSelfConversations as conversation (conversation.id)}
+						<ConversationItem
+							{conversation}
+							active={activeConversationId === conversation.id}
+							isNoteToSelf={true}
+							on:select={() => handleConversationSelect(conversation.id)}
+						/>
+					{/each}
+				</div>
+			{/if}
+
 			<!-- Groups Section -->
 			{#if $groups.length > 0}
 				<div class="section">
@@ -314,7 +341,7 @@
 					
 					{#each $groups as group (group.group_id)}
 						<div class="group-container">
-							<GroupItem 
+							<GroupItem
 								{group}
 								expanded={expandedGroups.has(group.group_id)}
 								on:toggle={() => toggleGroup(group.group_id)}
@@ -741,6 +768,32 @@
 
 	.sidebar-content::-webkit-scrollbar-thumb:hover {
 		background: var(--color-text-secondary);
+	}
+
+	/* Note to Self section styles */
+	.note-to-self-section {
+		margin-bottom: 1.5rem;
+		border-bottom: 1px solid var(--color-border-primary);
+		padding-bottom: 1rem;
+	}
+
+	.note-to-self-section :global(.conversation-item) {
+		background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100));
+		border: 1px solid var(--color-primary-200);
+		border-radius: 0.75rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.note-to-self-section :global(.conversation-item:hover) {
+		background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-200));
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+	}
+
+	.note-to-self-section :global(.conversation-item.active) {
+		background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+		color: white;
+		box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
 	}
 
 	/* Archive toggle styles */
