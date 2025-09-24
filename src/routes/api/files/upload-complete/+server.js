@@ -98,16 +98,14 @@ export async function POST(event) {
 			.insert({
 				message_id: messageId,
 				storage_path: storagePath,
-				original_filename: originalFilename,
 				mime_type: mimeType,
 				file_size: parseInt(fileSize),
 				encrypted_metadata: {
 					id: fileId,
-					originalName: originalFilename,
 					mimeType: mimeType,
 					size: parseInt(fileSize),
 					encryptedAt: new Date().toISOString(),
-					version: 2 // Version 2 = multi-recipient encryption
+					version: 3 // Version 3 = multi-recipient encryption with embedded filename
 				},
 				created_by: user.id // Use auth user ID for RLS policy compatibility
 			})
