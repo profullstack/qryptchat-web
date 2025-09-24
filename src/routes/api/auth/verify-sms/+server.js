@@ -341,12 +341,11 @@ export async function POST(event) {
 				);
 			}
 
-			// Handle avatar upload if provided (for multipart requests)
-			let avatarUrl = null;
-			if (avatarFile && avatarFile instanceof File) {
-				logger.info('Processing avatar upload during user creation', { fileName: avatarFile.name, fileSize: avatarFile.size });
+			const shouldUploadAvatar = avatarFile && avatarFile instanceof File;
 
-				// Validate file type
+			if (shouldUploadAvatar) {
+				logger.info('Validating avatar file before user creation', { fileName: avatarFile.name, fileSize: avatarFile.size });
+
 				const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 				if (!allowedTypes.includes(avatarFile.type)) {
 					logger.error('Invalid avatar file type', { fileType: avatarFile.type });
@@ -359,7 +358,6 @@ export async function POST(event) {
 					);
 				}
 
-				// Validate file size (5MB limit)
 				if (avatarFile.size > 5 * 1024 * 1024) {
 					logger.error('Avatar file too large', { fileSize: avatarFile.size });
 					return json(
@@ -370,46 +368,10 @@ export async function POST(event) {
 						{ status: 400 }
 					);
 				}
-
-				try {
-					// Generate unique filename
-					const fileExt = avatarFile.name.split('.').pop() || 'jpg';
-					const fileName = `${verifyData.user.id}/${Date.now()}.${fileExt}`;
-
-					// Convert file to buffer for upload
-					const fileBuffer = await avatarFile.arrayBuffer();
-
-					// Upload to Supabase Storage using service role
-					const { data: uploadData, error: uploadError } = await serviceSupabase.storage
-						.from('avatars')
-						.upload(fileName, fileBuffer, {
-							contentType: avatarFile.type,
-							cacheControl: '3600',
-							upsert: false
-						});
-
-					if (uploadError) {
-						logger.error('Avatar storage upload failed', { error: uploadError });
-						console.error('Avatar upload error:', uploadError);
-						// Continue without avatar (non-blocking)
-						console.warn('Avatar upload failed, proceeding without avatar');
-					} else {
-						// Get public URL
-						const { data: { publicUrl } } = serviceSupabase.storage
-							.from('avatars')
-							.getPublicUrl(fileName);
-						avatarUrl = publicUrl;
-						logger.info('Avatar uploaded successfully during user creation', { avatarUrl });
-					}
-				} catch (uploadError) {
-					logger.error('Avatar upload exception', { error: uploadError });
-					console.error('Avatar upload error:', uploadError);
-					// Continue without avatar (non-blocking)
-					console.warn('Avatar upload failed, proceeding without avatar');
-				}
 			}
 
-			// Create user record with optional avatar_url
+			let avatarUrl = null;
+
 			logger.info('Creating user record in database');
 			const { data: newUser, error: createError } = await serviceSupabase
 				.from('users')
@@ -418,7 +380,7 @@ export async function POST(event) {
 					phone_number: phoneNumber,
 					username,
 					display_name: displayName || username,
-					avatar_url: avatarUrl, // Set if uploaded
+					avatar_url: null,
 					created_at: new Date().toISOString(),
 					updated_at: new Date().toISOString()
 				})
