@@ -1,6 +1,1 @@
 .git
-node_modules
-.svelte-kit
-Dockerfile
-.env*
-
