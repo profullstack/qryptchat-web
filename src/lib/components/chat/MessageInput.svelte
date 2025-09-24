@@ -93,10 +93,6 @@
 		
 		// File validation utilities
 		const maxFileSize = 2 * 1024 * 1024 * 1024; // 2GB
-		const allowedExtensions = [
-			'.txt', '.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif',
-			'.mp3', '.wav', '.mp4', '.webm', '.zip', '.rar'
-		];
 		const blockedExtensions = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
 		
 		const getFileExtension = (filename) => {
@@ -104,17 +100,12 @@
 			return lastDot !== -1 ? filename.substring(lastDot).toLowerCase() : '';
 		};
 		
-		const isAllowedFileType = (filename) => {
-			const extension = getFileExtension(filename);
-			return !blockedExtensions.includes(extension) &&
-				   (!extension || allowedExtensions.includes(extension));
-		};
-		
 		// Validate files
 		const validFiles = [];
 		for (const file of files) {
-			if (!isAllowedFileType(file.name)) {
-				uploadError = `File type not allowed: ${getFileExtension(file.name)}`;
+			const ext = getFileExtension(file.name);
+			if (blockedExtensions.includes(ext)) {
+				uploadError = `File type not allowed: ${ext}`;
 				return;
 			}
 			if (file.size > maxFileSize) {
@@ -330,7 +321,7 @@
 	bind:this={fileInputElement}
 	type="file"
 	multiple
-	accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar"
+	accept="*/*"
 	style="display: none;"
 	onchange={handleFileInput}
 />
