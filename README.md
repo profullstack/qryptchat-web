@@ -7,50 +7,62 @@ A secure, privacy-focused chat application built with post-quantum cryptography 
 ## ✨ Features
 
 ### 🛡️ Quantum-Resistant Security
-- **Post-Quantum Cryptography** ready for quantum-safe communication
-- **End-to-End Encryption** with client-side key management
-- **Perfect Forward Secrecy** with automatic key rotation
-- **Zero-Knowledge Architecture** - your data stays private
+- **ML-KEM-1024 Post-Quantum Cryptography** - FIPS 203 compliant quantum-safe encryption
+- **ChaCha20-Poly1305 Symmetric Encryption** - Fast, secure message encryption
+- **End-to-End Encryption** with client-side key management and zero server access
+- **Perfect Forward Secrecy** with automatic key rotation and secure key derivation
+- **Zero-Knowledge Architecture** - your private keys never leave your device
+- **Private Key Import/Export** - Secure backup with password and GPG protection
 
 ### 📱 Progressive Web App
-- **Cross-Platform**: Works on iOS, Android, Desktop, and Web
-- **Offline Support**: Send messages even without internet
-- **Push Notifications**: Never miss a message
-- **Install Anywhere**: Add to home screen on any device
+- **Cross-Platform**: Works on iOS, Android, Desktop, and Web browsers
+- **Offline Support**: Queue messages when offline, sync when reconnected
+- **Desktop Integration**: Install as native app with system shortcuts
+- **Mobile Optimized**: Touch-friendly interface with gesture support
+- **Service Worker**: Background sync and caching for optimal performance
 
 ### 🚀 Real-Time Communication & Sync
-- **Instant Messaging** with WebSocket real-time delivery
-- **Cross-Device Sync** - seamless experience across all devices
-- **Multi-Session Support** - stay logged in on multiple devices
-- **Typing Indicators** to see when others are typing
-- **Online Presence** to know who's available
-- **Message Status** with delivery and read receipts
+- **WebSocket Real-Time** - Instant message delivery and status updates
+- **Cross-Device Sync** - Seamless experience across all logged-in devices
+- **Multi-Session Support** - Stay connected on multiple devices simultaneously
+- **Live Typing Indicators** - See when others are composing messages
+- **Online Presence System** - Real-time availability status
+- **Message Delivery Status** - Sent, delivered, and read receipts
+- **Auto-Reconnection** - Robust connection handling with automatic retry
 
-### 👥 Social Features
-- **Phone Verification** via Twilio SMS for secure onboarding
-- **Contact Discovery** find friends using phone numbers
-- **Group Chats** up to 100 participants with admin controls
-- **Media Sharing** with end-to-end encrypted file transfers
+### 👥 Social & Communication Features
+- **SMS Phone Verification** - Secure onboarding via Twilio integration
+- **Contact Discovery** - Find friends using verified phone numbers
+- **Encrypted File Sharing** - Share photos, videos, and documents securely
+- **Enhanced Video Player** - In-app video playback with diagnostic tools
+- **Message Archiving** - Archive and restore conversation history
+- **Disappearing Messages** - Auto-delete messages after specified time periods
+- **Voice & Video Calls** - End-to-end encrypted calls with ML-KEM key exchange
 
 ### 🌍 Accessibility & Internationalization
-- **Multi-Language Support** - 6 languages (EN, ES, FR, DE, AR, ZH)
-- **RTL Support** for Arabic and other right-to-left languages
-- **Dark/Light Themes** with system preference detection
-- **Responsive Design** optimized for all screen sizes
+- **Multi-Language Support** - 6 languages (EN, ES, FR, DE, AR, ZH) with easy switching
+- **RTL Support** - Full right-to-left language support for Arabic and Hebrew
+- **Dark/Light Themes** - System preference detection with manual override
+- **Responsive Design** - Optimized for all screen sizes from mobile to desktop
+- **Keyboard Navigation** - Full accessibility support for screen readers
 
 ## 🏗️ Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| **Frontend** | SvelteKit 5 + Svelte 5 | Reactive UI framework |
-| **Styling** | Vanilla CSS + Custom Properties | Modern design system |
-| **Database** | Supabase PostgreSQL | User data and messages |
-| **Real-time** | Supabase Realtime | Live message delivery & sync |
-| **Auth** | Custom SMS + Supabase | Phone-based verification |
-| **SMS** | Twilio | SMS verification service |
-| **Crypto** | Post-Quantum Ready | Future-proof encryption |
-| **PWA** | Vite PWA Plugin | Offline-first experience |
-| **I18n** | Custom Store | Multi-language support |
+| **Frontend** | SvelteKit 5 + Svelte 5 | Reactive UI framework with runes |
+| **Styling** | Vanilla CSS + Custom Properties | Modern design system with themes |
+| **Database** | Supabase PostgreSQL | User data, messages, and file storage |
+| **Real-time** | Custom WebSocket + Supabase Realtime | Live message delivery & presence |
+| **Auth** | Custom SMS + Supabase Auth | Phone-based verification system |
+| **SMS** | Twilio | SMS verification and notifications |
+| **Crypto** | ML-KEM-1024 + ChaCha20-Poly1305 | Post-quantum encryption (FIPS 203) |
+| **Key Exchange** | ML-KEM (Kyber) + Dilithium | Quantum-resistant key management |
+| **File Encryption** | Multi-recipient PQ encryption | Secure file sharing with metadata |
+| **PWA** | Vite PWA Plugin + Service Worker | Offline-first with background sync |
+| **I18n** | Custom Svelte Store | Multi-language with RTL support |
+| **WebRTC** | Native WebRTC + ML-KEM | Encrypted voice/video calls |
+| **Testing** | Vitest + Custom Test Suite | Comprehensive crypto and integration tests |
 
 ## 🚀 Quick Start
 
@@ -105,13 +117,16 @@ PUBLIC_APP_URL=http://localhost:8080
 
 ## 🔒 Security Model
 
-QryptChat implements a **zero-knowledge architecture** where:
+QryptChat implements a **zero-knowledge post-quantum architecture** where:
 
-- 🔐 **All encryption happens client-side** before data leaves your device
-- 🗝️ **Private keys never leave your device** and are stored encrypted
-- 🔄 **Perfect forward secrecy** ensures past messages stay secure
-- 🛡️ **Quantum-resistant algorithms** protect against future quantum computers
-- 🕵️ **Metadata protection** minimizes information leakage
+- 🔐 **ML-KEM-1024 + ChaCha20-Poly1305** - FIPS 203 compliant post-quantum encryption
+- 🗝️ **Private keys never leave your device** - Stored encrypted in IndexedDB
+- 🔄 **Perfect forward secrecy** - Automatic key rotation with secure derivation
+- 🛡️ **Quantum-resistant algorithms** - Protection against both classical and quantum attacks
+- 🕵️ **Metadata protection** - Minimal server-side data with encrypted message content
+- 🔑 **Multi-recipient encryption** - Each participant gets individually encrypted messages
+- 💾 **Secure key backup** - Password-protected export with optional GPG encryption
+- 🔍 **Key verification** - Cryptographic signatures ensure key authenticity
 
 ## 📚 Documentation
 
@@ -145,7 +160,7 @@ pnpm format
 
 ## 🛣️ Roadmap
 
-### ✅ Completed (v0.1.0)
+### ✅ Completed (v1.0.0)
 - [x] 🏗️ **Core Infrastructure** - SvelteKit + Vite + PWA setup
 - [x] 🎨 **Modern UI/UX** - Responsive design with dark/light themes
 - [x] 🌍 **Internationalization** - 6 languages with RTL support
@@ -153,26 +168,37 @@ pnpm format
 - [x] 🔐 **Authentication System** - Phone-based SMS verification
 - [x] 🗄️ **Database Schema** - Complete Supabase setup with RLS
 - [x] 🔄 **Real-time Foundation** - WebSocket infrastructure ready
+- [x] 💬 **Core Messaging** - Send/receive messages with post-quantum encryption
+- [x] 🔄 **Cross-Device Sync** - Real-time synchronization across devices
+- [x] 👥 **Contact System** - Add and manage contacts via phone numbers
+- [x] 📊 **Presence System** - Online/offline status indicators
+- [x] 🔐 **Post-Quantum Encryption** - ML-KEM-1024 + ChaCha20-Poly1305 implementation
+- [x] 📁 **File Sharing** - Encrypted media and document sharing with video playback
+- [x] 🎥 **Voice & Video** - End-to-end encrypted calls with ML-KEM key exchange
+- [x] 🔑 **Key Management** - Private key import/export with password protection
+- [x] 🗂️ **Message Archiving** - Archive and restore conversations
+- [x] ⏰ **Disappearing Messages** - Auto-delete messages after specified time
+- [x] 🔔 **Real-time Notifications** - Live message delivery and status updates
 
-### 🚧 In Progress (v0.2.0)
-- [ ] 💬 **Core Messaging** - Send/receive messages with encryption
-- [ ] 🔄 **Cross-Device Sync** - Real-time synchronization across devices
-- [ ] 👥 **Contact System** - Add and manage contacts
-- [ ] 📊 **Presence System** - Online/offline status indicators
-
-### 🎯 Upcoming (v0.3.0+)
-- [ ] 👥 **Group Chats** - Multi-user conversations
-- [ ] 📁 **File Sharing** - Encrypted media and document sharing
+### 🚧 In Progress (v1.1.0)
+- [ ] 👥 **Group Chats** - Multi-user conversations (basic implementation exists)
 - [ ] 🔍 **Message Search** - Full-text search across conversations
 - [ ] 🔔 **Push Notifications** - Cross-platform notification system
-- [ ] 🎥 **Voice & Video** - End-to-end encrypted calls
-- [ ] 🔐 **Advanced Encryption** - Post-quantum cryptography implementation
+- [ ] 📱 **Mobile App Optimization** - Enhanced PWA features for mobile
 
-### 🔮 Future Vision
+### 🎯 Upcoming (v1.2.0+)
 - [ ] 🤖 **AI Integration** - Smart message suggestions and translation
 - [ ] 🌐 **Federation** - Connect with other secure messaging platforms
 - [ ] 📈 **Analytics** - Privacy-preserving usage insights
 - [ ] 🎨 **Customization** - Custom themes and chat backgrounds
+- [ ] 🔐 **Hardware Security** - WebAuthn integration for key storage
+- [ ] 📊 **Advanced Analytics** - Message delivery metrics and insights
+
+### 🔮 Future Vision
+- [ ] 🌍 **Decentralized Network** - P2P messaging without central servers
+- [ ] 🛡️ **Zero-Knowledge Proofs** - Enhanced privacy verification
+- [ ] 🔬 **Quantum Key Distribution** - Hardware-based quantum security
+- [ ] 🤝 **Cross-Platform Protocol** - Universal secure messaging standard
 
 ## 📄 License
 
