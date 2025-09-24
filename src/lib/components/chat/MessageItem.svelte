@@ -768,4 +768,32 @@
 			font-size: 0.8125rem;
 		}
 	}
+  .text-preview {
+    margin-top: 0.5rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    max-height: 400px;
+    overflow: auto;
+  }
+
+  .read-more-btn {
+    display: inline-block;
+    margin-top: 0.5rem;
+    background: var(--color-primary-500);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .read-more-btn:hover {
+    background: var(--color-primary-600);
+  }
 </style>
