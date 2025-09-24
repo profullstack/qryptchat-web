@@ -6,7 +6,7 @@ GenericName=Secure Messaging
 Comment=Quantum-resistant encrypted messaging app
 Categories=Network;Chat;InstantMessaging;
 Keywords=chat;messaging;encryption;quantum;secure;
-Icon=qryptchat
+Icon=/home/ettinger/src/qrypt.chat/qryptochat-web/static/qryptchat.png
 Exec=google-chrome --app=https://qrypt.chat
 StartupNotify=true
 NoDisplay=false
