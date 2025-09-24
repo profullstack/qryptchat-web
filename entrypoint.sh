@@ -131,61 +131,19 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
-# Function to update Railway environment variable
-update_railway_env() {
-  local var_name="$1"
-  local var_value="$2"
-  
-  # Check if we have Railway API credentials
-  if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_PROJECT_ID" ] || [ -z "$RAILWAY_SERVICE_ID" ]; then
-    echo "⚠️  Railway API credentials not found. Cannot auto-update environment variables."
-    echo "   To enable auto-update, set: RAILWAY_TOKEN, RAILWAY_PROJECT_ID, RAILWAY_SERVICE_ID"
-    return 1
-  fi
-  
-  echo "📡 Updating Railway environment variable: ${var_name}"
-  
-  # Railway API call to update environment variable
-  local response=$(curl -s -X POST \
-    "https://backboard.railway.app/graphql" \
-    -H "Authorization: Bearer $RAILWAY_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"query\": \"mutation variableUpsert(\$input: VariableUpsertInput!) { variableUpsert(input: \$input) }\",
-      \"variables\": {
-        \"input\": {
-          \"projectId\": \"$RAILWAY_PROJECT_ID\",
-          \"serviceId\": \"$RAILWAY_SERVICE_ID\",
-          \"name\": \"$var_name\",
-          \"value\": \"$var_value\"
-        }
-      }
-    }")
-  
-  if echo "$response" | grep -q "variableUpsert"; then
-    echo "✅ Successfully updated $var_name in Railway environment"
-    return 0
-  else
-    echo "❌ Failed to update Railway environment variable"
-    echo "Response: $response"
-    return 1
-  fi
-}
-
 # Final check and display
 if [ -f /var/lib/tor/hidden_service/hostname ] && [ -s /var/lib/tor/hidden_service/hostname ]; then
   ONION_URL="$(cat /var/lib/tor/hidden_service/hostname)"
   echo "🧅 TOR HIDDEN SERVICE READY!"
   echo "ONION_URL=${ONION_URL}"
   echo "Your site is accessible at: http://${ONION_URL}"
+  echo ""
+  echo "📋 To enable the Tor link in your footer:"
+  echo "   Add this to Railway environment variables:"
+  echo "   PUBLIC_ONION_URL=${ONION_URL}"
+  echo ""
   
-  # Try to update Railway environment variable
-  if update_railway_env "ONION_URL" "$ONION_URL"; then
-    echo "🚀 ONION_URL has been saved to Railway environment variables"
-    echo "   It will be available in future deployments and your application code"
-  fi
-  
-  # Also add to current .env file for this session (both server and client versions)
+  # Add to current .env file for this session
   echo "ONION_URL=${ONION_URL}" >> /app/.env
   echo "PUBLIC_ONION_URL=${ONION_URL}" >> /app/.env
   echo "📝 Added ONION_URL and PUBLIC_ONION_URL to current .env file"
@@ -201,10 +159,15 @@ else
   tail -10 /var/log/tor/notices.log 2>/dev/null || echo "No logs available"
 fi
 
-# Start your app with production environment
+# Start your app with production environment in background
 echo "Starting Node.js application on ${HOST}:${PORT}"
-NODE_ENV=production pnpm start
+NODE_ENV=production pnpm start &
+APP_PID=$!
 
-# If app exits, shut down Tor too
-kill "$TOR_PID" || true
-wait "$TOR_PID" || true
+# Wait for either the app or Tor to exit
+wait -n $APP_PID $TOR_PID
+
+# Clean up both processes
+echo "Shutting down services..."
+kill $APP_PID $TOR_PID 2>/dev/null || true
+wait $APP_PID $TOR_PID 2>/dev/null || true
