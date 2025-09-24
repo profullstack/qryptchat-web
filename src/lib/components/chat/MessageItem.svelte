@@ -208,6 +208,7 @@
 						</div>
 					{:else}
 						{#each files as file}
+							{@const displayFilename = decryptedFilenames.get(file.id) || file.originalFilename}
 							{#if file.mimeType?.startsWith('image/')}
 								<!-- Inline image display -->
 								<div class="media-attachment">
@@ -215,7 +216,7 @@
 										<div class="media-info">
 											<span class="media-icon">{getFileIcon(file.mimeType)}</span>
 											<div class="media-details">
-												<span class="media-filename">{file.originalFilename}</span>
+												<span class="media-filename">{displayFilename}</span>
 												<span class="media-size">{formatFileSize(file.fileSize)}</span>
 											</div>
 										</div>
@@ -233,7 +234,7 @@
 									{:then mediaUrl}
 										{#if mediaUrl}
 											<button type="button" class="image-button" onclick={() => downloadFile(file)} aria-label="Download image">
-												<img src={mediaUrl} alt={file.originalFilename} class="inline-image" />
+												<img src={mediaUrl} alt={displayFilename} class="inline-image" />
 											</button>
 										{:else}
 											<div class="media-error">Failed to load image</div>
