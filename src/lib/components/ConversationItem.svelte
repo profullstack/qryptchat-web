@@ -316,13 +316,6 @@
 		text-overflow: ellipsis;
 	}
 
-	.no-messages {
-		flex: 1;
-		font-size: 0.75rem;
-		color: var(--color-text-secondary);
-		font-style: italic;
-	}
-
 	.unread-indicator {
 		width: 8px;
 		height: 8px;

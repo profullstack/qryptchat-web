@@ -5,6 +5,70 @@ set -euo pipefail
 export HOST="${HOST:-0.0.0.0}"
 export PORT="${PORT:-8080}"
 
+# Generate .env file from Railway environment variables
+echo "Generating .env file from Railway environment variables..."
+cat > /app/.env <<EOF
+# Generated from Railway environment variables
+# Supabase Configuration
+PUBLIC_SUPABASE_URL=${PUBLIC_SUPABASE_URL:-}
+PUBLIC_SUPABASE_ANON_KEY=${PUBLIC_SUPABASE_ANON_KEY:-}
+SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD:-}
+SUPABASE_ACCESS_TOKEN=${SUPABASE_ACCESS_TOKEN:-}
+SUPABASE_PROJECT_REF=${SUPABASE_PROJECT_REF:-}
+PROJECT_REF=${PROJECT_REF:-}
+SUPABASE_JWT_DISCOVERY_URL=${SUPABASE_JWT_DISCOVERY_URL:-}
+GOTRUE_OTP_EXPIRY=${GOTRUE_OTP_EXPIRY:-300}
+GOTRUE_DISABLE_SIGNUP=${GOTRUE_DISABLE_SIGNUP:-false}
+
+# Application Configuration
+PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://localhost:8080}
+PUBLIC_APP_NAME=${PUBLIC_APP_NAME:-QryptChat}
+PUBLIC_APP_VERSION=${PUBLIC_APP_VERSION:-1.0.0}
+SITE_URL=${SITE_URL:-}
+
+# AI Configuration (OpenAI)
+OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+# Email Configuration
+SMTP_HOST=${SMTP_HOST:-}
+SMTP_PORT=${SMTP_PORT:-587}
+SMTP_USER=${SMTP_USER:-}
+SMTP_PASS=${SMTP_PASS:-}
+
+# Mailgun Configuration
+MAILGUN_API_KEY=${MAILGUN_API_KEY:-}
+MAILGUN_DOMAIN=${MAILGUN_DOMAIN:-}
+FROM_EMAIL=${FROM_EMAIL:-}
+OTP_TO_EMAIL=${OTP_TO_EMAIL:-}
+
+# SMS (Twilio) Configuration
+TWILIO_SID=${TWILIO_SID:-}
+TWILIO_SECRET=${TWILIO_SECRET:-}
+TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
+TWILIO_MESSAGE_SERVICE_SID=${TWILIO_MESSAGE_SERVICE_SID:-}
+
+# SMS Configuration
+ENABLE_PHONE_CONFIRMATIONS=${ENABLE_PHONE_CONFIRMATIONS:-true}
+ENABLE_PHONE_CHANGE_CONFIRMATIONS=${ENABLE_PHONE_CHANGE_CONFIRMATIONS:-true}
+SMS_TEMPLATE=${SMS_TEMPLATE:-"Your code is {{ .Code }}"}
+
+# Development Configuration
+NODE_ENV=${NODE_ENV:-production}
+VITE_LOG_LEVEL=${VITE_LOG_LEVEL:-info}
+
+# Security Configuration
+ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+
+# Runtime Configuration
+HOST=${HOST}
+PORT=${PORT}
+EOF
+
+echo ".env file generated successfully"
+
 # Write tor config (points onion:80 -> your local app on $PORT)
 cat >/etc/tor/torrc <<EOF
 DataDirectory /var/lib/tor
