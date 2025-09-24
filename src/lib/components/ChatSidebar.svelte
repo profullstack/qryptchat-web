@@ -772,18 +772,17 @@
 
 	/* Note to Self section styles */
 	.note-to-self-section {
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
 		border-bottom: 1px solid var(--color-border-primary);
-		padding-bottom: 1rem;
+		padding-bottom: 0.5rem;
 	}
 
 	.note-to-self-section :global(.conversation-item) {
 		background: linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100));
 		border: 1px solid var(--color-primary-200);
 		border-radius: 0.75rem;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0;
 	}
-
 
 	.note-to-self-section :global(.conversation-item.active) {
 		background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
