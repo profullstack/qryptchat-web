@@ -211,6 +211,9 @@ export class PrivateKeyManager {
 			CryptoUtils.secureClear(decryptionKey);
 
 			console.log('🔑 Post-quantum private keys imported successfully');
+			
+			// Sync public key to database after import
+			await this._syncPublicKeyToDatabase();
 
 		} catch (error) {
 			throw new Error(`Failed to import post-quantum private keys: ${error instanceof Error ? error.message : String(error)}`);
@@ -540,6 +543,47 @@ export class PrivateKeyManager {
 		
 		// Clean up
 		URL.revokeObjectURL(url);
+	}
+
+	/**
+		* Sync the current user's public key to the database
+		* This should be called after importing keys to ensure database sync
+		* @private
+		*/
+	async _syncPublicKeyToDatabase() {
+		try {
+			if (!browser) return;
+
+			// Get the current user's public key from post-quantum encryption
+			await postQuantumEncryption.initialize();
+			const publicKey = await postQuantumEncryption.getPublicKey();
+			
+			if (!publicKey) {
+				console.warn('🔑 ⚠️ No public key available to sync to database');
+				return;
+			}
+
+			// Sync to database via API
+			const response = await fetch('/api/crypto/public-keys', {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					public_key: publicKey,
+					key_type: 'ML-KEM-1024'
+				})
+			});
+
+			if (response.ok) {
+				console.log('🔑 ✅ Successfully synced public key to database');
+			} else {
+				const errorData = await response.json().catch(() => ({}));
+				console.error('🔑 ❌ Failed to sync public key to database:', errorData.error || response.statusText);
+			}
+		} catch (error) {
+			console.error('🔑 ❌ Exception syncing public key to database:', error);
+		}
 	}
 }
 

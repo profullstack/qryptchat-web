@@ -34,10 +34,6 @@
 	let keyBackupPassword = $state('');
 	let confirmKeyBackupPassword = $state('');
 	let showBackupPassword = $state(false);
-	let useGPGBackup = $state(true);
-	let gpgBackupPassword = $state('');
-	let confirmGPGBackupPassword = $state('');
-	let showGPGBackupPassword = $state(false);
 
 	// Redirect if already authenticated
 	onMount(() => {
@@ -280,43 +276,16 @@
 			return;
 		}
 
-		// Validate GPG password if GPG backup is enabled
-		if (useGPGBackup) {
-			if (!gpgBackupPassword || gpgBackupPassword.trim().length === 0) {
-				messages.error('Please enter a GPG password for additional encryption');
-				return;
-			}
-			
-			if (gpgBackupPassword !== confirmGPGBackupPassword) {
-				messages.error('GPG passwords do not match');
-				return;
-			}
-			
-			if (gpgBackupPassword.length < 8) {
-				messages.error('GPG password must be at least 8 characters long');
-				return;
-			}
-		}
 		
 		try {
-			let exportedData;
-			if (useGPGBackup) {
-				// Export with GPG encryption
-				exportedData = await privateKeyManager.exportPrivateKeysWithGPG(keyBackupPassword, gpgBackupPassword);
-				privateKeyManager.downloadGPGEncryptedKeys(exportedData);
-				messages.success('Key backup downloaded with GPG encryption! Welcome to QryptChat!');
-			} else {
-				// Standard export
-				exportedData = await privateKeyManager.exportPrivateKeys(keyBackupPassword);
-				privateKeyManager.downloadExportedKeys(exportedData);
-				messages.success('Key backup downloaded! Welcome to QryptChat!');
-			}
+			// Standard export
+			const exportedData = await privateKeyManager.exportPrivateKeys(keyBackupPassword);
+			privateKeyManager.downloadExportedKeys(exportedData);
+			messages.success('Key backup downloaded! Welcome to QryptChat!');
 			
 			// Clear passwords and proceed to chat
 			keyBackupPassword = '';
 			confirmKeyBackupPassword = '';
-			gpgBackupPassword = '';
-			confirmGPGBackupPassword = '';
 			showKeyBackupPrompt = false;
 			
 			goto('/chat?welcome=true');
@@ -598,80 +567,18 @@
 						</div>
 					</div>
 
-					<!-- GPG Encryption Option -->
-					<div class="input-group">
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								bind:checked={useGPGBackup}
-								disabled={$isLoading}
-							/>
-							<span class="checkbox-text">🔐 Enable GPG encryption (recommended)</span>
-						</label>
-						<p class="help-text-small">
-							Adds an additional layer of GPG encryption for maximum security
-						</p>
-					</div>
-
-					{#if useGPGBackup}
-						<div class="gpg-backup-section">
-							<div class="input-group">
-								<label for="gpg-backup-password">GPG Password *</label>
-								<div class="password-input">
-									<input
-										id="gpg-backup-password"
-										type={showGPGBackupPassword ? 'text' : 'password'}
-										bind:value={gpgBackupPassword}
-										placeholder="Enter a strong GPG password"
-										required
-										disabled={$isLoading}
-									/>
-									<button
-										type="button"
-										class="toggle-password"
-										onclick={() => showGPGBackupPassword = !showGPGBackupPassword}
-										disabled={$isLoading}
-									>
-										{showGPGBackupPassword ? '👁️' : '👁️‍🗨️'}
-									</button>
-								</div>
-							</div>
-							
-							<div class="input-group">
-								<label for="confirm-gpg-backup-password">Confirm GPG Password *</label>
-								<div class="password-input">
-									<input
-										id="confirm-gpg-backup-password"
-										type={showGPGBackupPassword ? 'text' : 'password'}
-										bind:value={confirmGPGBackupPassword}
-										placeholder="Confirm your GPG password"
-										required
-										disabled={$isLoading}
-									/>
-									<button
-										type="button"
-										class="toggle-password"
-										onclick={() => showGPGBackupPassword = !showGPGBackupPassword}
-										disabled={$isLoading}
-									>
-										{showGPGBackupPassword ? '👁️' : '👁️‍🗨️'}
-									</button>
-								</div>
-							</div>
-						</div>
-					{/if}
 					
 					<div class="button-group">
 						<button
 							type="submit"
-							disabled={$isLoading || !keyBackupPassword || !confirmKeyBackupPassword || (useGPGBackup && (!gpgBackupPassword || !confirmGPGBackupPassword))}
+							disabled={$isLoading || !keyBackupPassword || !confirmKeyBackupPassword}
 							class="primary-button"
 						>
 							{#if $isLoading}
 								<span class="loading-spinner"></span>
 								Creating Backup...
 							{:else}
-								{useGPGBackup ? '🔐 Download GPG Backup' : '📁 Download Backup'}
+								📁 Download Backup
 							{/if}
 						</button>
 						
