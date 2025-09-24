@@ -13,6 +13,9 @@
 	
 	// Reactive state for SMS notifications enabled
 	let smsNotificationsEnabled = $state(user?.sms_notifications_enabled ?? false);
+
+	// Reactive state for Web notifications
+	let webNotificationsEnabled = $state(localStorage.getItem('notifications-enabled') === 'true');
 	
 	/**
 	 * Update SMS notification preference
@@ -89,14 +92,14 @@
 		<label class="toggle-label">
 			<input
 				type="checkbox"
+				bind:checked={webNotificationsEnabled}
 				onchange={async (event) => {
-					const target = event.currentTarget;
-					if (target && target.checked) {
+					if (webNotificationsEnabled) {
 						const permission = await Notification.requestPermission();
 						if (permission === 'granted') {
 							localStorage.setItem('notifications-enabled', 'true');
 						} else {
-							target.checked = false;
+							webNotificationsEnabled = false;
 							localStorage.setItem('notifications-enabled', 'false');
 						}
 					} else {
@@ -107,7 +110,7 @@
 			/>
 			<span class="toggle-slider"></span>
 			<span class="toggle-text">
-				{localStorage.getItem('notifications-enabled') === 'true'
+				{webNotificationsEnabled
 					? 'Web notifications enabled'
 					: 'Web notifications disabled'}
 			</span>
