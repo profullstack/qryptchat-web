@@ -263,7 +263,7 @@
 										<div class="media-info">
 											<span class="media-icon">{getFileIcon(file.mimeType)}</span>
 											<div class="media-details">
-												<span class="media-filename">{file.originalFilename}</span>
+												<span class="media-filename">{displayFilename}</span>
 												<span class="media-size">{formatFileSize(file.fileSize)}</span>
 											</div>
 										</div>
@@ -332,7 +332,7 @@
 										<div class="media-info">
 											<span class="media-icon">{getFileIcon(file.mimeType)}</span>
 											<div class="media-details">
-												<span class="media-filename">{file.originalFilename}</span>
+												<span class="media-filename">{displayFilename}</span>
 												<span class="media-size">{formatFileSize(file.fileSize)}</span>
 											</div>
 										</div>

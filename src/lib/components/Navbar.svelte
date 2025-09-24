@@ -122,7 +122,6 @@
 				<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>{$t('nav.home')}</a>
 				{#if $isAuthenticated}
 					<a href="/chat" class="nav-link" class:active={$page.url.pathname === '/chat'}>{$t('nav.chat')}</a>
-					<a href="/encryption-test" class="nav-link" class:active={$page.url.pathname === '/encryption-test'}>Encryption Test</a>
 				{/if}
 			</div>
 			
@@ -304,7 +303,6 @@
 					<a href="/" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.home')}</a>
 					{#if $isAuthenticated}
 						<a href="/chat" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.chat')}</a>
-						<a href="/encryption-test" class="mobile-nav-link" on:click={closeMobileMenu}>Encryption Test</a>
 						{#if $user?.username}
 							<a href="/u/{$user.username}" class="mobile-nav-link" on:click={closeMobileMenu}>Profile</a>
 						{/if}

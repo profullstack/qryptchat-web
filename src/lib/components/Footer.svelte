@@ -81,10 +81,11 @@
 					{ key: 'footer.privacy', href: '/privacy' },
 					{ key: 'footer.terms', href: '/terms' },
 					{ key: 'footer.contact', href: '/contact' },
-					{ key: 'footer.warrantCanary', href: '/warrant-canary' }
+					{ key: 'footer.warrantCanary', href: '/warrant-canary' },
+					{ key: 'Encryption Test', href: '/encryption-test' }
 				] as link}
 					<a href={link.href} class="footer-link">
-						{$t(link.key)}
+						{link.key.startsWith('footer.') ? $t(link.key) : link.key}
 					</a>
 				{/each}
 			</div>
