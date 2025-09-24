@@ -453,11 +453,6 @@
 		border-top: 1px solid var(--color-border);
 		background: var(--color-surface);
 		z-index: 100;
-		/* Explicitly disable Safari's backdrop blur */
-		-webkit-backdrop-filter: none !important;
-		backdrop-filter: none !important;
-		/* Ensure 100% opaque background */
-		background: var(--color-surface) !important;
 	}
 
 	.upload-error {
@@ -748,20 +743,7 @@
 		.message-input-container {
 			position: fixed;
 			padding: 0.75rem;
-			/* Use wrapper approach for safe area */
-			padding-bottom: 0.75rem;
-		}
-		
-		/* Safe area wrapper to prevent Safari blur interference */
-		.message-input-container::after {
-			content: '';
-			position: absolute;
-			bottom: 0;
-			left: 0;
-			right: 0;
-			height: env(safe-area-inset-bottom);
-			background: var(--color-surface);
-			z-index: -1;
+			padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 		}
 
 		.input-wrapper {
