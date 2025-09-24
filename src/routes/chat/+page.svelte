@@ -89,25 +89,36 @@
 	 * Start ML-KEM encrypted voice call
 	 */
 	async function handleMLKEMVoiceCall() {
-		if (!currentConversation) return;
+		if (!currentConversation) {
+			console.error('🔐 No current conversation');
+			alert('Cannot start call: No conversation selected');
+			return;
+		}
 		
 		try {
 			console.log('🔐 Starting ML-KEM encrypted voice call');
-			
-			// For 1:1 calls, get the other participant
-			let targetUserId = null;
-			if (currentConversation.type === 'direct' && currentConversation.participants) {
-				const otherParticipant = currentConversation.participants.find(p => p.id !== $user?.id);
-				targetUserId = otherParticipant?.id;
-			}
-			
-			if (!targetUserId) {
-				alert('Cannot start call: No valid participant found');
-				return;
-			}
+			console.log('🔐 Current conversation:', currentConversation);
+			console.log('🔐 Current user:', $user);
 			
 			if (currentConversation.type === 'direct') {
-				// 1:1 voice call
+				// For 1:1 calls, get the other participant
+				let targetUserId = null;
+				
+				if (currentConversation.participants && Array.isArray(currentConversation.participants)) {
+					console.log('🔐 Participants:', currentConversation.participants);
+					const otherParticipant = currentConversation.participants.find(p => p.id !== $user?.id);
+					targetUserId = otherParticipant?.id;
+					console.log('🔐 Found other participant:', otherParticipant);
+				} else {
+					console.error('🔐 No participants array found in conversation');
+				}
+				
+				if (!targetUserId) {
+					console.error('🔐 No target user ID found');
+					alert(`Cannot start call: No valid participant found\n\nDebug info:\n- Conversation type: ${currentConversation.type}\n- Has participants: ${!!currentConversation.participants}\n- Participants count: ${currentConversation.participants?.length || 0}\n- Current user ID: ${$user?.id}`);
+					return;
+				}
+				
 				// Initialize ML-KEM call manager if not already done
 				if (!mlkemCallManager && wsChat.getWebSocket()) {
 					mlkemCallManager = new MLKEMCallManager(wsChat.getWebSocket());
@@ -115,11 +126,15 @@
 				}
 				
 				if (mlkemCallManager) {
+					console.log('🔐 Initiating call to:', targetUserId);
 					await mlkemCallManager.initiateCall(targetUserId, false);
 				}
 			} else if (currentConversation.type === 'group') {
 				// Group voice call
 				await handleGroupCall(false);
+			} else {
+				console.log('🔐 Conversation type not supported for calls:', currentConversation.type);
+				alert(`Cannot start call: Conversation type "${currentConversation.type}" not supported for calls`);
 			}
 			
 		} catch (error) {
