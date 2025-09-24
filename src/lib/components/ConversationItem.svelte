@@ -154,11 +154,11 @@
 	}
 
 	.conversation-item:hover {
-		background: var(--color-surface-hover);
+		background: rgba(0, 0, 0, 0.05);
 	}
 
 	.conversation-item.active {
-		background: var(--color-primary-100);
+		background: rgba(0, 0, 0, 0.1);
 		border-right: 3px solid var(--color-primary-500);
 	}
 
@@ -341,8 +341,12 @@
 
 	/* Dark mode support */
 	@media (prefers-color-scheme: dark) {
+		.conversation-item:hover {
+			background: rgba(255, 255, 255, 0.05);
+		}
+
 		.conversation-item.active {
-			background: var(--color-primary-900);
+			background: rgba(255, 255, 255, 0.1);
 		}
 
 		.conversation-item.active .conversation-name {

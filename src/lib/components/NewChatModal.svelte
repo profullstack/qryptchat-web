@@ -975,7 +975,7 @@
 			--color-border: #374151;
 			--color-text-primary: #f9fafb;
 			--color-text-secondary: #9ca3af;
-			--color-surface-hover: #374151;
+			--color-surface-hover: #4f617e;
 			--color-gray-200: #4b5563;
 			--color-gray-300: #6b7280;
 			--color-primary-50: #1e3a8a;
