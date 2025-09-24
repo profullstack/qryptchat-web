@@ -224,6 +224,37 @@
 		}
 	}
 
+	// Handle reconnect
+	async function handleReconnect() {
+		try {
+			console.log('🔄 Manual reconnect triggered');
+			
+			// Get token from localStorage
+			const storedSession = localStorage.getItem('qrypt_session');
+			if (storedSession) {
+				const session = JSON.parse(storedSession);
+				if (session.access_token) {
+					// Disconnect first, then reconnect
+					wsChat.disconnect();
+					
+					// Wait a moment before reconnecting
+					setTimeout(() => {
+						wsChat.connect(session.access_token);
+					}, 1000);
+				} else {
+					console.error('No access token found for reconnection');
+					alert('Cannot reconnect: No valid session found. Please refresh the page.');
+				}
+			} else {
+				console.error('No session found for reconnection');
+				alert('Cannot reconnect: No valid session found. Please refresh the page.');
+			}
+		} catch (error) {
+			console.error('Failed to reconnect:', error);
+			alert('Reconnection failed. Please refresh the page.');
+		}
+	}
+
 	// Format last message time
 	function formatMessageTime(/** @type {string | null | undefined} */ timestamp) {
 		if (!timestamp) return '';
@@ -259,7 +290,31 @@
 			</div>
 			<div class="user-details">
 				<div class="user-name">{$user?.displayName || $user?.username}</div>
-				<div class="user-status">Online</div>
+				<div class="connection-status">
+					<div class="status-indicator" class:online={$isConnected && $isAuthenticated} class:offline={!$isConnected} class:connecting={$isConnected && !$isAuthenticated}></div>
+					<span class="status-text">
+						{#if $isConnected && $isAuthenticated}
+							Online
+						{:else if $isConnected && !$isAuthenticated}
+							Connecting...
+						{:else}
+							Offline
+						{/if}
+					</span>
+					{#if !$isConnected}
+						<button
+							class="reconnect-button"
+							onclick={handleReconnect}
+							title="Reconnect to server"
+							aria-label="Reconnect to server"
+						>
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M1 4v6h6M23 20v-6h-6"/>
+								<path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+							</svg>
+						</button>
+					{/if}
+				</div>
 			</div>
 		</div>
 		
@@ -545,6 +600,65 @@
 	.user-status {
 		font-size: 0.75rem;
 		color: var(--color-success);
+	}
+
+	.connection-status {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.75rem;
+		margin-top: 0.25rem;
+	}
+
+	.status-indicator {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.status-indicator.online {
+		background: var(--color-success);
+		animation: pulse 2s infinite;
+	}
+
+	.status-indicator.offline {
+		background: var(--color-error);
+	}
+
+	.status-indicator.connecting {
+		background: var(--color-warning);
+		animation: pulse 1s infinite;
+	}
+
+	@keyframes pulse {
+		0% { opacity: 1; }
+		50% { opacity: 0.5; }
+		100% { opacity: 1; }
+	}
+
+	.reconnect-button {
+		background: none;
+		border: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		padding: 0.25rem;
+		border-radius: 0.25rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s ease;
+		margin-left: auto;
+	}
+
+	.reconnect-button:hover {
+		background: var(--color-bg-secondary);
+		color: var(--color-text-primary);
+	}
+
+	.reconnect-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.header-actions {
