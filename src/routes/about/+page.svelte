@@ -466,22 +466,35 @@
 		color: white;
 		text-decoration: none;
 		border-radius: 0.75rem;
-		font-weight: 500;
+		font-weight: 600;
+		font-size: 0.95rem;
 		transition: all 0.3s ease;
 		box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
 	.community-link:hover {
 		transform: translateY(-2px);
 		box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+		color: white;
 	}
 
 	.community-link.discord {
 		background: linear-gradient(135deg, #5865f2, #7289da);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	}
+
+	.community-link.discord:hover {
+		color: white;
 	}
 
 	.community-link.github {
 		background: linear-gradient(135deg, #24292f, #4a5568);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+	}
+
+	.community-link.github:hover {
+		color: white;
 	}
 
 	@media (max-width: 768px) {
