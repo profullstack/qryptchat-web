@@ -793,7 +793,6 @@
 	.note-to-self-section :global(.conversation-item.active) {
 		background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
 		color: white;
-		box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
 	}
 
 	/* Archive toggle styles */
