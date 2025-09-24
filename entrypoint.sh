@@ -110,8 +110,9 @@ else
   echo "Timed out waiting for onion hostname" >&2
 fi
 
-# Start your app exactly as before
-pnpm start
+# Start your app with production environment
+echo "Starting Node.js application on ${HOST}:${PORT}"
+NODE_ENV=production pnpm start
 
 # If app exits, shut down Tor too
 kill "$TOR_PID" || true
