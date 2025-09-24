@@ -217,6 +217,21 @@
 		border-radius: 50%;
 	}
 
+	.note-to-self-icon {
+		width: 100%;
+		height: 100%;
+		background: var(--color-primary-100);
+		color: var(--color-primary-600);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+	}
+
+	.note-to-self-icon svg {
+		flex-shrink: 0;
+	}
+
 	.conversation-content {
 		flex: 1;
 		min-width: 0;
