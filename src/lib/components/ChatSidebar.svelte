@@ -784,11 +784,6 @@
 		margin-bottom: 0.5rem;
 	}
 
-	.note-to-self-section :global(.conversation-item:hover) {
-		background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-200));
-		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-	}
 
 	.note-to-self-section :global(.conversation-item.active) {
 		background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
