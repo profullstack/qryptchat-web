@@ -71,7 +71,8 @@
 					{ key: 'footer.security', href: '/security' },
 					{ key: 'footer.privacy', href: '/privacy' },
 					{ key: 'footer.terms', href: '/terms' },
-					{ key: 'footer.contact', href: '/contact' }
+					{ key: 'footer.contact', href: '/contact' },
+					{ key: 'footer.warrantCanary', href: '/warrant-canary' }
 				] as link}
 					<a href={link.href} class="footer-link">
 						{$t(link.key)}
