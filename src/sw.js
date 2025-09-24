@@ -74,37 +74,52 @@ registerRoute(
 
 // Handle push notifications
 self.addEventListener('push', (event) => {
-	if (!event.data) return;
+if (!event.data) return;
 
-	try {
-		const data = event.data.json();
-		const { title, body, icon, badge, tag, data: notificationData } = data;
+// Check user preference via IndexedDB/localStorage
+event.waitUntil(
+	(async () => {
+		const pref = await caches.open('settings-cache')
+			.then(cache => cache.match('notifications-pref'))
+			.then(res => res?.text())
+			.catch(() => null);
 
-		const options = {
-			body,
-			icon: icon || '/icons/icon-192x192.png',
-			badge: badge || '/icons/badge-72x72.png',
-			tag: tag || 'qryptchat-message',
-			data: notificationData,
-			requireInteraction: true,
-			actions: [
-				{
-					action: 'reply',
-					title: 'Reply',
-					icon: '/icons/action-reply.png'
-				},
-				{
-					action: 'view',
-					title: 'View',
-					icon: '/icons/action-view.png'
-				}
-			]
-		};
+		if (pref === 'false') {
+			console.log('Notifications disabled by user preference');
+			return;
+		}
 
-		event.waitUntil(self.registration.showNotification(title, options));
-	} catch (error) {
-		console.error('Error handling push notification:', error);
-	}
+		try {
+			const data = event.data.json();
+			const { title, body, icon, badge, tag, data: notificationData } = data;
+
+			const options = {
+				body,
+				icon: icon || '/icons/icon-192x192.png',
+				badge: badge || '/icons/badge-72x72.png',
+				tag: tag || 'qryptchat-message',
+				data: notificationData,
+				requireInteraction: true,
+				actions: [
+					{
+						action: 'reply',
+						title: 'Reply',
+						icon: '/icons/action-reply.png'
+					},
+					{
+						action: 'view',
+						title: 'View',
+						icon: '/icons/action-view.png'
+					}
+				]
+			};
+
+			await self.registration.showNotification(title, options);
+		} catch (error) {
+			console.error('Error handling push notification:', error);
+		}
+	})()
+);
 });
 
 // Handle notification clicks

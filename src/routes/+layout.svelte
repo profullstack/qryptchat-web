@@ -44,13 +44,8 @@
 				console.error('SW registration failed', err);
 			});
 	}
-
-	// Request Notification Permission
-	if ('Notification' in window && Notification.permission === 'default') {
-		Notification.requestPermission().then((perm) => {
-			console.log('Notification permission:', perm);
-		});
-	}
+	// NOTE: Notification.requestPermission must be triggered via a user action (button click),
+	// so we cannot safely call it directly here.
 });
 </script>
 

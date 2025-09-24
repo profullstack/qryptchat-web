@@ -63,7 +63,7 @@
 	<p class="description">
 		Get SMS notifications when you receive messages while you're away from the app.
 	</p>
-	
+
 	<div class="setting-item">
 		<label class="toggle-label">
 			<input
@@ -76,6 +76,40 @@
 			<span class="toggle-slider"></span>
 			<span class="toggle-text">
 				{smsNotificationsEnabled ? 'SMS notifications enabled' : 'SMS notifications disabled'}
+			</span>
+		</label>
+	</div>
+
+	<h3>Web Notifications</h3>
+	<p class="description">
+		Enable browser notifications for new messages.
+	</p>
+
+	<div class="setting-item">
+		<label class="toggle-label">
+			<input
+				type="checkbox"
+				onchange={async (event) => {
+					const target = event.currentTarget;
+					if (target && target.checked) {
+						const permission = await Notification.requestPermission();
+						if (permission === 'granted') {
+							localStorage.setItem('notifications-enabled', 'true');
+						} else {
+							target.checked = false;
+							localStorage.setItem('notifications-enabled', 'false');
+						}
+					} else {
+						localStorage.setItem('notifications-enabled', 'false');
+					}
+				}}
+				class="toggle-input"
+			/>
+			<span class="toggle-slider"></span>
+			<span class="toggle-text">
+				{localStorage.getItem('notifications-enabled') === 'true'
+					? 'Web notifications enabled'
+					: 'Web notifications disabled'}
 			</span>
 		</label>
 	</div>
