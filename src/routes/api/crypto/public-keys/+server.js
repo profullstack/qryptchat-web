@@ -210,5 +210,47 @@ export async function POST({ request }) {
 	}
 }
 
-// PUT endpoint removed - public keys are auto-generated during account creation
-// and should not be uploaded manually for proper E2E encryption security
+/**
+ * PUT /api/crypto/public-keys
+ * Update/sync user's public key to database
+ */
+export async function PUT({ request }) {
+	try {
+		// Authenticate user
+		const { user, error: authError } = await authenticateUser(request);
+		if (authError || !user) {
+			return json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		const { public_key, key_type = 'ML-KEM-1024' } = await request.json();
+		
+		if (!public_key) {
+			return json({ error: 'Missing public_key' }, { status: 400 });
+		}
+
+		// Sync public key to database using the upsert function
+		const { data: result, error } = await getServiceRoleClient()
+			.rpc('upsert_user_public_key', {
+				target_user_id: user.auth_user_id, // Use auth_user_id for the function
+				public_key_param: public_key,
+				key_type_param: key_type
+			});
+
+		if (error) {
+			console.error('Error syncing public key:', error);
+			return json({ error: 'Failed to sync public key' }, { status: 500 });
+		}
+
+		console.log(`🔑 ✅ Successfully synced public key for user ${user.id} (${user.username})`);
+		
+		return json({
+			success: true,
+			message: 'Public key synced successfully',
+			key_id: result
+		});
+
+	} catch (error) {
+		console.error('Error in PUT /api/crypto/public-keys:', error);
+		return json({ error: 'Internal server error' }, { status: 500 });
+	}
+}
