@@ -430,7 +430,7 @@
 		background: var(--color-bg-primary);
 		border-bottom: 1px solid var(--color-border-primary);
 		position: sticky;
-		top: 4rem; /* Position below the main navbar (4rem = 64px) */
+		top: 0; /* Position below the main navbar (4rem = 64px) */
 		z-index: 10;
 		min-height: 60px;
 		flex-shrink: 0;
