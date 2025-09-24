@@ -127,12 +127,7 @@
 						{truncateMessage(conversation.last_message_content)}
 					</span>
 				</div>
-			{:else}
-				<div class="no-messages">
-					{isRoom ? 'No messages in this room' : 'No messages yet'}
-				</div>
 			{/if}
-
 		</div>
 	</div>
 </button>
