@@ -221,7 +221,7 @@
 						</div>
 					{:else}
 						{#each files as file}
-							{@const displayFilename = decryptedFilenames.get(file.id) || file.originalFilename}
+							{@const displayFilename = decryptedFilenames.get(file.id)}
 							{#if file.mimeType?.startsWith('image/')}
 								<!-- Inline image display -->
 								<div class="media-attachment">
