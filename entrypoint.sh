@@ -91,23 +91,114 @@ mkdir -p /var/lib/tor/hidden_service /var/log/tor
 chown -R debian-tor:debian-tor /var/lib/tor /var/log/tor
 chmod 700 /var/lib/tor/hidden_service || true
 
-# Start Tor
+# Start Tor with verbose logging
+echo "Starting Tor daemon..."
 tor -f /etc/tor/torrc &
 TOR_PID=$!
 
+# Give Tor a moment to start
+sleep 2
+
+# Check if Tor process is running
+if ! kill -0 $TOR_PID 2>/dev/null; then
+  echo "ERROR: Tor failed to start" >&2
+  echo "Checking Tor logs:" >&2
+  cat /var/log/tor/notices.log 2>/dev/null || echo "No Tor logs found" >&2
+  exit 1
+fi
+
+echo "Tor started successfully (PID: $TOR_PID)"
+
 # Wait for onion hostname (first run generates keys)
+echo "Waiting for Tor to generate hidden service keys..."
 for i in $(seq 1 60); do
+  echo "Checking for hostname file... attempt $i/60"
+  
+  # Check if hostname file exists and has content
   if [ -s /var/lib/tor/hidden_service/hostname ]; then
+    echo "Hostname file found!"
     break
   fi
+  
+  # Show directory contents for debugging
+  if [ $i -eq 10 ] || [ $i -eq 30 ]; then
+    echo "Debug: Contents of /var/lib/tor/hidden_service:"
+    ls -la /var/lib/tor/hidden_service/ 2>/dev/null || echo "Directory not accessible"
+    echo "Debug: Tor log tail:"
+    tail -5 /var/log/tor/notices.log 2>/dev/null || echo "No logs available"
+  fi
+  
   sleep 1
 done
 
-if [ -f /var/lib/tor/hidden_service/hostname ]; then
+# Function to update Railway environment variable
+update_railway_env() {
+  local var_name="$1"
+  local var_value="$2"
+  
+  # Check if we have Railway API credentials
+  if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_PROJECT_ID" ] || [ -z "$RAILWAY_SERVICE_ID" ]; then
+    echo "⚠️  Railway API credentials not found. Cannot auto-update environment variables."
+    echo "   To enable auto-update, set: RAILWAY_TOKEN, RAILWAY_PROJECT_ID, RAILWAY_SERVICE_ID"
+    return 1
+  fi
+  
+  echo "📡 Updating Railway environment variable: ${var_name}"
+  
+  # Railway API call to update environment variable
+  local response=$(curl -s -X POST \
+    "https://backboard.railway.app/graphql" \
+    -H "Authorization: Bearer $RAILWAY_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"query\": \"mutation variableUpsert(\$input: VariableUpsertInput!) { variableUpsert(input: \$input) }\",
+      \"variables\": {
+        \"input\": {
+          \"projectId\": \"$RAILWAY_PROJECT_ID\",
+          \"serviceId\": \"$RAILWAY_SERVICE_ID\",
+          \"name\": \"$var_name\",
+          \"value\": \"$var_value\"
+        }
+      }
+    }")
+  
+  if echo "$response" | grep -q "variableUpsert"; then
+    echo "✅ Successfully updated $var_name in Railway environment"
+    return 0
+  else
+    echo "❌ Failed to update Railway environment variable"
+    echo "Response: $response"
+    return 1
+  fi
+}
+
+# Final check and display
+if [ -f /var/lib/tor/hidden_service/hostname ] && [ -s /var/lib/tor/hidden_service/hostname ]; then
   ONION_URL="$(cat /var/lib/tor/hidden_service/hostname)"
+  echo "🧅 TOR HIDDEN SERVICE READY!"
   echo "ONION_URL=${ONION_URL}"
+  echo "Your site is accessible at: http://${ONION_URL}"
+  
+  # Try to update Railway environment variable
+  if update_railway_env "ONION_URL" "$ONION_URL"; then
+    echo "🚀 ONION_URL has been saved to Railway environment variables"
+    echo "   It will be available in future deployments and your application code"
+  fi
+  
+  # Also add to current .env file for this session (both server and client versions)
+  echo "ONION_URL=${ONION_URL}" >> /app/.env
+  echo "PUBLIC_ONION_URL=${ONION_URL}" >> /app/.env
+  echo "📝 Added ONION_URL and PUBLIC_ONION_URL to current .env file"
+  
 else
-  echo "Timed out waiting for onion hostname" >&2
+  echo "❌ Failed to generate onion hostname" >&2
+  echo "Debug info:"
+  echo "- Hostname file exists: $([ -f /var/lib/tor/hidden_service/hostname ] && echo 'YES' || echo 'NO')"
+  echo "- Hostname file size: $(stat -c%s /var/lib/tor/hidden_service/hostname 2>/dev/null || echo 'N/A')"
+  echo "- Directory permissions: $(ls -ld /var/lib/tor/hidden_service/ 2>/dev/null || echo 'N/A')"
+  echo "- Tor process running: $(kill -0 $TOR_PID 2>/dev/null && echo 'YES' || echo 'NO')"
+  echo "- Recent Tor logs:"
+  tail -10 /var/log/tor/notices.log 2>/dev/null || echo "No logs available"
 fi
 
 # Start your app with production environment

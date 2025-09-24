@@ -1,5 +1,13 @@
 <script>
 	import { t } from '$lib/stores/i18n.js';
+	import { browser } from '$app/environment';
+	import { PUBLIC_ONION_URL } from '$env/static/public';
+	
+	// Check if we're on a .onion domain
+	$: isOnionSite = browser && window.location.hostname.endsWith('.onion');
+	
+	// Use PUBLIC_ONION_URL directly from environment
+	const onionUrl = PUBLIC_ONION_URL;
 	
 	const socialLinks = [
 		{
@@ -123,6 +131,18 @@
 					<div class="badge-dot"></div>
 					<span>NIST Approved</span>
 				</div>
+				
+				{#if onionUrl && !isOnionSite}
+					<a href="http://{onionUrl}" class="badge tor-available" title="Access via Tor Browser">
+						<div class="badge-dot"></div>
+						<span>🧅 Tor Available</span>
+					</a>
+				{:else if isOnionSite}
+					<div class="badge tor-enabled">
+						<div class="badge-dot"></div>
+						<span>🧅 Tor Enabled</span>
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -372,5 +392,35 @@
 	.nist-approved .badge-dot {
 		background-color: #60a5fa;
 		animation-delay: 0.5s;
+	}
+
+	.tor-available {
+		background: linear-gradient(135deg, rgba(139, 69, 19, 0.1), rgba(160, 82, 45, 0.1));
+		border: 1px solid rgba(139, 69, 19, 0.2);
+		color: #deb887;
+		text-decoration: none;
+		transition: all 0.3s ease;
+	}
+
+	.tor-available:hover {
+		background: linear-gradient(135deg, rgba(139, 69, 19, 0.2), rgba(160, 82, 45, 0.2));
+		border-color: rgba(139, 69, 19, 0.4);
+		transform: scale(1.05);
+	}
+
+	.tor-available .badge-dot {
+		background-color: #deb887;
+		animation-delay: 1s;
+	}
+
+	.tor-enabled {
+		background: linear-gradient(135deg, rgba(139, 69, 19, 0.1), rgba(160, 82, 45, 0.1));
+		border: 1px solid rgba(139, 69, 19, 0.2);
+		color: #deb887;
+	}
+
+	.tor-enabled .badge-dot {
+		background-color: #deb887;
+		animation-delay: 1s;
 	}
 </style>
