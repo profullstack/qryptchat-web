@@ -37,6 +37,7 @@ export async function POST(event) {
 		let username = null;
 		let displayName = null;
 		let useSession = false;
+		/** @type {File | null} */
 		let avatarFile = null;
 		let requestBody;
 		
@@ -52,7 +53,16 @@ export async function POST(event) {
 				username = formData.get('username');
 				displayName = formData.get('displayName');
 				useSession = formData.get('useSession') === 'true';
-				avatarFile = formData.get('avatar'); // File if present
+
+				const avatarEntry = formData.get('avatar');
+				if (avatarEntry instanceof File) {
+					avatarFile = avatarEntry;
+				} else if (avatarEntry) {
+					logger.warn('Avatar form entry is not a File, ignoring', {
+						entryType: typeof avatarEntry,
+						constructorName: avatarEntry?.constructor?.name
+					});
+				}
 
 				if (useSession && !phoneNumber) {
 					return json({ error: 'Phone number is required for session-based request' }, { status: 400 });
@@ -341,14 +351,17 @@ export async function POST(event) {
 				);
 			}
 
-			const shouldUploadAvatar = avatarFile && avatarFile instanceof File;
-
-			if (shouldUploadAvatar) {
-				logger.info('Validating avatar file before user creation', { fileName: avatarFile.name, fileSize: avatarFile.size });
+			if (avatarFile) {
+				const avatar = avatarFile;
+				
+				logger.info('Validating avatar file before user creation', {
+					fileName: avatar.name,
+					fileSize: avatar.size
+				});
 
 				const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-				if (!allowedTypes.includes(avatarFile.type)) {
-					logger.error('Invalid avatar file type', { fileType: avatarFile.type });
+				if (!allowedTypes.includes(avatar.type)) {
+					logger.error('Invalid avatar file type', { fileType: avatar.type });
 					return json(
 						{
 							error: 'Invalid file type. Please upload JPEG, PNG, WebP, or GIF images only.',
@@ -358,8 +371,8 @@ export async function POST(event) {
 					);
 				}
 
-				if (avatarFile.size > 5 * 1024 * 1024) {
-					logger.error('Avatar file too large', { fileSize: avatarFile.size });
+				if (avatar.size > 5 * 1024 * 1024) {
+					logger.error('Avatar file too large', { fileSize: avatar.size });
 					return json(
 						{
 							error: 'File size too large. Please upload files smaller than 5MB.',
@@ -369,8 +382,6 @@ export async function POST(event) {
 					);
 				}
 			}
-
-			let avatarUrl = null;
 
 			logger.info('Creating user record in database');
 			const { data: newUser, error: createError } = await serviceSupabase
@@ -417,7 +428,61 @@ export async function POST(event) {
 
 			user = newUser;
 			isNewUser = true;
-			logger.info('User account created successfully', { userId: newUser.id, hasAvatar: !!avatarUrl });
+			logger.info('User account created successfully', { userId: newUser.id, hasAvatar: !!avatarFile });
+
+			if (avatarFile) {
+				const avatar = avatarFile;
+				try {
+					const fileExt = avatar.name.split('.').pop()?.toLowerCase() || 'jpg';
+					const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+					logger.info('Uploading avatar to storage after user creation', { fileName });
+
+					const fileBuffer = await avatar.arrayBuffer();
+					const { error: uploadError } = await serviceSupabase.storage
+						.from('avatars')
+						.upload(fileName, fileBuffer, {
+							contentType: avatar.type,
+							cacheControl: '3600',
+							upsert: false
+						});
+
+					if (uploadError) {
+						logger.error('Avatar storage upload failed', { error: uploadError });
+						console.error('Avatar upload error:', uploadError);
+					} else {
+						const {
+							data: { publicUrl }
+						} = serviceSupabase.storage.from('avatars').getPublicUrl(fileName);
+
+						logger.info('Avatar uploaded, updating user record', { publicUrl });
+
+						const {
+							data: updatedUser,
+							error: updateError
+						} = await serviceSupabase
+							.from('users')
+							.update({
+								avatar_url: publicUrl,
+								updated_at: new Date().toISOString()
+							})
+							.eq('id', user.id)
+							.select()
+							.single();
+
+						if (updateError) {
+							logger.error('Failed to update user with avatar URL', { error: updateError });
+							console.error('Avatar URL update error:', updateError);
+						} else if (updatedUser) {
+							user = updatedUser;
+							logger.info('User avatar URL updated successfully', { userId: user.id });
+						}
+					}
+				} catch (uploadError) {
+					logger.error('Avatar upload exception after user creation', { error: uploadError });
+					console.error('Avatar upload error:', uploadError);
+				}
+			}
 		}
 
 		logger.info('SMS verification completed successfully', {
