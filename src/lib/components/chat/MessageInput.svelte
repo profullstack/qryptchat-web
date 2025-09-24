@@ -746,9 +746,9 @@
 			padding: 0.75rem;
 			/* Account for mobile safari viewport issues */
 			padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
-			/* Ensure solid background on mobile */
-			background: #ffffff !important;
-			border-top: 1px solid #e5e7eb !important;
+			/* Ensure solid background on mobile with theme support */
+			background: var(--color-surface) !important;
+			border-top: 1px solid var(--color-border) !important;
 		}
 
 		.input-wrapper {

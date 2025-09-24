@@ -375,8 +375,10 @@
 
 <style>
 	.navbar {
-		position: sticky;
+		position: fixed;
 		top: 0;
+		left: 0;
+		right: 0;
 		z-index: 40;
 		/* Solid background fallback for iOS/Safari */
 		background-color: #ffffff;
@@ -384,9 +386,9 @@
 		border-bottom: 1px solid var(--color-border-primary);
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
-		/* Fix iOS/Safari gap at top */
+		/* Ensure full coverage on iOS/Safari */
 		padding-top: env(safe-area-inset-top);
-		margin-top: calc(-1 * env(safe-area-inset-top));
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 	}
 	
 	.navbar-content {

@@ -66,5 +66,7 @@
 		flex: 1;
 		display: flex;
 		flex-direction: column;
+		/* Account for fixed navbar */
+		margin-top: calc(4rem + env(safe-area-inset-top));
 	}
 </style>
