@@ -45,13 +45,29 @@ export async function GET(event) {
 				.eq('user_id', internalUser?.id)
 				.maybeSingle();
 
+			// fetch participants to send to frontend so it can build a name if conversation_name is null
+			const { data: participantsData } = await supabase
+				.from('conversation_participants')
+				.select('user_id, users(username)')
+				.eq('conversation_id', conv.conversation_id);
+
 			conversationsWithArchive.push({
 				...conv,
 				id: conv.conversation_id,
-				// preserve name if present, otherwise let frontend derive correctly
 				name: conv.conversation_name ?? null,
 				type: conv.conversation_type,
-				participants: conv.participants ?? [], // include participants if available
+				participants: (participantsData || []).map(p => {
+					let username = '';
+					if (p && p.users) {
+						if (Array.isArray(p.users) && p.users.length > 0) {
+							username = String(p.users[0]?.username || '');
+						} else if (typeof p.users === 'object' && p.users !== null) {
+							// @ts-ignore - allow dynamic access
+							username = String(p.users.username || '');
+						}
+					}
+					return { id: p.user_id, username };
+				}) ?? [],
 				is_archived: participantData?.archived_at !== null,
 				archived_at: participantData?.archived_at
 			});
