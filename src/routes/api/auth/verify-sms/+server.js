@@ -31,68 +31,18 @@ export async function POST(event) {
 	const logger = new SMSDebugLogger();
 	
 	try {
-		const { phoneNumber, verificationCode, username, displayName, useSession } = await request.json();
-		const authHeader = request.headers.get('authorization');
-		
-		logger.info('SMS verification request received', {
-			phoneNumber: phoneNumber ? `${phoneNumber.substring(0, 3)}***${phoneNumber.substring(phoneNumber.length - 2)}` : null,
-			hasCode: !!verificationCode,
-			codeLength: verificationCode?.length,
-			hasUsername: !!username,
-			useSession: !!useSession,
-			hasAuthHeader: !!authHeader,
-			userAgent: request.headers.get('user-agent'),
-			ip: event.getClientAddress()
-		});
-
-		// Validate input based on request type
-		if (useSession && authHeader) {
-			// Session-based request - only phone number required initially
-			if (!phoneNumber) {
-				logger.error('Missing phone number for session-based request', { phoneNumber: !!phoneNumber });
-				return json(
-					{ error: 'Phone number is required' },
-					{ status: 400 }
-				);
-			}
-		} else {
-			// Original OTP verification flow
-			if (!phoneNumber || !verificationCode) {
-				logger.error('Missing required fields', { phoneNumber: !!phoneNumber, verificationCode: !!verificationCode });
-				return json(
-					{ error: 'Phone number and verification code are required' },
-					{ status: 400 }
-				);
-			}
-		}
-
-		// Validate phone number format for all requests
-		if (!isValidPhoneNumber(phoneNumber)) {
-			logger.error('Invalid phone number format', { phoneNumber });
-			return json(
-				{
-					error: 'Invalid phone number format',
-					suggestion: 'Ensure your phone number is in E.164 format (e.g., +1234567890)'
-				},
-				{ status: 400 }
-			);
-		}
-
-		// Create Supabase client
-		const supabase = createSupabaseServerClient(event);
-		
-		let verifyData;
-		let verifyError;
-
-		// Check if this is a session-based request (profile completion)
-		let useSession = false;
+		// Initialize variables for both JSON and FormData
 		let phoneNumber = null;
+		let verificationCode = null;
 		let username = null;
 		let displayName = null;
+		let useSession = false;
 		let avatarFile = null;
+		let requestBody;
+		
+		const authHeader = request.headers.get('authorization');
 
 		// Handle both JSON and multipart/form-data
-		let requestBody;
 		try {
 			const contentType = request.headers.get('content-type') || '';
 			if (contentType.includes('multipart/form-data')) {
@@ -116,8 +66,6 @@ export async function POST(event) {
 			logger.error('Request body parsing failed', { error: parseError });
 			return json({ error: 'Invalid request format' }, { status: 400 });
 		}
-
-		const authHeader = request.headers.get('authorization');
 
 		logger.info('SMS verification request received', {
 			phoneNumber: phoneNumber ? `${phoneNumber.substring(0, 3)}***${phoneNumber.substring(phoneNumber.length - 2)}` : null,

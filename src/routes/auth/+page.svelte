@@ -485,7 +485,7 @@
 						<div class="avatar-upload-container">
 							<AvatarUpload
 								userId={null}
-								currentAvatarUrl={avatarUrl ?? null}
+								currentAvatarUrl={avatarUrl ? null : undefined}
 								size="medium"
 								disabled={$isLoading}
 								previewOnly={true}
