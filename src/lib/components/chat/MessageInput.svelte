@@ -451,7 +451,10 @@
 		right: 0;
 		padding: 1rem;
 		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
+		/* Semi-transparent background with blur for modern look */
+		background: rgba(var(--color-surface-rgb, 255, 255, 255), 0.95);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
 		z-index: 100;
 	}
 
@@ -744,10 +747,10 @@
 			position: fixed;
 			padding: 0.75rem;
 			padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
-			/* Solid background to prevent PWA blur */
-			background: var(--color-surface) !important;
-			-webkit-backdrop-filter: none !important;
-			backdrop-filter: none !important;
+			/* Restore original blur effect */
+			background: rgba(var(--color-surface-rgb, 255, 255, 255), 0.95);
+			backdrop-filter: blur(10px);
+			-webkit-backdrop-filter: blur(10px);
 		}
 
 		.input-wrapper {
