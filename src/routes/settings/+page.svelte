@@ -1,7 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { createSupabaseClient } from '$lib/supabase.js';
 	import { currentTheme, themeUtils, themes } from '$lib/stores/theme.js';
 	import SMSNotificationSettings from '$lib/components/settings/SMSNotificationSettings.svelte';
 	import EncryptionSettings from '$lib/components/settings/EncryptionSettings.svelte';
@@ -12,8 +11,6 @@
 	import AdvancedKeyDiagnostic from '$lib/components/settings/AdvancedKeyDiagnostic.svelte';
 	import CompleteKeyReset from '$lib/components/settings/CompleteKeyReset.svelte';
 	import KeyResetStatus from '$lib/components/settings/KeyResetStatus.svelte';
-	
-	const supabase = createSupabaseClient();
 	
 	let user = $state(null);
 	let loading = $state(true);
@@ -33,25 +30,29 @@
 	
 	onMount(async () => {
 		try {
-			// Get current user
-			const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+			// Get current user via API route
+			const userResponse = await fetch('/api/auth/user');
 			
-			if (authError || !authUser) {
+			if (!userResponse.ok) {
 				goto('/auth');
 				return;
 			}
 			
-			// Get user profile with SMS preferences
-			const { data: userProfile, error: profileError } = await supabase
-				.from('users')
-				.select('*')
-				.eq('auth_user_id', authUser.id)
-				.single();
+			const { user: authUser } = await userResponse.json();
 			
-			if (profileError) {
-				throw profileError;
+			if (!authUser) {
+				goto('/auth');
+				return;
 			}
 			
+			// Get user profile via API route
+			const profileResponse = await fetch(`/api/user/profile/${authUser.id}`);
+			
+			if (!profileResponse.ok) {
+				throw new Error('Failed to load user profile');
+			}
+			
+			const { user: userProfile } = await profileResponse.json();
 			user = userProfile;
 			
 		} catch (err) {
@@ -114,13 +115,24 @@
 		deleteResult = null;
 		
 		try {
-			// Get the current session to extract the access token
-			const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+			// Get the current session via API route
+			const sessionResponse = await fetch('/api/auth/session');
 			
-			if (sessionError || !session?.access_token) {
+			if (!sessionResponse.ok) {
 				deleteResult = {
 					success: false,
 					error: 'Not authenticated - please refresh and try again'
+				};
+				isDeleting = false;
+				return;
+			}
+			
+			const { session } = await sessionResponse.json();
+			
+			if (!session?.access_token) {
+				deleteResult = {
+					success: false,
+					error: 'No valid session - please refresh and try again'
 				};
 				isDeleting = false;
 				return;
