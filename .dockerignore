@@ -1,7 +1,5 @@
 .git
 node_modules
-.build
-dist
 .svelte-kit
 Dockerfile
 .env*

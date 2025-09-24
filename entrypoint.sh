@@ -100,6 +100,26 @@ else
   tail -10 /var/log/tor/notices.log 2>/dev/null || echo "No logs available"
 fi
 
+# Check build artifacts before starting
+echo "Checking SvelteKit build artifacts..."
+if [ ! -d "/app/build" ]; then
+  echo "❌ ERROR: /app/build directory not found!"
+  echo "Build may have failed. Checking for build artifacts..."
+  ls -la /app/ | grep -E "(build|dist|.svelte-kit)"
+  exit 1
+fi
+
+if [ ! -f "/app/build/handler.js" ]; then
+  echo "❌ ERROR: /app/build/handler.js not found!"
+  echo "SvelteKit build incomplete. Contents of /app/build:"
+  ls -la /app/build/
+  exit 1
+fi
+
+echo "✅ Build artifacts found"
+echo "Contents of /app/build:"
+ls -la /app/build/
+
 # Ensure production environment and start app in background
 echo "Starting Node.js application on ${HOST}:${PORT} in production mode"
 echo "Forcing NODE_ENV=production (Railway may have set it to development)"
