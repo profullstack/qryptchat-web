@@ -451,10 +451,7 @@
 		right: 0;
 		padding: 1rem;
 		border-top: 1px solid var(--color-border);
-		/* Semi-transparent background with blur for modern look */
-		background: rgba(var(--color-surface-rgb, 255, 255, 255), 0.95);
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
+		background: var(--color-surface);
 		z-index: 100;
 	}
 
@@ -747,10 +744,7 @@
 			position: fixed;
 			padding: 0.75rem;
 			padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
-			/* Restore original blur effect */
-			background: rgba(var(--color-surface-rgb, 255, 255, 255), 0.95);
-			backdrop-filter: blur(10px);
-			-webkit-backdrop-filter: blur(10px);
+			/* Let iOS Safari handle native blur transparency */
 		}
 
 		.input-wrapper {
