@@ -86,6 +86,16 @@
 
 		const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
 		
+		// DEBUG: Log scroll behavior to validate assumptions
+		console.log('🐛 DEBUG MessageList Scroll:', {
+			scrollTop,
+			scrollHeight,
+			clientHeight,
+			'scrollTop + clientHeight': scrollTop + clientHeight,
+			'near bottom?': scrollTop + clientHeight >= scrollHeight - 100,
+			shouldScrollToBottom
+		});
+		
 		// Check if user scrolled to top (load more messages)
 		if (scrollTop === 0 && !isLoadingMore) {
 			loadMoreMessages();

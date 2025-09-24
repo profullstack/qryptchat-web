@@ -231,7 +231,11 @@
 			<!-- Main Chat Area -->
 			<div class="chat-main" class:show={!showSidebar || !activeConversationId}>
 				{#if activeConversationId}
-					<div class="chat-interface">
+					<div class="chat-interface" style="border: 2px solid red; /* DEBUG: Layout visualization */">
+						<!-- DEBUG: Log layout dimensions -->
+						<div style="position: absolute; top: 0; right: 0; background: yellow; padding: 4px; font-size: 10px; z-index: 999;">
+							DEBUG: Chat Interface
+						</div>
 						<!-- Chat Header (Desktop and Mobile) -->
 						<div class="chat-header">
 							<button class="back-button" onclick={handleBackToConversations}>

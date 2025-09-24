@@ -304,6 +304,42 @@
 			textareaElement.focus();
 		}
 
+		// DEBUG: Track when MessageInput is visible/invisible
+		console.log('🐛 DEBUG MessageInput mounted for conversation:', conversationId);
+		
+		// Use Intersection Observer to detect when input goes out of view
+		let messageInputContainer;
+		const elements = document.getElementsByClassName('message-input-container');
+		if (elements.length > 0) {
+			messageInputContainer = elements[0];
+			
+			const observer = new IntersectionObserver((entries) => {
+				entries.forEach(entry => {
+					console.log('🐛 DEBUG MessageInput visibility:', {
+						isIntersecting: entry.isIntersecting,
+						intersectionRatio: entry.intersectionRatio,
+						boundingClientRect: entry.boundingClientRect,
+						target: entry.target.className
+					});
+				});
+			}, {
+				threshold: [0, 0.25, 0.5, 0.75, 1.0]
+			});
+			
+			observer.observe(messageInputContainer);
+			
+			// Cleanup observer on unmount
+			return () => {
+				observer.disconnect();
+				if (typingTimeout) {
+					clearTimeout(typingTimeout);
+				}
+				if (conversationId && currentUser?.id) {
+					wsChat.stopTyping(conversationId);
+				}
+			};
+		}
+
 		// Cleanup typing indicator on unmount
 		return () => {
 			if (typingTimeout) {
