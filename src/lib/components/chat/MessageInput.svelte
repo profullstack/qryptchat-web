@@ -451,7 +451,7 @@
 		right: 0;
 		padding: 1rem;
 		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
+		background: #6366f1;
 		z-index: 100;
 	}
 
