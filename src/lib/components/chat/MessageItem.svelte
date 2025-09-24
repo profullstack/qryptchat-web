@@ -161,13 +161,35 @@
 			console.log(`📁 [DOWNLOAD] Decrypting file client-side...`);
 
 			// Decrypt the file content client-side
-			const decryptedBase64 = await postQuantumEncryption.decryptFromSender(
+			const decryptedContent = await postQuantumEncryption.decryptFromSender(
 				userEncryptedCopy,
 				'' // Sender public key not needed
 			);
 
+			// Parse the decrypted content to extract file metadata and content
+			let fileMetadata;
+			let actualFileContent;
+			let downloadFilename;
+			
+			try {
+				// Try to parse as JSON (new format with metadata)
+				fileMetadata = JSON.parse(decryptedContent);
+				if (fileMetadata.content && fileMetadata.filename) {
+					actualFileContent = fileMetadata.content;
+					downloadFilename = fileMetadata.filename;
+					console.log(`📁 [DOWNLOAD] Using encrypted filename from metadata: ${downloadFilename}`);
+				} else {
+					throw new Error('Invalid metadata format');
+				}
+			} catch (parseError) {
+				// Fallback to treating entire content as base64 file content (legacy format)
+				actualFileContent = decryptedContent;
+				downloadFilename = file.originalFilename;
+				console.log(`📁 [DOWNLOAD] Using legacy format, filename: ${downloadFilename}`);
+			}
+
 			// Convert base64 to binary
-			const binaryString = atob(decryptedBase64);
+			const binaryString = atob(actualFileContent);
 			const bytes = new Uint8Array(binaryString.length);
 			for (let i = 0; i < binaryString.length; i++) {
 				bytes[i] = binaryString.charCodeAt(i);
@@ -178,13 +200,13 @@
 			const url = window.URL.createObjectURL(blob);
 			const link = document.createElement('a');
 			link.href = url;
-			link.download = file.originalFilename;
+			link.download = downloadFilename;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();
 			window.URL.revokeObjectURL(url);
 
-			console.log(`📁 [DOWNLOAD] ✅ File decrypted and downloaded: ${file.originalFilename}`);
+			console.log(`📁 [DOWNLOAD] ✅ File decrypted and downloaded: ${downloadFilename}`);
 
 		} catch (error) {
 			console.error(`📁 [DOWNLOAD] ❌ Error downloading file:`, error);
@@ -241,13 +263,32 @@
 			console.log(`📁 [MEDIA] Decrypting file client-side...`);
 
 			// Decrypt the file content client-side
-			const decryptedBase64 = await postQuantumEncryption.decryptFromSender(
+			const decryptedContent = await postQuantumEncryption.decryptFromSender(
 				userEncryptedCopy,
 				'' // Sender public key not needed
 			);
 
+			// Parse the decrypted content to extract file metadata and content
+			let fileMetadata;
+			let actualFileContent;
+			
+			try {
+				// Try to parse as JSON (new format with metadata)
+				fileMetadata = JSON.parse(decryptedContent);
+				if (fileMetadata.content && fileMetadata.filename) {
+					actualFileContent = fileMetadata.content;
+					console.log(`📁 [MEDIA] Using encrypted filename from metadata: ${fileMetadata.filename}`);
+				} else {
+					throw new Error('Invalid metadata format');
+				}
+			} catch (parseError) {
+				// Fallback to treating entire content as base64 file content (legacy format)
+				actualFileContent = decryptedContent;
+				console.log(`📁 [MEDIA] Using legacy format`);
+			}
+
 			// Convert base64 to binary
-			const binaryString = atob(decryptedBase64);
+			const binaryString = atob(actualFileContent);
 			const bytes = new Uint8Array(binaryString.length);
 			for (let i = 0; i < binaryString.length; i++) {
 				bytes[i] = binaryString.charCodeAt(i);
@@ -257,7 +298,8 @@
 			const blob = new Blob([bytes], { type: file.mimeType });
 			const mediaUrl = window.URL.createObjectURL(blob);
 
-			console.log(`📁 [MEDIA] ✅ File decrypted and blob created: ${file.originalFilename}`);
+			const displayName = fileMetadata?.filename || file.originalFilename;
+			console.log(`📁 [MEDIA] ✅ File decrypted and blob created: ${displayName}`);
 			return mediaUrl;
 
 		} catch (error) {

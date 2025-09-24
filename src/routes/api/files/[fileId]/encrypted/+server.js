@@ -38,7 +38,6 @@ export async function GET(event) {
 				id,
 				message_id,
 				storage_path,
-				original_filename,
 				mime_type,
 				file_size,
 				encrypted_metadata,
@@ -63,7 +62,7 @@ export async function GET(event) {
 			return error(404, 'File not found or unauthorized');
 		}
 
-		console.log(`📁 [ENCRYPTED-FILE] Found file: ${fileData.original_filename}`);
+		console.log(`📁 [ENCRYPTED-FILE] Found encrypted file: ${fileId}`);
 
 		// Download encrypted file from storage
 		const { data: storageData, error: storageError } = await supabase.storage
@@ -78,15 +77,16 @@ export async function GET(event) {
 		// Get the encrypted contents as text
 		const encryptedContentsJson = await storageData.text();
 
-		console.log(`📁 [ENCRYPTED-FILE] ✅ Retrieved encrypted file data: ${fileData.original_filename}`);
+		console.log(`📁 [ENCRYPTED-FILE] ✅ Retrieved encrypted file data: ${fileId}`);
 
 		// Return encrypted file data for client-side decryption
+		// Note: filename is now encrypted within the file contents JSON, not in database
 		return json({
 			success: true,
 			file: {
 				id: fileData.id,
 				messageId: fileData.message_id,
-				originalFilename: fileData.original_filename,
+				originalFilename: 'encrypted-file', // Filename is encrypted in content
 				mimeType: fileData.mime_type,
 				fileSize: fileData.file_size,
 				encryptedContents: encryptedContentsJson,

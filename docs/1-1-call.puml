@@ -1,0 +1,45 @@
+@startuml
+title Signal-style 1:1 E2EE Call (messages + WebRTC)
+
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+actor Alice
+participant "Signal Service\n(signaling relay)" as Server
+actor Bob
+collections "TURN/STUN" as Turn
+
+== Bootstrap trust / shared secret ==
+Alice -> Server : Signal message: X3DH init (Alice→Bob)
+Server -> Bob : Deliver encrypted init
+Bob -> Server : Signal message: X3DH response
+Server -> Alice : Deliver encrypted response
+note over Alice,Bob
+Both sides run Double Ratchet → derive shared secret SK_AB\n(also verify safety numbers / identities)
+end note
+
+== Call setup signaling ==
+Alice -> Server : Encrypted signaling: INVITE (SDP offer, ICE candidates)
+Server -> Bob : Relay encrypted INVITE
+Bob -> Server : Encrypted signaling: ANSWER (SDP answer, ICE)
+Server -> Alice : Relay encrypted ANSWER
+
+== DTLS-SRTP key agreement ==
+Alice -> Bob : DTLS handshake over selected ICE path
+Bob --> Alice : DTLS handshake complete
+note over Alice,Bob
+Bind DTLS identity to SK_AB context (authenticated channel binding).
+Derive SRTP keys K(A→B), K(B→A) from DTLS exporter.
+end note
+
+== Media ==
+Alice -> Bob : SRTP media (A→B), possibly via TURN
+Alice -> Turn : SRTP packets (if relay needed)
+Turn -> Bob : SRTP packets (opaque to relay)
+Bob -> Alice : SRTP media (B→A)
+note over Server
+Server only relays signaling.\nNo access to DTLS/SRTP keys or media.
+end note
+
+@enduml

@@ -40,7 +40,6 @@ export async function GET(event) {
 				id,
 				message_id,
 				storage_path,
-				original_filename,
 				mime_type,
 				file_size,
 				encrypted_metadata,
@@ -65,7 +64,9 @@ export async function GET(event) {
 			return error(404, 'File not found or unauthorized');
 		}
 
-		console.log(`📁 [FILE-DOWNLOAD] Found file: ${fileData.original_filename}`);
+		// Display filename will be extracted from encrypted content or fallback to generic name
+		let displayFilename = 'encrypted-file';
+		console.log(`📁 [FILE-DOWNLOAD] Processing encrypted file: ${fileId}`);
 
 		// Download encrypted file from storage
 		const { data: storageData, error: storageError } = await supabase.storage
@@ -105,14 +106,33 @@ export async function GET(event) {
 
 		console.log(`📁 [FILE-DOWNLOAD] Decrypted content type:`, typeof decryptedContent);
 		console.log(`📁 [FILE-DOWNLOAD] Decrypted content length:`, decryptedContent?.length);
-		console.log(`📁 [FILE-DOWNLOAD] Decrypted content preview:`, decryptedContent?.substring(0, 100));
+
+		// Parse the decrypted content to extract file metadata and content
+		let fileMetadata;
+		let actualFileContent;
+		
+		try {
+			// Try to parse as JSON (new format with metadata)
+			fileMetadata = JSON.parse(decryptedContent);
+			if (fileMetadata.content && fileMetadata.filename) {
+				actualFileContent = fileMetadata.content;
+				displayFilename = fileMetadata.filename;
+				console.log(`📁 [FILE-DOWNLOAD] Using encrypted filename from metadata: ${displayFilename}`);
+			} else {
+				throw new Error('Invalid metadata format');
+			}
+		} catch (parseError) {
+			// Fallback to treating entire content as base64 file content (legacy format)
+			actualFileContent = decryptedContent;
+			console.log(`📁 [FILE-DOWNLOAD] Using legacy format, filename from database: ${displayFilename}`);
+		}
 
 		// Convert base64 back to binary
-		const fileBuffer = Buffer.from(decryptedContent, 'base64');
+		const fileBuffer = Buffer.from(actualFileContent, 'base64');
 
 		console.log(`📁 [FILE-DOWNLOAD] File buffer length:`, fileBuffer.length);
 		console.log(`📁 [FILE-DOWNLOAD] File buffer first 10 bytes:`, fileBuffer.slice(0, 10));
-		console.log(`📁 [FILE-DOWNLOAD] ✅ File decrypted successfully: ${fileData.original_filename}`);
+		console.log(`📁 [FILE-DOWNLOAD] ✅ File decrypted successfully: ${displayFilename}`);
 
 		// Return decrypted file with correct content length
 		return new Response(fileBuffer, {
@@ -120,7 +140,7 @@ export async function GET(event) {
 			headers: {
 				'Content-Type': fileData.mime_type,
 				'Content-Length': fileBuffer.length.toString(),
-				'Content-Disposition': `attachment; filename="${encodeURIComponent(fileData.original_filename)}"`,
+				'Content-Disposition': `attachment; filename="${encodeURIComponent(displayFilename)}"`,
 				'Cache-Control': 'private, no-cache, no-store, must-revalidate',
 				'Pragma': 'no-cache',
 				'Expires': '0'
@@ -153,11 +173,11 @@ export async function HEAD(event) {
 			.from('encrypted_files')
 			.select(`
 				id,
-				original_filename,
 				mime_type,
 				file_size,
 				created_at,
 				messages!inner(
+					conversation_id,
 					conversation_participants!inner(
 						user_id
 					)
@@ -171,13 +191,13 @@ export async function HEAD(event) {
 			return error(404, 'File not found or unauthorized');
 		}
 
-		// Return file headers without content
+		// Return file headers without content (filename from database fallback)
 		return new Response(null, {
 			status: 200,
 			headers: {
 				'Content-Type': fileData.mime_type,
 				'Content-Length': fileData.file_size.toString(),
-				'Content-Disposition': `attachment; filename="${encodeURIComponent(fileData.original_filename)}"`,
+				'Content-Disposition': `attachment; filename="encrypted-file"`,
 				'Last-Modified': new Date(fileData.created_at).toUTCString()
 			}
 		});
@@ -233,7 +253,7 @@ export async function POST(event) {
 			return error(404, 'File not found or unauthorized');
 		}
 
-		// Return file metadata
+		// Return file metadata (filename from database fallback, actual filename encrypted in content)
 		return json({
 			id: fileData.id,
 			messageId: fileData.message_id,

@@ -1,0 +1,67 @@
+@startuml
+title Signal-style Group Call (E2EE via shared Group Call Key + SFU)
+
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 18
+skinparam BoxPadding 10
+
+actor A as Creator
+participant "Signal Service\n(E2EE message relay)" as Server
+actor B
+actor C
+actor D
+participant "SFU\n(Selective Forwarding Unit)" as SFU
+
+== Create and distribute Group Call Key (GCK) ==
+Creator -> Creator : Generate random GCK (per-call)
+Creator -> Server : Signal message (E2EE) : {GCK} to B
+Server -> B : Deliver {GCK} (only B can decrypt)
+Creator -> Server : Signal message (E2EE) : {GCK} to C
+Server -> C : Deliver {GCK}
+Creator -> Server : Signal message (E2EE) : {GCK} to D
+Server -> D : Deliver {GCK}
+note over Creator,B,C,D
+Each participant now holds GCK.
+They will derive SRTP keys from GCK (with per-sender salts/labels).
+end note
+
+== Join WebRTC room via SFU ==
+Creator -> SFU : Join + publish track(s) (encrypted)
+B -> SFU : Join + publish track(s) (encrypted)
+C -> SFU : Join + publish track(s) (encrypted)
+D -> SFU : Join + publish track(s) (encrypted)
+
+== Key derivation ==
+note over Creator,B,C,D
+For each sender S:
+K_S = KDF(GCK, "SRTP", sender_id, direction, nonce)
+Clients encrypt outbound frames with K_S.
+Receivers derive same K_S to decrypt.
+end note
+
+== Media routing ==
+Creator -> SFU : SRTP media (opaque)
+B -> SFU : SRTP media (opaque)
+C -> SFU : SRTP media (opaque)
+D -> SFU : SRTP media (opaque)
+SFU -> Creator : Forwards others' SRTP streams
+SFU -> B : Forwards others' SRTP streams
+SFU -> C : Forwards others' SRTP streams
+SFU -> D : Forwards others' SRTP streams
+note over SFU
+SFU switches/routes packets only.
+No access to GCK or SRTP keys - cannot decrypt.
+end note
+
+== Membership change ==
+alt New participant E joins
+Creator -> Server : Signal message (E2EE) : {GCK or new GCK'} to E
+else Member leaves / is removed
+Creator -> Creator : Rotate GCK to GCK'
+Creator -> Server : E2EE redistribute GCK’ to remaining members
+note over Creator,B,C,D
+Clients re-derive SRTP keys from GCK’ and rekey streams.
+end note
+end
+
+@enduml
