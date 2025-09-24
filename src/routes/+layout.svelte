@@ -21,18 +21,37 @@
 	});
 	
 	onMount(() => {
-		// Initialize theme with system preference detection
-		let theme = localStorage.getItem('qrypt-theme');
-		if (!theme) {
-			// Default to system preference if no saved theme
-			theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-		}
-		
-		const language = localStorage.getItem('qrypt-language') || 'en';
-		
-		themeUtils.setTheme(theme);
-		i18nUtils.applyLanguage(language);
-	});
+	// Initialize theme with system preference detection
+	let theme = localStorage.getItem('qrypt-theme');
+	if (!theme) {
+		// Default to system preference if no saved theme
+		theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+	}
+	
+	const language = localStorage.getItem('qrypt-language') || 'en';
+	
+	themeUtils.setTheme(theme);
+	i18nUtils.applyLanguage(language);
+
+	// Register Service Worker
+	if ('serviceWorker' in navigator) {
+		navigator.serviceWorker
+			.register('/sw.js')
+			.then((reg) => {
+				console.log('Service worker registered', reg.scope);
+			})
+			.catch((err) => {
+				console.error('SW registration failed', err);
+			});
+	}
+
+	// Request Notification Permission
+	if ('Notification' in window && Notification.permission === 'default') {
+		Notification.requestPermission().then((perm) => {
+			console.log('Notification permission:', perm);
+		});
+	}
+});
 </script>
 
 <svelte:head>
