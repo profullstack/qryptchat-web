@@ -95,6 +95,7 @@ export default {
 	'footer.terms': 'Terms of Service',
 	'footer.security': 'Security',
 	'footer.contact': 'Contact',
+	'footer.warrantCanary': 'Warrant Canary',
 	
 	// Chat
 	'chat.title': 'Chat',
@@ -353,5 +354,13 @@ export default {
 	'dev.notImplemented': 'Not yet implemented',
 	'dev.loadMore': 'Load more messages not yet implemented in WebSocket store',
 	'dev.markAsRead': 'Mark messages as read not yet implemented in WebSocket store',
-	'dev.joinByInvite': 'Join group by invite not yet implemented in WebSocket store'
+	'dev.joinByInvite': 'Join group by invite not yet implemented in WebSocket store',
+	
+	// Warrant Canary
+	'warrantCanary.title': 'Warrant Canary - QryptChat',
+	'warrantCanary.heading': 'Warrant Canary',
+	'warrantCanary.intro': 'This page serves as QryptChat\'s Warrant Canary. If this message is ever removed, altered, or not updated within the expected time frame, it may indicate that we have received a secret government order that we are legally forbidden from disclosing.',
+	'warrantCanary.lastUpdatedLabel': 'Last Updated:',
+	'warrantCanary.statement': 'As of the date above, QryptChat has not received any National Security Letters, FISA orders, or other classified requests for user data.',
+	'warrantCanary.regularUpdateNote': 'This document will be updated regularly. The absence of an update may be cause for concern.'
 };

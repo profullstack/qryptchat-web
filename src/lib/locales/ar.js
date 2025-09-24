@@ -1,4 +1,11 @@
 export default {
+	'footer.warrantCanary': 'كناري الضمان',
+	'warrantCanary.title': 'كناري الضمان - QryptChat',
+	'warrantCanary.heading': 'كناري الضمان',
+	'warrantCanary.intro': 'تعمل هذه الصفحة ككناري الضمان الخاص بـ QryptChat. إذا تم حذف هذه الرسالة أو تغييرها أو عدم تحديثها في الإطار الزمني المتوقع، فقد يشير ذلك إلى أننا تلقينا أمرًا حكوميًا سريًا يُمنع علينا قانونيًا الكشف عنه.',
+	'warrantCanary.lastUpdatedLabel': 'آخر تحديث:',
+	'warrantCanary.statement': 'اعتبارًا من التاريخ المذكور أعلاه، لم تتلق QryptChat أي رسائل أمن قومي أو أوامر FISA أو طلبات سرية أخرى لبيانات المستخدمين.',
+	'warrantCanary.regularUpdateNote': 'سيتم تحديث هذا المستند بانتظام. قد يكون عدم وجود تحديث مدعاة للقلق.',
 	'nav.home': 'الرئيسية',
 	'nav.chat': 'المحادثة',
 	'nav.settings': 'الإعدادات',
