@@ -85,6 +85,91 @@ export async function POST(event) {
 		let verifyError;
 
 		// Check if this is a session-based request (profile completion)
+		let useSession = false;
+		let phoneNumber = null;
+		let username = null;
+		let displayName = null;
+		let avatarFile = null;
+
+		// Handle both JSON and multipart/form-data
+		let requestBody;
+		try {
+			const contentType = request.headers.get('content-type') || '';
+			if (contentType.includes('multipart/form-data')) {
+				// Parse FormData for session-based profile completion with potential avatar
+				const formData = await request.formData();
+				phoneNumber = formData.get('phoneNumber');
+				username = formData.get('username');
+				displayName = formData.get('displayName');
+				useSession = formData.get('useSession') === 'true';
+				avatarFile = formData.get('avatar'); // File if present
+
+				if (useSession && !phoneNumber) {
+					return json({ error: 'Phone number is required for session-based request' }, { status: 400 });
+				}
+			} else {
+				// Parse JSON for standard OTP verification
+				requestBody = await request.json();
+				({ phoneNumber, verificationCode, username, displayName, useSession } = requestBody);
+			}
+		} catch (parseError) {
+			logger.error('Request body parsing failed', { error: parseError });
+			return json({ error: 'Invalid request format' }, { status: 400 });
+		}
+
+		const authHeader = request.headers.get('authorization');
+
+		logger.info('SMS verification request received', {
+			phoneNumber: phoneNumber ? `${phoneNumber.substring(0, 3)}***${phoneNumber.substring(phoneNumber.length - 2)}` : null,
+			hasCode: !!verificationCode,
+			codeLength: verificationCode?.length,
+			hasUsername: !!username,
+			useSession: !!useSession,
+			hasAvatar: !!avatarFile,
+			hasAuthHeader: !!authHeader,
+			userAgent: request.headers.get('user-agent'),
+			ip: event.getClientAddress()
+		});
+
+		// Validate input based on request type
+		if (useSession && authHeader) {
+			// Session-based request - username and optional avatar
+			if (!phoneNumber || !username) {
+				logger.error('Missing required fields for session-based request', { phoneNumber: !!phoneNumber, username: !!username });
+				return json(
+					{ error: 'Phone number and username are required' },
+					{ status: 400 }
+				);
+			}
+		} else {
+			// Original OTP verification flow
+			if (!phoneNumber || !verificationCode) {
+				logger.error('Missing required fields', { phoneNumber: !!phoneNumber, verificationCode: !!verificationCode });
+				return json(
+					{ error: 'Phone number and verification code are required' },
+					{ status: 400 }
+				);
+			}
+		}
+
+		// Validate phone number format for all requests
+		if (!isValidPhoneNumber(phoneNumber)) {
+			logger.error('Invalid phone number format', { phoneNumber });
+			return json(
+				{
+					error: 'Invalid phone number format',
+					suggestion: 'Ensure your phone number is in E.164 format (e.g., +1234567890)'
+				},
+				{ status: 400 }
+			);
+		}
+
+		// Create Supabase client
+		const supabase = createSupabaseServerClient(event);
+		
+		let verifyData;
+		let verifyError;
+
 		if (useSession && authHeader) {
 			logger.info('Processing session-based profile completion');
 			
@@ -308,7 +393,75 @@ export async function POST(event) {
 				);
 			}
 
-			// Create user record
+			// Handle avatar upload if provided (for multipart requests)
+			let avatarUrl = null;
+			if (avatarFile && avatarFile instanceof File) {
+				logger.info('Processing avatar upload during user creation', { fileName: avatarFile.name, fileSize: avatarFile.size });
+
+				// Validate file type
+				const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+				if (!allowedTypes.includes(avatarFile.type)) {
+					logger.error('Invalid avatar file type', { fileType: avatarFile.type });
+					return json(
+						{
+							error: 'Invalid file type. Please upload JPEG, PNG, WebP, or GIF images only.',
+							session: verifyData.session
+						},
+						{ status: 400 }
+					);
+				}
+
+				// Validate file size (5MB limit)
+				if (avatarFile.size > 5 * 1024 * 1024) {
+					logger.error('Avatar file too large', { fileSize: avatarFile.size });
+					return json(
+						{
+							error: 'File size too large. Please upload files smaller than 5MB.',
+							session: verifyData.session
+						},
+						{ status: 400 }
+					);
+				}
+
+				try {
+					// Generate unique filename
+					const fileExt = avatarFile.name.split('.').pop() || 'jpg';
+					const fileName = `${verifyData.user.id}/${Date.now()}.${fileExt}`;
+
+					// Convert file to buffer for upload
+					const fileBuffer = await avatarFile.arrayBuffer();
+
+					// Upload to Supabase Storage using service role
+					const { data: uploadData, error: uploadError } = await serviceSupabase.storage
+						.from('avatars')
+						.upload(fileName, fileBuffer, {
+							contentType: avatarFile.type,
+							cacheControl: '3600',
+							upsert: false
+						});
+
+					if (uploadError) {
+						logger.error('Avatar storage upload failed', { error: uploadError });
+						console.error('Avatar upload error:', uploadError);
+						// Continue without avatar (non-blocking)
+						console.warn('Avatar upload failed, proceeding without avatar');
+					} else {
+						// Get public URL
+						const { data: { publicUrl } } = serviceSupabase.storage
+							.from('avatars')
+							.getPublicUrl(fileName);
+						avatarUrl = publicUrl;
+						logger.info('Avatar uploaded successfully during user creation', { avatarUrl });
+					}
+				} catch (uploadError) {
+					logger.error('Avatar upload exception', { error: uploadError });
+					console.error('Avatar upload error:', uploadError);
+					// Continue without avatar (non-blocking)
+					console.warn('Avatar upload failed, proceeding without avatar');
+				}
+			}
+
+			// Create user record with optional avatar_url
 			logger.info('Creating user record in database');
 			const { data: newUser, error: createError } = await serviceSupabase
 				.from('users')
@@ -317,6 +470,7 @@ export async function POST(event) {
 					phone_number: phoneNumber,
 					username,
 					display_name: displayName || username,
+					avatar_url: avatarUrl, // Set if uploaded
 					created_at: new Date().toISOString(),
 					updated_at: new Date().toISOString()
 				})
@@ -353,7 +507,7 @@ export async function POST(event) {
 
 			user = newUser;
 			isNewUser = true;
-			logger.info('User account created successfully', { userId: newUser.id });
+			logger.info('User account created successfully', { userId: newUser.id, hasAvatar: !!avatarUrl });
 		}
 
 		logger.info('SMS verification completed successfully', {

@@ -155,23 +155,46 @@
 		}
 
 		try {
-			const response = await fetch('/api/auth/verify-sms', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${verifiedSession.access_token}`
-				},
-				body: JSON.stringify({
+			let body;
+			let headers = /** @type {Record<string, string>} */ ({
+				'Authorization': `Bearer ${verifiedSession.access_token}`
+			});
+
+			// If avatar preview exists (blob), prepare FormData for server-side upload during creation
+			if (avatarUrl && avatarUrl.startsWith('blob:')) {
+				console.log('📸 Preparing avatar for server-side upload during account creation...');
+				const response = await fetch(avatarUrl);
+				const blob = await response.blob();
+				const file = new File([blob], 'avatar.jpg', { type: blob.type });
+
+				body = new FormData();
+				body.append('phoneNumber', phoneNumber);
+				body.append('username', username);
+				body.append('displayName', displayName || username);
+				body.append('useSession', 'true');
+				body.append('avatar', file);
+
+				// Don't set Content-Type for FormData (browser sets multipart)
+			} else {
+				// No avatar, use JSON
+				body = JSON.stringify({
 					phoneNumber,
 					username,
 					displayName: displayName || username,
 					useSession: true // Flag to indicate we're using session auth
-				})
+				});
+				headers['Content-Type'] = 'application/json';
+			}
+
+			const apiResponse = await fetch('/api/auth/verify-sms', {
+				method: 'POST',
+				headers,
+				body
 			});
 
-			const data = await response.json();
+			const data = await apiResponse.json();
 
-			if (response.ok && data.success) {
+			if (apiResponse.ok && data.success) {
 				// Store user data and session
 				if (browser) {
 					localStorage.setItem('qrypt_user', JSON.stringify(data.user));
@@ -182,41 +205,10 @@
 				const supabase = createSupabaseClient();
 				await supabase.auth.setSession(verifiedSession);
 				
-				// Store user ID for potential avatar upload
-				createdUserId = data.user.id;
-				
-				// Handle avatar upload if user uploaded one during profile setup
-				if (avatarUrl && avatarUrl.startsWith('blob:')) {
-					try {
-						console.log('📸 Uploading avatar after user creation...');
-						// Get the file from the blob URL and upload it properly
-						const response = await fetch(avatarUrl);
-						const blob = await response.blob();
-						const file = new File([blob], 'avatar.jpg', { type: blob.type });
-						
-						// Create FormData for upload
-						const formData = new FormData();
-						formData.append('avatar', file);
-						
-						// Upload avatar now that user exists
-						const uploadResponse = await fetch('/api/auth/upload-avatar', {
-							method: 'POST',
-							headers: {
-								'Authorization': `Bearer ${verifiedSession.access_token}`
-							},
-							body: formData
-						});
-						
-						if (uploadResponse.ok) {
-							const uploadResult = await uploadResponse.json();
-							avatarUrl = uploadResult.avatarUrl;
-							console.log('📸 ✅ Avatar uploaded successfully after user creation');
-						} else {
-							console.warn('📸 ⚠️ Avatar upload failed after user creation');
-						}
-					} catch (avatarError) {
-						console.error('📸 ❌ Avatar upload error:', avatarError);
-					}
+				// Update avatarUrl if uploaded server-side
+				if (data.avatarUrl) {
+					avatarUrl = data.avatarUrl;
+					console.log('📸 ✅ Avatar uploaded server-side during account creation');
 				}
 				
 				// Generate encryption keys for new user
@@ -492,11 +484,11 @@
 						<div class="avatar-label">Profile Picture (Optional)</div>
 						<div class="avatar-upload-container">
 							<AvatarUpload
-								userId={createdUserId}
-								currentAvatarUrl={avatarUrl}
+								userId={null}
+								currentAvatarUrl={avatarUrl ?? null}
 								size="medium"
 								disabled={$isLoading}
-								previewOnly={!createdUserId}
+								previewOnly={true}
 								on:uploaded={handleAvatarUploaded}
 								on:error={handleAvatarError}
 								on:removed={handleAvatarRemoved}
