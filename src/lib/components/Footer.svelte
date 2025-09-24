@@ -76,6 +76,7 @@
 			<h4>Platform</h4>
 			<div class="links-list">
 				{#each [
+					{ key: 'footer.about', href: '/about' },
 					{ key: 'footer.security', href: '/security' },
 					{ key: 'footer.privacy', href: '/privacy' },
 					{ key: 'footer.terms', href: '/terms' },

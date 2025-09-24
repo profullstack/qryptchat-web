@@ -91,6 +91,7 @@ export default {
 	
 	// Footer
 	'footer.followUs': 'Follow us:',
+	'footer.about': 'About Us',
 	'footer.privacy': 'Privacy Policy',
 	'footer.terms': 'Terms of Service',
 	'footer.security': 'Security',
