@@ -1,5 +1,63 @@
 <script>
 	import { t } from '$lib/stores/i18n.js';
+	
+	/** @type {import('./$types').PageData} */
+	export let data;
+	
+	// Define team member roles and social links
+	const teamMemberInfo = {
+		profullstack: {
+			role: 'Sponsoring Company',
+			bio: 'Full-stack developer passionate about privacy, security, and building tools that empower users. Committed to creating a quantum-safe future for digital communication.',
+			socialLinks: [
+				{ type: 'github', url: 'https://github.com/profullstack' },
+				{ type: 'twitter', url: 'https://x.com/profullstackinc' },
+			]
+		},
+		chovy: {
+			role: 'Co-Founder & Developer',
+			bio: 'Experienced developer focused on creating secure, user-friendly applications. Passionate about privacy technology and building tools that protect user data.',
+			socialLinks: [
+				{ type: 'bluesky', url: 'https://bsky.app/profile/chovy.bsky.social' },
+				{ type: 'nostr', url: 'https://primal.net/p/nprofile1qqsd3xe2yc2whqtzkck22l80kst9wgk25ud90lv9mc7fwg7ynwdv53c465es2' }
+			]
+		},
+		mrpthedev: {
+			role: 'Developer',
+			bio: 'Talented developer contributing to QryptChat\'s mission of secure communication. Dedicated to building robust and reliable software solutions.',
+			socialLinks: []
+		}
+	};
+	
+	// Get social link icon SVG
+	function getSocialIcon(type) {
+		const icons = {
+			github: `<svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+				<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+			</svg>`,
+			twitter: `<svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+				<path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
+			</svg>`,
+			bluesky: `<svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+				<path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.017-.275.036-.415.056-2.67-.296-5.568.628-6.383 3.364C.378 17.902 0 22.862 0 23.55c0 .688.139 1.86.902 2.203.659.299 1.664.621 4.3-1.239 2.752-1.942 5.711-5.881 6.798-7.995 1.087 2.114 4.046 6.053 6.798 7.995 2.636 1.86 3.641 1.538 4.3 1.239.763-.343.902-1.515.902-2.203 0-.688-.378-5.648-.624-6.479-.815-2.736-3.713-3.66-6.383-3.364-.14.017-.277.039-.415.056.138-.017.275-.036.415-.056 2.67.296 5.568-.628 6.383-3.364.246-.829.624-5.789.624-6.479 0-.688-.139-1.86-.902-2.203-.659-.299-1.664-.621-4.3 1.239-2.752 1.942-5.711 5.881-6.798 7.995Z"/>
+			</svg>`,
+			nostr: `<svg width="20" height="20" viewBox="0 0 256 256">
+				<path fill="currentColor" d="M210.8 199.4c0 3.1-2.5 5.7-5.7 5.7h-68c-3.1 0-5.7-2.5-5.7-5.7v-15.5c.3-19 2.3-37.2 6.5-45.5 2.5-5 6.7-7.7 11.5-9.1 9.1-2.7 24.9-.9 31.7-1.2 0 0 20.4.8 20.4-10.7s-9.1-8.6-9.1-8.6c-10 .3-17.7-.4-22.6-2.4-8.3-3.3-8.6-9.2-8.6-11.2-.4-23.1-34.5-25.9-64.5-20.1-32.8 6.2.4 53.3.4 116.1v8.4c0 3.1-2.6 5.6-5.7 5.6H57.7c-3.1 0-5.7-2.5-5.7-5.7v-144c0-3.1 2.5-5.7 5.7-5.7h31.7c3.1 0 5.7 2.5 5.7 5.7 0 4.7 5.2 7.2 9 4.5 11.4-8.2 26-12.5 42.4-12.5 36.6 0 64.4 21.4 64.4 68.7v83.2ZM150 99.3c0-6.7-5.4-12.1-12.1-12.1s-12.1 5.4-12.1 12.1 5.4 12.1 12.1 12.1S150 106 150 99.3Z"/>
+			</svg>`
+		};
+		return icons[type] || '';
+	}
+	
+	// Get social link label
+	function getSocialLabel(type) {
+		const labels = {
+			github: 'GitHub',
+			twitter: 'X (Twitter)',
+			bluesky: 'Bluesky',
+			nostr: 'Nostr'
+		};
+		return labels[type] || type;
+	}
 </script>
 
 <svelte:head>
@@ -45,52 +103,57 @@
 				<p>QryptChat is built by a passionate team of developers, cryptographers, and privacy advocates.</p>
 				
 				<div class="team-grid">
-					<div class="team-member">
-						<div class="member-avatar">
-							<div class="avatar-placeholder">P</div>
-						</div>
-						<div class="member-info">
-							<h3>Profullstack</h3>
-							<p class="member-role">Founder & Lead Developer</p>
-							<p class="member-bio">
-								Full-stack developer passionate about privacy, security, and building tools that empower users.
-								Committed to creating a quantum-safe future for digital communication.
-							</p>
-							<div class="member-links">
-								<a href="/u/chovy" class="social-link profile">
-									<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-										<circle cx="12" cy="7" r="4"/>
-									</svg>
-									View Profile
-								</a>
-								<a href="https://github.com/profullstack" target="_blank" rel="noopener noreferrer" class="social-link github">
-									<svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-										<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-									</svg>
-									GitHub
-								</a>
-								<a href="https://x.com/profullstackinc" target="_blank" rel="noopener noreferrer" class="social-link twitter">
-									<svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-										<path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
-									</svg>
-									X (Twitter)
-								</a>
-								<a href="https://bsky.app/profile/chovy.bsky.social" target="_blank" rel="noopener noreferrer" class="social-link bluesky">
-									<svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-										<path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.017-.275.036-.415.056-2.67-.296-5.568.628-6.383 3.364C.378 17.902 0 22.862 0 23.55c0 .688.139 1.86.902 2.203.659.299 1.664.621 4.3-1.239 2.752-1.942 5.711-5.881 6.798-7.995 1.087 2.114 4.046 6.053 6.798 7.995 2.636 1.86 3.641 1.538 4.3 1.239.763-.343.902-1.515.902-2.203 0-.688-.378-5.648-.624-6.479-.815-2.736-3.713-3.66-6.383-3.364-.14.017-.277.039-.415.056.138-.017.275-.036.415-.056 2.67.296 5.568-.628 6.383-3.364.246-.829.624-5.789.624-6.479 0-.688-.139-1.86-.902-2.203-.659-.299-1.664-.621-4.3 1.239-2.752 1.942-5.711 5.881-6.798 7.995Z"/>
-									</svg>
-									Bluesky
-								</a>
-								<a href="https://primal.net/p/npub1profullstack" target="_blank" rel="noopener noreferrer" class="social-link nostr">
-									<svg width="20" height="20" viewBox="0 0 256 256">
-										<path fill="currentColor" d="M210.8 199.4c0 3.1-2.5 5.7-5.7 5.7h-68c-3.1 0-5.7-2.5-5.7-5.7v-15.5c.3-19 2.3-37.2 6.5-45.5 2.5-5 6.7-7.7 11.5-9.1 9.1-2.7 24.9-.9 31.7-1.2 0 0 20.4.8 20.4-10.7s-9.1-8.6-9.1-8.6c-10 .3-17.7-.4-22.6-2.4-8.3-3.3-8.6-9.2-8.6-11.2-.4-23.1-34.5-25.9-64.5-20.1-32.8 6.2.4 53.3.4 116.1v8.4c0 3.1-2.6 5.6-5.7 5.6H57.7c-3.1 0-5.7-2.5-5.7-5.7v-144c0-3.1 2.5-5.7 5.7-5.7h31.7c3.1 0 5.7 2.5 5.7 5.7 0 4.7 5.2 7.2 9 4.5 11.4-8.2 26-12.5 42.4-12.5 36.6 0 64.4 21.4 64.4 68.7v83.2ZM150 99.3c0-6.7-5.4-12.1-12.1-12.1s-12.1 5.4-12.1 12.1 5.4 12.1 12.1 12.1S150 106 150 99.3Z"/>
-									</svg>
-									Nostr
-								</a>
+					{#each data.teamMembers as member}
+						{@const memberInfo = teamMemberInfo[member.username]}
+						<div class="team-member">
+							<div class="member-avatar">
+								{#if member.avatarUrl}
+									<img src={member.avatarUrl} alt={member.displayName || member.username} class="avatar-image" />
+								{:else}
+									<div class="avatar-placeholder">
+										{(member.displayName || member.username).charAt(0).toUpperCase()}
+									</div>
+								{/if}
+							</div>
+							<div class="member-info">
+								<h3>{member.displayName || member.username}</h3>
+								<p class="member-role">{memberInfo?.role || 'Team Member'}</p>
+								<p class="member-bio">
+									{member.bio || memberInfo?.bio || 'Contributing to QryptChat\'s mission of secure communication.'}
+								</p>
+								<div class="member-links">
+									<!-- Profile link -->
+									<a href="/u/{member.username}" class="social-link profile">
+										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+											<circle cx="12" cy="7" r="4"/>
+										</svg>
+										View Profile
+									</a>
+									
+									<!-- Social links -->
+									{#each (memberInfo?.socialLinks || []) as socialLink}
+										<a href={socialLink.url} target="_blank" rel="noopener noreferrer" class="social-link {socialLink.type}">
+											{@html getSocialIcon(socialLink.type)}
+											{getSocialLabel(socialLink.type)}
+										</a>
+									{/each}
+									
+									<!-- Website link if available -->
+									{#if member.website}
+										<a href={member.website} target="_blank" rel="noopener noreferrer" class="social-link website">
+											<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<circle cx="12" cy="12" r="10"/>
+												<line x1="2" y1="12" x2="22" y2="12"/>
+												<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+											</svg>
+											Website
+										</a>
+									{/if}
+								</div>
 							</div>
 						</div>
-					</div>
+					{/each}
 				</div>
 			</section>
 
@@ -263,6 +326,14 @@
 		box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 	}
 
+	.avatar-image {
+		width: 80px;
+		height: 80px;
+		border-radius: 50%;
+		object-fit: cover;
+		box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+	}
+
 	.member-info h3 {
 		font-size: 1.25rem;
 		font-weight: 600;
@@ -364,6 +435,17 @@
 
 	.social-link.profile:hover {
 		background: #6366f1;
+		color: white;
+	}
+
+	.social-link.website {
+		background: rgba(34, 197, 94, 0.1);
+		color: #22c55e;
+		border-color: rgba(34, 197, 94, 0.2);
+	}
+
+	.social-link.website:hover {
+		background: #22c55e;
 		color: white;
 	}
 
