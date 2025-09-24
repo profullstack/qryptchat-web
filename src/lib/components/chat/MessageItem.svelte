@@ -99,12 +99,13 @@
 			
 			files = data.files || [];
 			
-			// Log file types for debugging
-			files.forEach(/** @type {any} */ (file) => {
-				console.log(`📁 [FILE-TYPE] File: ${file.originalFilename}, MIME: ${file.mimeType}, Icon: ${getFileIcon(file.mimeType)}`);
-			});
+			// Decrypt all filenames upfront before rendering
+			console.log(`📁 [LOAD-FILES] Decrypting filenames for ${files.length} files...`);
+			for (const file of files) {
+				await decryptFilename(file);
+			}
 			
-			console.log(`📁 [LOAD-FILES] ✅ Loaded ${files.length} files for message: ${message.id}`, files);
+			console.log(`📁 [LOAD-FILES] ✅ Loaded and decrypted ${files.length} files for message: ${message.id}`);
 
 		} catch (error) {
 			console.error(`📁 [LOAD-FILES] ❌ Error loading files for message ${message.id}:`, error);
