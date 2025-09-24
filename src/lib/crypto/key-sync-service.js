@@ -1,457 +1,247 @@
 /**
- * @fileoverview Cross-device key synchronization service
- * Handles backup and restoration of encrypted keys across devices
+ * @fileoverview Key synchronization service for QryptChat
+ * Handles syncing client-side generated public keys to the database
  */
 
 import { browser } from '$app/environment';
-import { MasterKeyDerivation } from './master-key-derivation.js';
-import { EncryptedKeyBackup } from './encrypted-key-backup.js';
+import { postQuantumEncryption } from './post-quantum-encryption.js';
 
 /**
- * Key synchronization service
- * Manages cross-device key backup and restoration
+ * Service for synchronizing public keys between client and server
  */
 export class KeySyncService {
-	/**
-	 * Initialize key sync service
-	 * @param {any} supabaseClient - Supabase client instance
-	 */
-	constructor(supabaseClient) {
-		this.supabase = supabaseClient;
-		this.isInitialized = false;
+	constructor() {
+		this.syncInProgress = false;
+		this.lastSyncAttempt = null;
+		this.maxRetries = 3;
+		this.retryDelay = 1000; // 1 second
 	}
 
 	/**
-	 * Initialize the service
+	 * Sync user's public key to the database
+	 * @param {boolean} force - Force sync even if recently attempted
+	 * @returns {Promise<{success: boolean, error?: string}>}
 	 */
-	async initialize() {
+	async syncPublicKey(force = false) {
 		if (!browser) {
-			console.warn('🔑 Key sync service only available in browser');
-			return;
+			return { success: false, error: 'Not in browser environment' };
 		}
 
-		this.isInitialized = true;
-		console.log('🔑 Key sync service initialized');
-	}
+		// Prevent concurrent sync attempts
+		if (this.syncInProgress && !force) {
+			console.log('🔑 Key sync already in progress, skipping');
+			return { success: false, error: 'Sync already in progress' };
+		}
 
-	/**
-	 * Backup user keys to encrypted cloud storage
-	 * @param {Object} params - Backup parameters
-	 * @param {string} params.phoneNumber - User's phone number
-	 * @param {string} params.pin - User's PIN/password
-	 * @param {{ publicKey: Uint8Array, privateKey: Uint8Array }} params.identityKeys - Identity key pair
-	 * @param {Record<string, Uint8Array>} params.conversationKeys - Conversation keys
-	 * @param {string} params.deviceFingerprint - Device identifier
-	 * @returns {Promise<{ success: boolean, backupId?: string, error?: string }>} Backup result
-	 */
-	async backupKeys({
-		phoneNumber,
-		pin,
-		identityKeys,
-		conversationKeys,
-		deviceFingerprint
-	}) {
+		// Rate limiting - don't sync more than once per minute unless forced
+		const now = Date.now();
+		if (!force && this.lastSyncAttempt && (now - this.lastSyncAttempt) < 60000) {
+			console.log('🔑 Key sync rate limited, skipping');
+			return { success: false, error: 'Rate limited' };
+		}
+
+		this.syncInProgress = true;
+		this.lastSyncAttempt = now;
+
 		try {
-			if (!this.isInitialized) {
-				throw new Error('Key sync service not initialized');
+			// Ensure post-quantum encryption is initialized
+			if (!postQuantumEncryption.isInitialized) {
+				console.log('🔑 Initializing post-quantum encryption for key sync');
+				await postQuantumEncryption.initialize();
 			}
 
-			// Get current user
-			const { data: { user }, error: userError } = await this.supabase.auth.getUser();
-			if (userError || !user) {
-				throw new Error('User not authenticated');
+			// Get the user's public key
+			const publicKey = await postQuantumEncryption.getPublicKey();
+			if (!publicKey) {
+				throw new Error('No public key available to sync');
 			}
 
-			// Derive master key from credentials
-			const masterKey = await MasterKeyDerivation.deriveFromCredentials(phoneNumber, pin);
+			console.log('🔑 Syncing public key to database...');
 
-			// Create encrypted backup package
-			const backup = await EncryptedKeyBackup.createBackup({
-				identityKeys,
-				conversationKeys,
-				masterKey,
-				phoneNumber,
-				deviceFingerprint
-			});
-
-			// Prepare database record
-			const backupRecord = {
-				user_id: user.id,
-				phone_number: phoneNumber,
-				encrypted_identity_keys: backup.encryptedIdentityKeys.encryptedData,
-				encrypted_master_key: backup.encryptedConversationKeys.encryptedData,
-				salt: backup.salt,
-				iterations: backup.iterations,
-				key_version: backup.keyVersion,
-				device_fingerprint: deviceFingerprint
-			};
-
-			// Store in database (upsert to handle updates)
-			const { data, error } = await this.supabase
-				.from('encrypted_key_backups')
-				.upsert(backupRecord, { onConflict: 'user_id' })
-				.select('id')
-				.single();
-
-			if (error) {
-				throw new Error(`Database error: ${error.message}`);
-			}
-
-			// Log access
-			await this.logKeyAccess({
-				userId: user.id,
-				deviceFingerprint,
-				accessType: 'backup_created',
-				success: true
-			});
-
-			// Clear sensitive data
-			MasterKeyDerivation.secureClear(masterKey);
-
-			console.log(`🔑 Successfully backed up keys for ${phoneNumber}`);
-			return {
-				success: true,
-				backupId: data.id
-			};
-
-		} catch (error) {
-			console.error('🔑 Failed to backup keys:', error);
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			
-			// Log failed access
-			try {
-				const { data: { user } } = await this.supabase.auth.getUser();
-				if (user) {
-					await this.logKeyAccess({
-						userId: user.id,
-						deviceFingerprint,
-						accessType: 'backup_created',
-						success: false,
-						errorMessage
+			// Sync to database with retry logic
+			let lastError = null;
+			for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+				try {
+					const response = await fetch('/api/crypto/public-keys', {
+						method: 'PUT',
+						headers: {
+							'Content-Type': 'application/json'
+						},
+						credentials: 'include', // Include cookies for authentication
+						body: JSON.stringify({
+							public_key: publicKey,
+							key_type: 'ML-KEM-1024'
+						})
 					});
+
+					if (!response.ok) {
+						const errorData = await response.json().catch(() => ({}));
+						throw new Error(errorData.error || `HTTP ${response.status}`);
+					}
+
+					const result = await response.json();
+					console.log('🔑 ✅ Public key synced successfully:', result.message);
+					
+					this.syncInProgress = false;
+					return { success: true };
+
+				} catch (error) {
+					lastError = error;
+					const errorMessage = error instanceof Error ? error.message : String(error);
+					console.warn(`🔑 Key sync attempt ${attempt}/${this.maxRetries} failed:`, errorMessage);
+					
+					if (attempt < this.maxRetries) {
+						// Wait before retrying
+						await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
+					}
 				}
-			} catch (logError) {
-				console.error('🔑 Failed to log access:', logError);
 			}
 
+			// All attempts failed
+			throw lastError;
+
+		} catch (error) {
+			console.error('🔑 ❌ Failed to sync public key:', error);
+			this.syncInProgress = false;
 			return {
 				success: false,
-				error: errorMessage
+				error: error instanceof Error ? error.message : 'Unknown error during key sync'
 			};
 		}
 	}
 
 	/**
-	 * Restore user keys from encrypted cloud storage
-	 * @param {string} phoneNumber - User's phone number
-	 * @param {string} pin - User's PIN/password
-	 * @param {string} [deviceFingerprint] - Device identifier
-	 * @returns {Promise<{ success: boolean, identityKeys?: any, conversationKeys?: any, error?: string }>} Restore result
+	 * Check if user needs key sync (has keys locally but not in database)
+	 * @returns {Promise<boolean>}
 	 */
-	async restoreKeys(phoneNumber, pin, deviceFingerprint) {
+	async needsKeySync() {
+		if (!browser) return false;
+
 		try {
-			if (!this.isInitialized) {
-				throw new Error('Key sync service not initialized');
+			// Check if we have local keys
+			if (!postQuantumEncryption.isInitialized) {
+				await postQuantumEncryption.initialize();
 			}
 
-			// Get current user
-			const { data: { user }, error: userError } = await this.supabase.auth.getUser();
-			if (userError || !user) {
-				throw new Error('User not authenticated');
+			const publicKey = await postQuantumEncryption.getPublicKey();
+			if (!publicKey) {
+				console.log('🔑 No local public key found, sync not needed');
+				return false;
 			}
 
-			// Fetch backup from database
-			const { data: backup, error } = await this.supabase
-				.from('encrypted_key_backups')
-				.select('*')
-				.eq('user_id', user.id)
-				.single();
-
-			if (error || !backup) {
-				throw new Error('No backup found for this user');
-			}
-
-			// Verify phone number matches
-			if (backup.phone_number !== phoneNumber) {
-				throw new Error('Phone number mismatch');
-			}
-
-			// Derive master key using stored salt
-			const masterKey = await MasterKeyDerivation.deriveWithSalt(
-				phoneNumber,
-				pin,
-				backup.salt,
-				backup.iterations
-			);
-
-			// Reconstruct backup package
-			const backupPackage = {
-				encryptedIdentityKeys: {
-					encryptedData: backup.encrypted_identity_keys,
-					nonce: backup.encrypted_identity_keys.slice(-12) // Last 12 bytes as nonce
-				},
-				encryptedConversationKeys: {
-					encryptedData: backup.encrypted_master_key,
-					nonce: backup.encrypted_master_key.slice(-12) // Last 12 bytes as nonce
-				},
-				salt: backup.salt,
-				iterations: backup.iterations,
-				phoneNumber: backup.phone_number,
-				deviceFingerprint: backup.device_fingerprint,
-				keyVersion: backup.key_version
-			};
-
-			// Restore keys from backup
-			const restored = await EncryptedKeyBackup.restoreFromBackup(backupPackage, masterKey);
-
-			// Log successful access
-			await this.logKeyAccess({
-				userId: user.id,
-				deviceFingerprint: deviceFingerprint || 'unknown',
-				accessType: 'keys_restored',
-				success: true
+			// Check if key exists in database by trying to fetch it
+			// This is a simple check - if the API returns our own key, it's synced
+			const response = await fetch('/api/crypto/public-keys/all', {
+				method: 'GET',
+				credentials: 'include'
 			});
 
-			// Clear sensitive data
-			MasterKeyDerivation.secureClear(masterKey);
-
-			console.log(`🔑 Successfully restored keys for ${phoneNumber}`);
-			return {
-				success: true,
-				identityKeys: restored.identityKeys,
-				conversationKeys: restored.conversationKeys
-			};
-
-		} catch (error) {
-			console.error('🔑 Failed to restore keys:', error);
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-			// Log failed access
-			try {
-				const { data: { user } } = await this.supabase.auth.getUser();
-				if (user) {
-					await this.logKeyAccess({
-						userId: user.id,
-						deviceFingerprint: deviceFingerprint || 'unknown',
-						accessType: 'keys_restored',
-						success: false,
-						errorMessage
-					});
-				}
-			} catch (logError) {
-				console.error('🔑 Failed to log access:', logError);
+			if (!response.ok) {
+				console.log('🔑 Cannot check database keys, assuming sync needed');
+				return true;
 			}
 
-			return {
-				success: false,
-				error: errorMessage
-			};
-		}
-	}
-
-	/**
-	 * Sync keys to a new device
-	 * @param {string} phoneNumber - User's phone number
-	 * @param {string} pin - User's PIN/password
-	 * @param {string} newDeviceFingerprint - New device identifier
-	 * @returns {Promise<{ success: boolean, identityKeys?: any, conversationKeys?: any, error?: string }>} Sync result
-	 */
-	async syncToNewDevice(phoneNumber, pin, newDeviceFingerprint) {
-		try {
-			// First restore keys
-			const restoreResult = await this.restoreKeys(phoneNumber, pin, newDeviceFingerprint);
+			const data = await response.json();
+			const currentUserId = this.getCurrentUserId();
 			
-			if (!restoreResult.success) {
-				return restoreResult;
+			if (!currentUserId) {
+				console.log('🔑 No current user ID, cannot determine sync status');
+				return false;
 			}
 
-			// Log device sync
-			const { data: { user } } = await this.supabase.auth.getUser();
-			if (user) {
-				await this.logKeyAccess({
-					userId: user.id,
-					deviceFingerprint: newDeviceFingerprint,
-					accessType: 'keys_accessed',
-					success: true
-				});
+			// Check if our key exists in the database
+			const hasKeyInDb = data.public_keys && data.public_keys[currentUserId];
+			
+			if (!hasKeyInDb) {
+				console.log('🔑 Public key not found in database, sync needed');
+				return true;
 			}
 
-			console.log(`🔑 Successfully synced keys to new device: ${newDeviceFingerprint}`);
-			return restoreResult;
+			console.log('🔑 Public key already synced to database');
+			return false;
 
 		} catch (error) {
-			console.error('🔑 Failed to sync to new device:', error);
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			return {
-				success: false,
-				error: errorMessage
-			};
+			console.error('🔑 Error checking key sync status:', error);
+			// If we can't check, assume sync is needed to be safe
+			return true;
 		}
 	}
 
 	/**
-	 * Check if user has a key backup
-	 * @param {string} phoneNumber - User's phone number
-	 * @returns {Promise<{ hasBackup: boolean, backupInfo?: any, error?: string }>} Backup status
-	 */
-	async checkBackupStatus(phoneNumber) {
-		try {
-			const { data: { user }, error: userError } = await this.supabase.auth.getUser();
-			if (userError || !user) {
-				throw new Error('User not authenticated');
-			}
-
-			const { data: backup, error } = await this.supabase
-				.from('encrypted_key_backups')
-				.select('phone_number, key_version, created_at, updated_at, device_fingerprint')
-				.eq('user_id', user.id)
-				.single();
-
-			if (error || !backup) {
-				return { hasBackup: false };
-			}
-
-			return {
-				hasBackup: true,
-				backupInfo: {
-					phoneNumber: backup.phone_number,
-					keyVersion: backup.key_version,
-					createdAt: backup.created_at,
-					updatedAt: backup.updated_at,
-					deviceFingerprint: backup.device_fingerprint,
-					phoneMatches: backup.phone_number === phoneNumber
-				}
-			};
-
-		} catch (error) {
-			console.error('🔑 Failed to check backup status:', error);
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			return {
-				hasBackup: false,
-				error: errorMessage
-			};
-		}
-	}
-
-	/**
-	 * Delete user's key backup
-	 * @param {string} phoneNumber - User's phone number for verification
-	 * @returns {Promise<{ success: boolean, error?: string }>} Delete result
-	 */
-	async deleteBackup(phoneNumber) {
-		try {
-			const { data: { user }, error: userError } = await this.supabase.auth.getUser();
-			if (userError || !user) {
-				throw new Error('User not authenticated');
-			}
-
-			// Verify phone number first
-			const { data: backup } = await this.supabase
-				.from('encrypted_key_backups')
-				.select('phone_number')
-				.eq('user_id', user.id)
-				.single();
-
-			if (backup && backup.phone_number !== phoneNumber) {
-				throw new Error('Phone number verification failed');
-			}
-
-			// Delete backup
-			const { error } = await this.supabase
-				.from('encrypted_key_backups')
-				.delete()
-				.eq('user_id', user.id);
-
-			if (error) {
-				throw new Error(`Database error: ${error.message}`);
-			}
-
-			console.log(`🔑 Successfully deleted backup for ${phoneNumber}`);
-			return { success: true };
-
-		} catch (error) {
-			console.error('🔑 Failed to delete backup:', error);
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			return {
-				success: false,
-				error: errorMessage
-			};
-		}
-	}
-
-	/**
-	 * Log key access for security monitoring
-	 * @param {Object} params - Log parameters
-	 * @param {string} params.userId - User ID
-	 * @param {string} params.deviceFingerprint - Device identifier
-	 * @param {string} params.accessType - Type of access
-	 * @param {boolean} params.success - Whether access was successful
-	 * @param {string} [params.errorMessage] - Error message if failed
+	 * Get current user ID from localStorage
+	 * @returns {string|null}
 	 * @private
 	 */
-	async logKeyAccess({
-		userId,
-		deviceFingerprint,
-		accessType,
-		success,
-		errorMessage
-	}) {
+	getCurrentUserId() {
 		try {
-			const logEntry = {
-				user_id: userId,
-				device_fingerprint: deviceFingerprint,
-				access_type: accessType,
-				success,
-				error_message: errorMessage || null,
-				ip_address: null, // Could be populated from request headers
-				user_agent: browser ? navigator.userAgent : null
-			};
+			const storedUser = localStorage.getItem('qrypt_user');
+			if (storedUser) {
+				const user = JSON.parse(storedUser);
+				return user.id;
+			}
+		} catch (error) {
+			console.error('🔑 Error getting current user ID:', error);
+		}
+		return null;
+	}
 
-			await this.supabase
-				.from('key_access_log')
-				.insert(logEntry);
+	/**
+	 * Auto-sync keys on login if needed
+	 * This handles both scenarios:
+	 * 1. User has local keys but not in database -> sync to database
+	 * 2. User has keys in database but not locally -> pull from database (future feature)
+	 * @returns {Promise<{success: boolean, error?: string}>}
+	 */
+	async autoSyncOnLogin() {
+		try {
+			console.log('🔑 Checking if auto-sync is needed on login...');
+			
+			// Check if we have local keys
+			if (!postQuantumEncryption.isInitialized) {
+				await postQuantumEncryption.initialize();
+			}
+
+			const localPublicKey = await postQuantumEncryption.getPublicKey();
+			const hasLocalKeys = !!localPublicKey;
+
+			console.log('🔑 Local keys status:', { hasLocalKeys });
+
+			if (hasLocalKeys) {
+				// User has local keys - check if they need to be synced to database
+				const needsSync = await this.needsKeySync();
+				if (needsSync) {
+					console.log('🔑 Auto-syncing local keys to database...');
+					return await this.syncPublicKey(false);
+				} else {
+					console.log('🔑 Local keys already synced to database');
+					return { success: true };
+				}
+			} else {
+				// User has no local keys - this could be a new browser
+				// In the future, we could pull keys from database here
+				// For now, just log and let the user generate new keys if needed
+				console.log('🔑 No local keys found - user may need to generate keys or this is a new browser');
+				console.log('🔑 Note: Key pulling from database is not yet implemented');
+				return { success: true };
+			}
 
 		} catch (error) {
-			console.error('🔑 Failed to log key access:', error);
-			// Don't throw - logging failures shouldn't break main functionality
+			console.error('🔑 Error during auto-sync on login:', error);
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : 'Auto-sync failed'
+			};
 		}
 	}
 
 	/**
-	 * Get user's key access history
-	 * @param {number} limit - Number of records to fetch
-	 * @returns {Promise<{ success: boolean, logs?: any[], error?: string }>} Access logs
+	 * Force sync public key (ignores rate limiting)
+	 * @returns {Promise<{success: boolean, error?: string}>}
 	 */
-	async getAccessHistory(limit = 50) {
-		try {
-			const { data: { user }, error: userError } = await this.supabase.auth.getUser();
-			if (userError || !user) {
-				throw new Error('User not authenticated');
-			}
-
-			const { data: logs, error } = await this.supabase
-				.from('key_access_log')
-				.select('*')
-				.eq('user_id', user.id)
-				.order('created_at', { ascending: false })
-				.limit(limit);
-
-			if (error) {
-				throw new Error(`Database error: ${error.message}`);
-			}
-
-			return {
-				success: true,
-				logs: logs || []
-			};
-
-		} catch (error) {
-			console.error('🔑 Failed to get access history:', error);
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			return {
-				success: false,
-				error: errorMessage
-			};
-		}
+	async forceSyncPublicKey() {
+		return await this.syncPublicKey(true);
 	}
 }
+
+// Create and export singleton instance
+export const keySyncService = new KeySyncService();

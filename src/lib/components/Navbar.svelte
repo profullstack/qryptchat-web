@@ -576,6 +576,8 @@
 	.premium-item {
 		color: var(--color-brand-primary);
 		font-weight: 500;
+		text-wrap: nowrap;
+		justify-content: flex-start;
 	}
 
 	.premium-item:hover {

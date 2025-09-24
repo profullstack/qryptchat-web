@@ -8,6 +8,7 @@ import { browser } from '$app/environment';
 import { createSupabaseClient } from '$lib/supabase.js';
 import { messages } from './messages.js';
 import { keyManager } from '$lib/crypto/key-manager.js';
+import { keySyncService } from '$lib/crypto/key-sync-service.js';
 
 /**
  * @typedef {Object} User
@@ -64,6 +65,22 @@ function createAuthStore() {
 						if (expiresAt > now) {
 							// Session is still valid, restore user
 							update(state => ({ ...state, user, loading: false }));
+							
+							// Schedule key sync for existing users (non-blocking)
+							setTimeout(async () => {
+								try {
+									console.log('🔑 Auto-syncing public keys for restored session...');
+									const syncResult = await keySyncService.autoSyncOnLogin();
+									if (syncResult.success) {
+										console.log('🔑 ✅ Public keys synced successfully for restored session');
+									} else {
+										console.warn('🔑 ⚠️ Public key sync failed for restored session:', syncResult.error);
+									}
+								} catch (syncError) {
+									console.error('🔑 ❌ Error during session restore key sync:', syncError);
+								}
+							}, 100);
+							
 							return;
 						} else if (session.refresh_token) {
 							// Token is expired but we have a refresh token, try to refresh
@@ -72,6 +89,22 @@ function createAuthStore() {
 							if (refreshResult.success) {
 								// Successfully refreshed, restore user with new session
 								update(state => ({ ...state, user, loading: false }));
+								
+								// Schedule key sync after session refresh (non-blocking)
+								setTimeout(async () => {
+									try {
+										console.log('🔑 Auto-syncing public keys after session refresh...');
+										const syncResult = await keySyncService.autoSyncOnLogin();
+										if (syncResult.success) {
+											console.log('🔑 ✅ Public keys synced successfully after session refresh');
+										} else {
+											console.warn('🔑 ⚠️ Public key sync failed after session refresh:', syncResult.error);
+										}
+									} catch (syncError) {
+										console.error('🔑 ❌ Error during session refresh key sync:', syncError);
+									}
+								}, 100);
+								
 								return;
 							}
 							// Refresh failed, fall through to clear session
@@ -298,6 +331,37 @@ function createAuthStore() {
 				}
 
 				update(state => ({ ...state, user, loading: false }));
+				
+				// For new users, run onboarding flow after user creation is complete
+				if (data.isNewUser) {
+					try {
+						console.log('🔑 Running onboarding flow for new user...');
+						const syncResult = await keySyncService.autoSyncOnLogin();
+						if (syncResult.success) {
+							console.log('🔑 ✅ Public keys synced successfully during onboarding');
+						} else {
+							console.warn('🔑 ⚠️ Public key sync failed during onboarding:', syncResult.error);
+						}
+					} catch (syncError) {
+						console.error('🔑 ❌ Error during onboarding key sync:', syncError);
+					}
+				} else {
+					// For existing users, schedule key sync (non-blocking)
+					setTimeout(async () => {
+						try {
+							console.log('🔑 Auto-syncing public keys for existing user...');
+							const syncResult = await keySyncService.autoSyncOnLogin();
+							if (syncResult.success) {
+								console.log('🔑 ✅ Public keys synced successfully for existing user');
+							} else {
+								console.warn('🔑 ⚠️ Public key sync failed for existing user:', syncResult.error);
+							}
+						} catch (syncError) {
+							console.error('🔑 ❌ Error during existing user key sync:', syncError);
+						}
+					}, 100);
+				}
+				
 				return { success: true, user, isNewUser: data.isNewUser, session };
 
 			} catch (error) {
