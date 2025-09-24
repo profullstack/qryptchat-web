@@ -1,36 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure HOST/PORT work for most Node/SvelteKit servers on Railway
+# Railway/SvelteKit-friendly defaults
 export HOST="${HOST:-0.0.0.0}"
 export PORT="${PORT:-8080}"
 
-# Generate torrc dynamically so we can inject $PORT
+# Write tor config (points onion:80 -> your local app on $PORT)
 cat >/etc/tor/torrc <<EOF
 DataDirectory /var/lib/tor
 Log notice file /var/log/tor/notices.log
 User debian-tor
 
-# Persistent keys live on your mounted volume:
 HiddenServiceDir /var/lib/tor/hidden_service
 HiddenServicePort 80 127.0.0.1:${PORT}
 
-# Not acting as a relay/exit
 SocksPort 0
 ORPort 0
 ExitPolicy reject *:*
 EOF
 
-# Make sure Tor owns its dirs (important when a volume is mounted)
+# Perms for mounted volume
 mkdir -p /var/lib/tor/hidden_service /var/log/tor
 chown -R debian-tor:debian-tor /var/lib/tor /var/log/tor
 chmod 700 /var/lib/tor/hidden_service || true
 
-# Start Tor (drops privileges to debian-tor via torrc "User")
+# Start Tor
 tor -f /etc/tor/torrc &
 TOR_PID=$!
 
-# Wait (first boot generates keys + hostname)
+# Wait for onion hostname (first run generates keys)
 for i in $(seq 1 60); do
-  if
+  if [ -s /var/lib/tor/hidden_service/hostname ]; then
+    break
+  fi
+  sleep 1
+done
 
+if [ -f /var/lib/tor/hidden_service/hostname ]; then
+  ONION_URL="$(cat /var/lib/tor/hidden_service/hostname)"
+  echo "ONION_URL=${ONION_URL}"
+else
+  echo "Timed out waiting for onion hostname" >&2
+fi
+
+# Start your app exactly as before
+pnpm start
+
+# If app exits, shut down Tor too
+kill "$TOR_PID" || true
+wait "$TOR_PID" || true
