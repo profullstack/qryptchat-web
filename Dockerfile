@@ -1,9 +1,9 @@
 # Use an official Node image with Corepack (pnpm) available
 FROM node:20-bookworm-slim
 
-# System deps: tor + tini for clean PID 1
+# System deps: tor + tini for clean PID 1 + gettext for envsubst
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tor ca-certificates tini \
+    tor ca-certificates tini gettext-base \
  && rm -rf /var/lib/apt/lists/*
 
 # Prepare Tor dirs (volume will mount at /var/lib/tor/hidden_service)
