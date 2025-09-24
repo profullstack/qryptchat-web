@@ -1,6 +1,7 @@
 <script>
 	import { user } from '$lib/stores/auth.js';
 	import { convertUrlsToLinks } from '$lib/utils/url-link-converter.js';
+	import { decryptFileContent, downloadDecryptedFile, createDecryptedMediaUrl } from '$lib/utils/file-decryption.js';
 	import { onMount } from 'svelte';
 
 	let {
@@ -116,75 +117,9 @@
 	async function decryptFilename(/** @type {any} */ file) {
 		try {
 			console.log(`📁 [DECRYPT-FILENAME] Decrypting filename for file: ${file.id}`);
-
-			// Get encrypted file data (same as download)
-			const response = await fetch(`/api/files/${file.id}/encrypted`, {
-				method: 'GET',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				console.error(`📁 [DECRYPT-FILENAME] Failed to load encrypted file: ${response.status}`);
-				return;
-			}
-
-			const encryptedData = await response.json();
-
-			// Import encryption services
-			const { postQuantumEncryption } = await import('$lib/crypto/post-quantum-encryption.js');
-			await postQuantumEncryption.initialize();
-
-			// Parse encrypted contents
-			const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
-
-			// Get current user from WebSocket store
-			const { currentUser: wsUser } = await import('$lib/stores/websocket-chat.js');
-			let user = /** @type {any} */ (null);
-			const unsubscribe = wsUser.subscribe(/** @type {any} */ (u) => user = u);
-			unsubscribe();
-			
-			if (!user?.id) {
-				console.error('📁 [DECRYPT-FILENAME] User not authenticated');
-				return;
-			}
-			
-			// Try to find user's encrypted copy (same logic as download)
-			const userEncryptedCopy = encryptedContents[user.id];
-			
-			if (!userEncryptedCopy) {
-				console.error(`📁 [DECRYPT-FILENAME] No encrypted copy found for user: ${user.id}`);
-				return;
-			}
-
-			// Decrypt the file content (same logic as download)
-			const decryptedContent = await postQuantumEncryption.decryptFromSender(
-				userEncryptedCopy,
-				''
-			);
-
-			// Parse the decrypted content to extract filename (same logic as download)
-			let fileMetadata;
-			let extractedFilename;
-			
-			try {
-				// Try to parse as JSON (new format with metadata)
-				fileMetadata = JSON.parse(decryptedContent);
-				if (fileMetadata.content && fileMetadata.filename) {
-					extractedFilename = fileMetadata.filename;
-					console.log(`📁 [DECRYPT-FILENAME] ✅ Extracted filename from metadata: ${extractedFilename}`);
-				} else {
-					throw new Error('Invalid metadata format');
-				}
-			} catch (parseError) {
-				// Fallback to generic name for legacy format
-				extractedFilename = 'encrypted-file';
-				console.log(`📁 [DECRYPT-FILENAME] Legacy format, using generic name`);
-			}
-
-			// Update the display filename
-			decryptedFilenames.set(file.id, extractedFilename);
-			console.log(`📁 [DECRYPT-FILENAME] ✅ Updated display filename for ${file.id}: ${extractedFilename}`);
-
+			const { filename } = await decryptFileContent(file.id);
+			decryptedFilenames.set(file.id, filename);
+			console.log(`📁 [DECRYPT-FILENAME] ✅ Updated display filename for ${file.id}: ${filename}`);
 		} catch (error) {
 			console.error(`📁 [DECRYPT-FILENAME] ❌ Error decrypting filename:`, error);
 		}
@@ -192,212 +127,24 @@
 
 	async function downloadFile(/** @type {any} */ file) {
 		try {
-			console.log(`📁 [DOWNLOAD] Starting client-side decryption for: ${file.originalFilename}`);
-
-			// Get encrypted file data
-			const response = await fetch(`/api/files/${file.id}/encrypted`, {
-				method: 'GET',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				throw new Error(`Failed to load encrypted file: ${response.status}`);
-			}
-
-			const encryptedData = await response.json();
-			console.log(`📁 [DOWNLOAD] Retrieved encrypted file data`);
-
-			// Import encryption services
-			const { postQuantumEncryption } = await import('$lib/crypto/post-quantum-encryption.js');
-			await postQuantumEncryption.initialize();
-
-			// Parse encrypted contents
-			const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
-			console.log(`📁 [DOWNLOAD] Available encrypted keys:`, Object.keys(encryptedContents));
-
-			// Get current user from WebSocket store (which has the correct user data)
-			const { currentUser: wsUser } = await import('$lib/stores/websocket-chat.js');
-			let user = /** @type {any} */ (null);
-			const unsubscribe = wsUser.subscribe(/** @type {any} */ (u) => user = u);
-			unsubscribe();
-			
-			if (!user?.id) {
-				throw new Error('User not authenticated');
-			}
-			
-			console.log(`📁 [DOWNLOAD] Trying to decrypt for user: ${user.id}`);
-			
-			// Try to find user's encrypted copy (encrypted contents are keyed by internal user ID)
-			const userEncryptedCopy = encryptedContents[user.id];
-			
-			if (!userEncryptedCopy) {
-				console.error(`📁 [DOWNLOAD] No encrypted copy found for user: ${user.id}`);
-				console.error(`📁 [DOWNLOAD] Available keys:`, Object.keys(encryptedContents));
-				throw new Error('No encrypted file copy found for user');
-			}
-
-			console.log(`📁 [DOWNLOAD] Decrypting file client-side...`);
-
-			// Decrypt the file content client-side
-			const decryptedContent = await postQuantumEncryption.decryptFromSender(
-				userEncryptedCopy,
-				'' // Sender public key not needed
-			);
-
-			// Parse the decrypted content to extract file metadata and content
-			let fileMetadata;
-			let actualFileContent;
-			let downloadFilename;
-			
-			try {
-				// Try to parse as JSON (new format with metadata)
-				fileMetadata = JSON.parse(decryptedContent);
-				if (fileMetadata.content && fileMetadata.filename) {
-					actualFileContent = fileMetadata.content;
-					downloadFilename = fileMetadata.filename;
-					console.log(`📁 [DOWNLOAD] Using encrypted filename from metadata: ${downloadFilename}`);
-				} else {
-					throw new Error('Invalid metadata format');
-				}
-			} catch (parseError) {
-				// Fallback to treating entire content as base64 file content (legacy format)
-				actualFileContent = decryptedContent;
-				downloadFilename = file.originalFilename;
-				console.log(`📁 [DOWNLOAD] Using legacy format, filename: ${downloadFilename}`);
-			}
-
-			// Convert base64 to binary
-			const binaryString = atob(actualFileContent);
-			const bytes = new Uint8Array(binaryString.length);
-			for (let i = 0; i < binaryString.length; i++) {
-				bytes[i] = binaryString.charCodeAt(i);
-			}
-
-			// Create blob and download
-			const blob = new Blob([bytes], { type: file.mimeType });
-			const url = window.URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			link.href = url;
-			link.download = downloadFilename;
-			document.body.appendChild(link);
-			link.click();
-			link.remove();
-			window.URL.revokeObjectURL(url);
-
-			console.log(`📁 [DOWNLOAD] ✅ File decrypted and downloaded: ${downloadFilename}`);
-
+			console.log(`📁 [DOWNLOAD] Starting download for: ${file.originalFilename}`);
+			const filename = await downloadDecryptedFile(file);
+			console.log(`📁 [DOWNLOAD] ✅ File downloaded: ${filename}`);
 		} catch (error) {
 			console.error(`📁 [DOWNLOAD] ❌ Error downloading file:`, error);
-			// Could show a toast or error message here
 		}
 	}
 
 	async function getMediaUrl(/** @type {any} */ file) {
 		try {
-			console.log(`📁 [MEDIA] Loading encrypted file data for: ${file.originalFilename}`);
+			console.log(`📁 [MEDIA] Loading media for file: ${file.id}`);
+			const { url, filename } = await createDecryptedMediaUrl(file);
 			
-			// Get encrypted file data
-			const response = await fetch(`/api/files/${file.id}/encrypted`, {
-				method: 'GET',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				throw new Error(`Failed to load encrypted file: ${response.status}`);
-			}
-
-			const encryptedData = await response.json();
-			console.log(`📁 [MEDIA] Retrieved encrypted file data:`, encryptedData.file.originalFilename);
-
-			// Import encryption services
-			const { postQuantumEncryption } = await import('$lib/crypto/post-quantum-encryption.js');
-			await postQuantumEncryption.initialize();
-
-			// Parse encrypted contents
-			const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
-			console.log(`📁 [MEDIA] Available encrypted keys:`, Object.keys(encryptedContents));
-
-			// Get current user from WebSocket store (which has the correct user data)
-			const { currentUser: wsUser } = await import('$lib/stores/websocket-chat.js');
-			let user = /** @type {any} */ (null);
-			const unsubscribe = wsUser.subscribe(/** @type {any} */ (u) => user = u);
-			unsubscribe();
+			// Update the decrypted filenames map
+			decryptedFilenames.set(file.id, filename);
+			console.log(`📁 [MEDIA] ✅ Media URL created: ${filename}`);
 			
-			if (!user?.id) {
-				throw new Error('User not authenticated');
-			}
-			
-			console.log(`📁 [MEDIA] Trying to decrypt for user: ${user.id}`);
-			
-			// Try to find user's encrypted copy (encrypted contents are keyed by internal user ID)
-			const userEncryptedCopy = encryptedContents[user.id];
-			
-			if (!userEncryptedCopy) {
-				console.error(`📁 [MEDIA] No encrypted copy found for user: ${user.id}`);
-				console.error(`📁 [MEDIA] Available keys:`, Object.keys(encryptedContents));
-				throw new Error('No encrypted file copy found for user');
-			}
-
-			console.log(`📁 [MEDIA] Decrypting file client-side...`);
-
-			// Decrypt the file content client-side
-			const decryptedContent = await postQuantumEncryption.decryptFromSender(
-				userEncryptedCopy,
-				'' // Sender public key not needed
-			);
-
-			// Parse the decrypted content to extract file metadata and content
-			let fileMetadata;
-			let actualFileContent;
-			
-			try {
-				// Try to parse as JSON (new format with metadata)
-				console.log(`📁 [MEDIA] Parsing decrypted content as JSON...`);
-				console.log(`📁 [MEDIA] Decrypted content preview:`, decryptedContent.substring(0, 200));
-				
-				fileMetadata = JSON.parse(decryptedContent);
-				console.log(`📁 [MEDIA] Parsed metadata:`, {
-					hasContent: !!fileMetadata.content,
-					hasFilename: !!fileMetadata.filename,
-					filename: fileMetadata.filename,
-					keys: Object.keys(fileMetadata)
-				});
-				
-				if (fileMetadata.content && fileMetadata.filename) {
-					actualFileContent = fileMetadata.content;
-					console.log(`📁 [MEDIA] ✅ Using encrypted filename from metadata: ${fileMetadata.filename}`);
-				} else {
-					console.log(`📁 [MEDIA] ❌ Invalid metadata format - missing content or filename`);
-					throw new Error('Invalid metadata format');
-				}
-			} catch (parseError) {
-				// Fallback to treating entire content as base64 file content (legacy format)
-				console.log(`📁 [MEDIA] ❌ JSON parse failed, using legacy format:`, parseError.message);
-				actualFileContent = decryptedContent;
-				console.log(`📁 [MEDIA] Using legacy format`);
-			}
-
-			// Convert base64 to binary
-			const binaryString = atob(actualFileContent);
-			const bytes = new Uint8Array(binaryString.length);
-			for (let i = 0; i < binaryString.length; i++) {
-				bytes[i] = binaryString.charCodeAt(i);
-			}
-
-			// Create blob with proper MIME type
-			const blob = new Blob([bytes], { type: file.mimeType });
-			const mediaUrl = window.URL.createObjectURL(blob);
-
-			const displayName = fileMetadata?.filename || 'encrypted-file';
-			console.log(`📁 [MEDIA] ✅ File decrypted and blob created: ${displayName}`);
-			
-			// Update the decrypted filenames map if we got a filename from metadata
-			if (fileMetadata?.filename) {
-				decryptedFilenames.set(file.id, fileMetadata.filename);
-			}
-			
-			return mediaUrl;
-
+			return url;
 		} catch (error) {
 			console.error(`📁 [MEDIA] ❌ Error loading media:`, error);
 			return null;
