@@ -120,7 +120,6 @@
 			<!-- Desktop Navigation -->
 			<div class="navbar-nav desktop-nav">
 				<a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>{$t('nav.home')}</a>
-				<a href="/about" class="nav-link" class:active={$page.url.pathname.startsWith('/about')}>About</a>
 				{#if $isAuthenticated}
 					<a href="/chat" class="nav-link" class:active={$page.url.pathname === '/chat'}>{$t('nav.chat')}</a>
 					<a href="/encryption-test" class="nav-link" class:active={$page.url.pathname === '/encryption-test'}>Encryption Test</a>
@@ -303,7 +302,6 @@
 			<div class="mobile-menu fade-in">
 				<div class="mobile-nav">
 					<a href="/" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.home')}</a>
-					<a href="/about" class="mobile-nav-link" on:click={closeMobileMenu}>About</a>
 					{#if $isAuthenticated}
 						<a href="/chat" class="mobile-nav-link" on:click={closeMobileMenu}>{$t('nav.chat')}</a>
 						<a href="/encryption-test" class="mobile-nav-link" on:click={closeMobileMenu}>Encryption Test</a>
