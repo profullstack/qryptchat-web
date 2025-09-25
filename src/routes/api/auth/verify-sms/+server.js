@@ -31,47 +31,20 @@ export async function POST(event) {
 	const logger = new SMSDebugLogger();
 	
 	try {
-		// Initialize variables for both JSON and FormData
+		// Initialize variables for both JSON requests
 		let phoneNumber = null;
 		let verificationCode = null;
 		let username = null;
 		let displayName = null;
 		let useSession = false;
-		/** @type {File | null} */
-		let avatarFile = null;
 		let requestBody;
 		
 		const authHeader = request.headers.get('authorization');
 
-		// Handle both JSON and multipart/form-data
+		// Parse JSON request body
 		try {
-			const contentType = request.headers.get('content-type') || '';
-			if (contentType.includes('multipart/form-data')) {
-				// Parse FormData for session-based profile completion with potential avatar
-				const formData = await request.formData();
-				phoneNumber = formData.get('phoneNumber');
-				username = formData.get('username');
-				displayName = formData.get('displayName');
-				useSession = formData.get('useSession') === 'true';
-
-				const avatarEntry = formData.get('avatar');
-				if (avatarEntry instanceof File) {
-					avatarFile = avatarEntry;
-				} else if (avatarEntry) {
-					logger.warn('Avatar form entry is not a File, ignoring', {
-						entryType: typeof avatarEntry,
-						constructorName: avatarEntry?.constructor?.name
-					});
-				}
-
-				if (useSession && !phoneNumber) {
-					return json({ error: 'Phone number is required for session-based request' }, { status: 400 });
-				}
-			} else {
-				// Parse JSON for standard OTP verification
-				requestBody = await request.json();
-				({ phoneNumber, verificationCode, username, displayName, useSession } = requestBody);
-			}
+			requestBody = await request.json();
+			({ phoneNumber, verificationCode, username, displayName, useSession } = requestBody);
 		} catch (parseError) {
 			logger.error('Request body parsing failed', { error: parseError });
 			return json({ error: 'Invalid request format' }, { status: 400 });
@@ -83,7 +56,6 @@ export async function POST(event) {
 			codeLength: verificationCode?.length,
 			hasUsername: !!username,
 			useSession: !!useSession,
-			hasAvatar: !!avatarFile,
 			hasAuthHeader: !!authHeader,
 			userAgent: request.headers.get('user-agent'),
 			ip: event.getClientAddress()
@@ -91,7 +63,7 @@ export async function POST(event) {
 
 		// Validate input based on request type
 		if (useSession && authHeader) {
-			// Session-based request - username and optional avatar
+			// Session-based request - username required
 			if (!phoneNumber || !username) {
 				logger.error('Missing required fields for session-based request', { phoneNumber: !!phoneNumber, username: !!username });
 				return json(
@@ -351,38 +323,6 @@ export async function POST(event) {
 				);
 			}
 
-			if (avatarFile) {
-				const avatar = avatarFile;
-				
-				logger.info('Validating avatar file before user creation', {
-					fileName: avatar.name,
-					fileSize: avatar.size
-				});
-
-				const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-				if (!allowedTypes.includes(avatar.type)) {
-					logger.error('Invalid avatar file type', { fileType: avatar.type });
-					return json(
-						{
-							error: 'Invalid file type. Please upload JPEG, PNG, WebP, or GIF images only.',
-							session: verifyData.session
-						},
-						{ status: 400 }
-					);
-				}
-
-				if (avatar.size > 5 * 1024 * 1024) {
-					logger.error('Avatar file too large', { fileSize: avatar.size });
-					return json(
-						{
-							error: 'File size too large. Please upload files smaller than 5MB.',
-							session: verifyData.session
-						},
-						{ status: 400 }
-					);
-				}
-			}
-
 			logger.info('Creating user record in database');
 			const { data: newUser, error: createError } = await serviceSupabase
 				.from('users')
@@ -428,61 +368,7 @@ export async function POST(event) {
 
 			user = newUser;
 			isNewUser = true;
-			logger.info('User account created successfully', { userId: newUser.id, hasAvatar: !!avatarFile });
-
-			if (avatarFile) {
-				const avatar = avatarFile;
-				try {
-					const fileExt = avatar.name.split('.').pop()?.toLowerCase() || 'jpg';
-					const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-
-					logger.info('Uploading avatar to storage after user creation', { fileName });
-
-					const fileBuffer = await avatar.arrayBuffer();
-					const { error: uploadError } = await serviceSupabase.storage
-						.from('avatars')
-						.upload(fileName, fileBuffer, {
-							contentType: avatar.type,
-							cacheControl: '3600',
-							upsert: false
-						});
-
-					if (uploadError) {
-						logger.error('Avatar storage upload failed', { error: uploadError });
-						console.error('Avatar upload error:', uploadError);
-					} else {
-						const {
-							data: { publicUrl }
-						} = serviceSupabase.storage.from('avatars').getPublicUrl(fileName);
-
-						logger.info('Avatar uploaded, updating user record', { publicUrl });
-
-						const {
-							data: updatedUser,
-							error: updateError
-						} = await serviceSupabase
-							.from('users')
-							.update({
-								avatar_url: publicUrl,
-								updated_at: new Date().toISOString()
-							})
-							.eq('id', user.id)
-							.select()
-							.single();
-
-						if (updateError) {
-							logger.error('Failed to update user with avatar URL', { error: updateError });
-							console.error('Avatar URL update error:', updateError);
-						} else if (updatedUser) {
-							user = updatedUser;
-							logger.info('User avatar URL updated successfully', { userId: user.id });
-						}
-					}
-				} catch (uploadError) {
-					logger.error('Avatar upload exception after user creation', { error: uploadError });
-					console.error('Avatar upload error:', uploadError);
-				}
-			}
+			logger.info('User account created successfully', { userId: newUser.id });
 		}
 
 		logger.info('SMS verification completed successfully', {

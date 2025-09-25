@@ -155,36 +155,18 @@
 		}
 
 		try {
-			let body;
-			let headers = /** @type {Record<string, string>} */ ({
-				'Authorization': `Bearer ${verifiedSession.access_token}`
+			// Create user account first (without avatar)
+			const body = JSON.stringify({
+				phoneNumber,
+				username,
+				displayName: displayName || username,
+				useSession: true // Flag to indicate we're using session auth
 			});
 
-			// If avatar preview exists (blob), prepare FormData for server-side upload during creation
-			if (avatarUrl && avatarUrl.startsWith('blob:')) {
-				console.log('📸 Preparing avatar for server-side upload during account creation...');
-				const response = await fetch(avatarUrl);
-				const blob = await response.blob();
-				const file = new File([blob], 'avatar.jpg', { type: blob.type });
-
-				body = new FormData();
-				body.append('phoneNumber', phoneNumber);
-				body.append('username', username);
-				body.append('displayName', displayName || username);
-				body.append('useSession', 'true');
-				body.append('avatar', file);
-
-				// Don't set Content-Type for FormData (browser sets multipart)
-			} else {
-				// No avatar, use JSON
-				body = JSON.stringify({
-					phoneNumber,
-					username,
-					displayName: displayName || username,
-					useSession: true // Flag to indicate we're using session auth
-				});
-				headers['Content-Type'] = 'application/json';
-			}
+			const headers = {
+				'Authorization': `Bearer ${verifiedSession.access_token}`,
+				'Content-Type': 'application/json'
+			};
 
 			const apiResponse = await fetch('/api/auth/verify-sms', {
 				method: 'POST',
@@ -205,10 +187,43 @@
 				const supabase = createSupabaseClient();
 				await supabase.auth.setSession(verifiedSession);
 				
-				// Update avatarUrl if uploaded server-side
-				if (data.avatarUrl) {
-					avatarUrl = data.avatarUrl;
-					console.log('📸 ✅ Avatar uploaded server-side during account creation');
+				// Upload avatar after user creation if one was selected
+				if (avatarUrl && avatarUrl.startsWith('blob:')) {
+					console.log('📸 Uploading avatar after user creation...');
+					try {
+						// Convert blob to file and upload using existing avatar upload component logic
+						const response = await fetch(avatarUrl);
+						const blob = await response.blob();
+						const file = new File([blob], 'avatar.jpg', { type: blob.type });
+
+						// Create FormData for avatar upload
+						const formData = new FormData();
+						formData.append('avatar', file);
+
+						// Upload avatar using the dedicated endpoint
+						const uploadResponse = await fetch('/api/auth/upload-avatar', {
+							method: 'POST',
+							headers: {
+								'Authorization': `Bearer ${verifiedSession.access_token}`
+							},
+							body: formData
+						});
+
+						const uploadResult = await uploadResponse.json();
+
+						if (uploadResponse.ok && uploadResult.avatarUrl) {
+							// Clean up blob URL
+							URL.revokeObjectURL(avatarUrl);
+							avatarUrl = uploadResult.avatarUrl;
+							console.log('📸 ✅ Avatar uploaded successfully after user creation');
+						} else {
+							console.warn('Avatar upload failed:', uploadResult.error);
+							messages.warning('Account created but avatar upload failed. You can add one later.');
+						}
+					} catch (avatarError) {
+						console.error('Avatar upload error:', avatarError);
+						messages.warning('Account created but avatar upload failed. You can add one later.');
+					}
 				}
 				
 				// Generate encryption keys for new user
