@@ -249,8 +249,8 @@ function createAuthStore() {
 		 * Verify SMS code and login/register user
 		 * @param {string} phoneNumber - Phone number in E.164 format
 		 * @param {string} verificationCode - 6-digit verification code
-		 * @param {string} [username] - Username for new users
-		 * @param {string} [displayName] - Display name for new users
+		 * @param {string} [username] - Username for new users (only needed for profile completion)
+		 * @param {string} [displayName] - Display name for new users (only needed for profile completion)
 		 * @returns {Promise<{success: boolean, error?: string, user?: User, isNewUser?: boolean, requiresUsername?: boolean, session?: any, message?: string}>}
 		 */
 		async verifySMS(phoneNumber, verificationCode, username, displayName) {
@@ -269,19 +269,27 @@ function createAuthStore() {
 					headers['Authorization'] = `Bearer ${sessionResult.session.access_token}`;
 				}
 				
-				// Check if we should use session-based request
-				const useSession = !!sessionResult.session;
+				// Check if we should use session-based request (only when we have both session and username)
+				const useSession = !!(sessionResult.session && username);
+
+				// Build request body - only include username/displayName if they're provided
+				/** @type {any} */
+				const requestBody = {
+					phoneNumber,
+					verificationCode
+				};
+
+				// Only add username/displayName for profile completion (when useSession is true)
+				if (useSession) {
+					requestBody.username = username;
+					requestBody.displayName = displayName;
+					requestBody.useSession = true;
+				}
 
 				const response = await fetch('/api/auth/verify-sms', {
 					method: 'POST',
 					headers,
-					body: JSON.stringify({
-						phoneNumber,
-						verificationCode,
-						username,
-						displayName,
-						useSession // Flag to indicate session-based request
-					})
+					body: JSON.stringify(requestBody)
 				});
 
 				const data = await response.json();

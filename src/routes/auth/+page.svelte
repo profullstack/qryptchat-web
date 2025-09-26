@@ -115,11 +115,11 @@
 			return;
 		}
 
+		// For initial verification, don't send username/displayName
+		// These are only needed for new user profile completion
 		const result = await auth.verifySMS(
 			phoneNumber,
-			verificationCode,
-			username,
-			displayName
+			verificationCode
 		);
 		
 		if (result.success) {
