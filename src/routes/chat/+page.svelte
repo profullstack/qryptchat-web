@@ -289,6 +289,18 @@
 			window.history.replaceState({}, '', url.toString());
 		}
 		
+		// Check for start_with parameter (from unique ID links)
+		const startWithParam = urlParams.get('start_with');
+		if (startWithParam && $isAuthenticated && $user?.id) {
+			// Start a conversation with the specified user
+			handleStartConversationWith(startWithParam);
+			
+			// Remove start_with parameter from URL
+			const url = new URL(window.location.href);
+			url.searchParams.delete('start_with');
+			window.history.replaceState({}, '', url.toString());
+		}
+		
 		if (showWelcome) {
 			// Remove welcome parameter from URL
 			const url = new URL(window.location.href);
@@ -301,6 +313,64 @@
 			}, 5000);
 		}
 	});
+
+	/**
+	 * Start a conversation with a specific user ID
+	 */
+	async function handleStartConversationWith(userId) {
+		if (!$isAuthenticated || !$user?.id) {
+			console.error('User not authenticated');
+			return;
+		}
+
+		try {
+			console.log('Starting conversation with user:', userId);
+
+			// Get token from localStorage
+			const storedSession = localStorage.getItem('qrypt_session');
+			if (!storedSession) {
+				console.error('No authentication session found');
+				return;
+			}
+
+			const session = JSON.parse(storedSession);
+			if (!session.access_token) {
+				console.error('No access token found');
+				return;
+			}
+
+			const headers = {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${session.access_token}`
+			};
+
+			// Create or find existing conversation
+			const response = await fetch('/api/chat/conversations', {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({
+					type: 'direct',
+					participant_ids: [userId]
+				})
+			});
+
+			const result = await response.json();
+
+			if (!response.ok) {
+				throw new Error(result.error || 'Failed to create conversation');
+			}
+
+			console.log('Conversation created/found:', result.conversation_id);
+			
+			// Auto-select the conversation
+			await handleConversationSelect(result.conversation_id);
+
+		} catch (error) {
+			console.error('Failed to start conversation:', error);
+			// Show user-friendly error message
+			alert(`Failed to start conversation: ${error.message}`);
+		}
+	}
 
 </script>
 

@@ -24,7 +24,7 @@ export async function load({ params }) {
 		// Fetch user profile by username
 		const { data: profile, error: profileError } = await supabase
 			.from('users')
-			.select('id, username, display_name, avatar_url, bio, website, created_at')
+			.select('id, username, display_name, avatar_url, bio, website, created_at, unique_identifier')
 			.eq('username', username)
 			.single();
 
@@ -49,7 +49,8 @@ export async function load({ params }) {
 			avatarUrl: profile.avatar_url,
 			bio: profile.bio,
 			website: profile.website,
-			createdAt: profile.created_at
+			createdAt: profile.created_at,
+			uniqueIdentifier: profile.unique_identifier
 		};
 
 		return {

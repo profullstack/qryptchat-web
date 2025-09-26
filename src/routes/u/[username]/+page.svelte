@@ -7,6 +7,7 @@
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 	import { voiceCallManager } from '$lib/stores/voice-call.js';
+	import { formatUniqueIdentifier } from '$lib/utils/unique-identifier.js';
 
 	/** @type {import('./$types').PageData} */
 	export let data;
@@ -21,6 +22,7 @@
 	let userPublicKey = '';
 	let publicKeyCopied = false;
 	let loadingPublicKey = false;
+	let uniqueIdCopied = false;
 
 	$: isOwnProfile = $isAuthenticated && $user?.username === data.profile?.username;
 	$: profileUser = data.profile;
@@ -199,6 +201,23 @@
 			}, 2000);
 		} catch (err) {
 			console.error('Failed to copy public key:', err);
+		}
+	}
+
+	/**
+		* Copy unique identifier to clipboard
+		*/
+	async function copyUniqueId() {
+		if (!profileUser?.uniqueIdentifier) return;
+		
+		try {
+			await navigator.clipboard.writeText(profileUser.uniqueIdentifier);
+			uniqueIdCopied = true;
+			setTimeout(() => {
+				uniqueIdCopied = false;
+			}, 2000);
+		} catch (err) {
+			console.error('Failed to copy unique ID:', err);
 		}
 	}
 
@@ -491,9 +510,9 @@
 					</div>
 				</div>
 			{:else if profileUser?.website}
-				<a 
-					href={formatWebsiteUrl(profileUser.website)} 
-					target="_blank" 
+				<a
+					href={formatWebsiteUrl(profileUser.website)}
+					target="_blank"
 					rel="noopener noreferrer"
 					class="profile-website"
 				>
@@ -507,6 +526,58 @@
 				<p class="profile-empty">Add your website or social media link.</p>
 			{:else}
 				<p class="profile-empty">No website available.</p>
+			{/if}
+		</div>
+
+		<!-- Unique Identifier Section -->
+		<div class="profile-section">
+			<h2 class="section-title">🆔 Profile ID</h2>
+			{#if profileUser?.uniqueIdentifier}
+				<div class="unique-id-display">
+					<p class="unique-id-description">
+						{#if isOwnProfile}
+							Share this ID with others so they can easily find and message you.
+							This ID is unique to your account and can be used instead of your username.
+						{:else}
+							This is {profileUser?.displayName || profileUser?.username || 'this user\'s'} unique profile ID.
+							You can use this ID to find them quickly.
+						{/if}
+					</p>
+					
+					<div class="id-display">
+						<div class="id-content">
+							<code class="unique-id">{formatUniqueIdentifier(profileUser.uniqueIdentifier)}</code>
+						</div>
+						<button
+							class="btn copy-btn"
+							on:click={copyUniqueId}
+							title="Copy profile ID to clipboard"
+						>
+							{#if uniqueIdCopied}
+								✅ Copied!
+							{:else}
+								📋 Copy
+							{/if}
+						</button>
+					</div>
+					
+					<div class="id-info">
+						<p><strong>💡 How to use:</strong></p>
+						<ul>
+							<li><strong>Share:</strong> Give this ID to friends so they can find you</li>
+							<li><strong>Search:</strong> Enter someone's ID in the chat search to start messaging</li>
+							<li><strong>Privacy:</strong> This ID doesn't reveal personal information</li>
+						</ul>
+					</div>
+				</div>
+			{:else}
+				<p class="profile-empty">
+					{#if isOwnProfile}
+						Your unique profile ID is being generated. Please refresh the page.
+					{:else}
+						This user doesn't have a profile ID yet.
+					{/if}
+				</p>
 			{/if}
 		</div>
 
@@ -871,7 +942,7 @@
 		}
 	}
 
-	/* Public Key Styles */
+	/* Public Key and Unique ID Styles */
 	.loading-state {
 		display: flex;
 		align-items: center;
@@ -880,31 +951,36 @@
 		font-size: 0.875rem;
 	}
 
-	.public-key-display {
+	.public-key-display,
+	.unique-id-display {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
 	}
 
-	.public-key-description {
+	.public-key-description,
+	.unique-id-description {
 		color: var(--color-text-secondary);
 		font-size: 0.875rem;
 		line-height: 1.5;
 		margin: 0;
 	}
 
-	.key-display {
+	.key-display,
+	.id-display {
 		display: flex;
 		gap: var(--space-3);
 		align-items: flex-start;
 	}
 
-	.key-content {
+	.key-content,
+	.id-content {
 		flex: 1;
 		min-width: 0;
 	}
 
-	.public-key {
+	.public-key,
+	.unique-id {
 		display: block;
 		width: 100%;
 		padding: var(--space-3);
@@ -912,11 +988,24 @@
 		border: 1px solid var(--color-border-primary);
 		border-radius: var(--radius-md);
 		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-		font-size: 0.75rem;
 		color: var(--color-text-primary);
 		word-break: break-all;
 		line-height: 1.4;
 		white-space: pre-wrap;
+	}
+
+	.public-key {
+		font-size: 0.75rem;
+	}
+
+	.unique-id {
+		font-size: 1.125rem;
+		font-weight: 600;
+		text-align: center;
+		letter-spacing: 0.05em;
+		background: linear-gradient(135deg, var(--color-brand-primary), var(--color-brand-secondary));
+		color: white;
+		border: none;
 	}
 
 	.copy-btn {
@@ -938,21 +1027,24 @@
 		background: var(--color-brand-secondary);
 	}
 
-	.key-info {
+	.key-info,
+	.id-info {
 		padding: var(--space-4);
 		background: var(--color-bg-primary);
 		border-radius: var(--radius-md);
 		border: 1px solid var(--color-border-primary);
 	}
 
-	.key-info p {
+	.key-info p,
+	.id-info p {
 		margin: 0 0 var(--space-2) 0;
 		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--color-text-primary);
 	}
 
-	.key-info ul {
+	.key-info ul,
+	.id-info ul {
 		margin: 0;
 		padding-left: var(--space-5);
 		font-size: 0.8125rem;
@@ -960,22 +1052,29 @@
 		line-height: 1.5;
 	}
 
-	.key-info li {
+	.key-info li,
+	.id-info li {
 		margin-bottom: var(--space-2);
 	}
 
-	.key-info li:last-child {
+	.key-info li:last-child,
+	.id-info li:last-child {
 		margin-bottom: 0;
 	}
 
 	@media (max-width: 640px) {
-		.key-display {
+		.key-display,
+		.id-display {
 			flex-direction: column;
 			gap: var(--space-3);
 		}
 
 		.copy-btn {
 			align-self: flex-start;
+		}
+
+		.unique-id {
+			font-size: 1rem;
 		}
 	}
 
