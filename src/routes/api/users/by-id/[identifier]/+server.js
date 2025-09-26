@@ -21,10 +21,10 @@ export async function GET({ params }) {
 		// Validate the identifier format
 		if (!validateUniqueIdentifier(identifier)) {
 			return json(
-				{ 
+				{
 					error: 'Invalid identifier format',
-					details: 'Identifier must be in format QC + 8 alphanumeric characters'
-				}, 
+					details: 'Identifier must be in format qryptchat_ + 8 alphanumeric characters'
+				},
 				{ status: 400 }
 			);
 		}

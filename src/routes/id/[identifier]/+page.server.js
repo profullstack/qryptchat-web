@@ -9,10 +9,7 @@ export async function load({ params, url }) {
 	
 	// Validate the identifier format
 	if (!validateUniqueIdentifier(identifier)) {
-		throw error(400, {
-			message: 'Invalid Profile ID',
-			details: 'The profile ID format is invalid. Profile IDs should be in the format QC-XXXX-XXXX.'
-		});
+		throw error(400, 'Invalid Profile ID: The profile ID format is invalid. Profile IDs should start with qryptchat_.');
 	}
 
 	try {
@@ -21,17 +18,11 @@ export async function load({ params, url }) {
 		
 		if (!response.ok) {
 			if (response.status === 404) {
-				throw error(404, {
-					message: 'Profile Not Found',
-					details: 'No user found with this profile ID. Please check the ID and try again.'
-				});
+				throw error(404, 'Profile Not Found: No user found with this profile ID. Please check the ID and try again.');
 			}
 			
 			const errorData = await response.json().catch(() => ({}));
-			throw error(response.status, {
-				message: 'Lookup Failed',
-				details: errorData.error || 'Failed to look up user profile.'
-			});
+			throw error(response.status, errorData.error || 'Failed to look up user profile.');
 		}
 
 		const data = await response.json();
@@ -56,9 +47,6 @@ export async function load({ params, url }) {
 		}
 		
 		console.error('Unexpected error in unique identifier lookup:', err);
-		throw error(500, {
-			message: 'Server Error',
-			details: 'An unexpected error occurred while looking up the profile.'
-		});
+		throw error(500, 'Server Error: An unexpected error occurred while looking up the profile.');
 	}
 }
