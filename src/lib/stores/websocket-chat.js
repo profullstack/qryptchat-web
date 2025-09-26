@@ -53,8 +53,13 @@ function createWebSocketChatStore() {
 	let reconnectAttempts = 0;
 	let maxReconnectAttempts = 5;
 	let reconnectDelay = 1000;
+	let maxReconnectDelay = 30000;
 	let pendingRequests = new Map(); // requestId -> { resolve, reject, timeout }
 	let typingTimeout = null;
+	let reconnectTimeout = null;
+	let heartbeatInterval = null;
+	let lastHeartbeat = null;
+	let connectionToken = null; // Store current connection token
 
 	/**
 	 * Get WebSocket URL based on environment
@@ -78,21 +83,44 @@ function createWebSocketChatStore() {
 	}
 
 	/**
-	 * Connect to WebSocket server
+	 * Connect to WebSocket server with enhanced reconnection logic
 	 * @param {string} token - Authentication token
 	 */
 	function connect(token) {
-		if (!browser || ws?.readyState === WebSocket.OPEN) return;
+		if (!browser) return;
+		
+		// Store token for reconnection attempts
+		connectionToken = token;
+		
+		// If already connected with same token, don't reconnect
+		if (ws?.readyState === WebSocket.OPEN && connectionToken === token) {
+			console.log('WebSocket already connected with same token');
+			return;
+		}
+
+		// Clean up existing connection
+		if (ws && ws.readyState !== WebSocket.CLOSED) {
+			console.log('Closing existing WebSocket connection');
+			ws.close();
+		}
 
 		const wsUrl = getWebSocketUrl();
-		console.log('Connecting to WebSocket:', wsUrl);
+		console.log(`🔗 Connecting to WebSocket (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts + 1}):`, wsUrl);
 
 		try {
 			ws = new WebSocket(wsUrl);
 
 			ws.onopen = async () => {
-				console.log('WebSocket connected');
+				console.log('✅ WebSocket connected successfully');
 				reconnectAttempts = 0;
+				lastHeartbeat = Date.now();
+				
+				// Clear any pending reconnection timeout
+				if (reconnectTimeout) {
+					clearTimeout(reconnectTimeout);
+					reconnectTimeout = null;
+				}
+				
 				update(state => ({ ...state, connected: true, error: null }));
 
 				// Initialize multi-recipient encryption and public key service
@@ -106,47 +134,63 @@ function createWebSocketChatStore() {
 
 				// Authenticate immediately after connection
 				if (token) {
-					authenticate(token);
+					await authenticate(token);
 				}
+				
+				// Start heartbeat
+				startHeartbeat();
 			};
 
 			ws.onmessage = (event) => {
+				lastHeartbeat = Date.now();
 				handleMessage(event.data);
 			};
 
 			ws.onclose = (event) => {
-				console.log('WebSocket disconnected:', event.code, event.reason);
-				update(state => ({ 
-					...state, 
-					connected: false, 
-					authenticated: false 
+				console.log(`🔌 WebSocket disconnected: ${event.code} - ${event.reason}`);
+				
+				// Stop heartbeat
+				stopHeartbeat();
+				
+				update(state => ({
+					...state,
+					connected: false,
+					authenticated: false
 				}));
 
-				// Attempt to reconnect
-				if (reconnectAttempts < maxReconnectAttempts) {
-					setTimeout(() => {
-						reconnectAttempts++;
-						connect(token);
-					}, reconnectDelay * Math.pow(2, reconnectAttempts));
+				// Only attempt reconnection if we have a token and haven't exceeded max attempts
+				if (connectionToken && reconnectAttempts < maxReconnectAttempts) {
+					scheduleReconnection();
+				} else if (reconnectAttempts >= maxReconnectAttempts) {
+					console.error('❌ Max reconnection attempts reached');
+					update(state => ({
+						...state,
+						error: 'Connection failed after multiple attempts. Please refresh the page.'
+					}));
 				}
 			};
 
 			ws.onerror = (error) => {
-				console.error('WebSocket error:', error);
-				update(state => ({ 
-					...state, 
+				console.error('❌ WebSocket error:', error);
+				update(state => ({
+					...state,
 					error: 'Connection error',
-					connected: false 
+					connected: false
 				}));
 			};
 
 		} catch (error) {
-			console.error('Failed to create WebSocket connection:', error);
-			update(state => ({ 
-				...state, 
+			console.error('❌ Failed to create WebSocket connection:', error);
+			update(state => ({
+				...state,
 				error: 'Failed to connect',
-				connected: false 
+				connected: false
 			}));
+			
+			// Schedule reconnection on connection creation failure
+			if (connectionToken && reconnectAttempts < maxReconnectAttempts) {
+				scheduleReconnection();
+			}
 		}
 	}
 

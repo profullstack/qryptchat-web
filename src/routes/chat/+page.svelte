@@ -15,6 +15,7 @@
 	import { MLKEMCallManager, CALL_STATES } from '$lib/webrtc/ml-kem-call-manager.js';
 	import { callAudioManager } from '$lib/audio/call-sounds.js';
 	import MLKEMCallInterface from '$lib/components/calls/MLKEMCallInterface.svelte';
+	import { pwaSessionManager } from '$lib/utils/pwa-session-manager.js';
 	
 	// Import debug utilities for development
 	import '$lib/debug/encryption-debug.js';
@@ -243,7 +244,7 @@
 		currentConversation.type === 'direct' // Direct messages can be converted to groups
 	));
 
-	// Redirect if not authenticated and initialize WebSocket
+	// Redirect if not authenticated and initialize WebSocket with PWA session management
 	onMount(() => {
 		if (!$isAuthenticated) {
 			goto('/auth');
@@ -252,25 +253,115 @@
 
 		// Initialize WebSocket connection when authenticated
 		if (!$isConnected) {
-			try {
-				// Get token from localStorage (same as frontend auth system)
-				const storedSession = localStorage.getItem('qrypt_session');
-				if (storedSession) {
-					const session = JSON.parse(storedSession);
-					if (session.access_token) {
-						console.log('Initializing WebSocket connection with localStorage token...');
-						wsChat.connect(session.access_token);
-					} else {
-						console.error('No access token found in stored session for WebSocket');
-					}
-				} else {
-					console.error('No authentication session found in localStorage for WebSocket');
-				}
-			} catch (error) {
-				console.error('Failed to get token from localStorage for WebSocket:', error);
-			}
+			initializeWebSocketConnection();
 		}
+
+		// Set up PWA session restoration handling
+		setupPWASessionHandling();
 	});
+
+	/**
+	 * Initialize WebSocket connection with proper error handling
+	 */
+	async function initializeWebSocketConnection() {
+		try {
+			// Get token from localStorage (same as frontend auth system)
+			const storedSession = localStorage.getItem('qrypt_session');
+			if (storedSession) {
+				const session = JSON.parse(storedSession);
+				if (session.access_token) {
+					console.log('🔗 Initializing WebSocket connection with localStorage token...');
+					wsChat.connect(session.access_token);
+				} else {
+					console.error('❌ No access token found in stored session for WebSocket');
+					await handleSessionError();
+				}
+			} else {
+				console.error('❌ No authentication session found in localStorage for WebSocket');
+				await handleSessionError();
+			}
+		} catch (error) {
+			console.error('❌ Failed to get token from localStorage for WebSocket:', error);
+			await handleSessionError();
+		}
+	}
+
+	/**
+	 * Set up PWA session handling for visibility changes and reconnection
+	 */
+	function setupPWASessionHandling() {
+		// Listen for PWA session manager events
+		const handleVisibilityChange = async () => {
+			if (!document.hidden && pwaSessionManager.isInProblematicState()) {
+				console.log('🔄 App resumed with connection issues - attempting recovery...');
+				await handleConnectionRecovery();
+			}
+		};
+
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
+		// Clean up on component destroy
+		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+		};
+	}
+
+	/**
+	 * Handle session errors by attempting recovery
+	 */
+	async function handleSessionError() {
+		console.log('🔄 Handling session error - attempting recovery...');
+		
+		try {
+			// Try to refresh the session
+			const sessionResult = await auth.getCurrentSession();
+			if (sessionResult.session) {
+				console.log('✅ Session refreshed successfully');
+				wsChat.connect(sessionResult.session.access_token);
+			} else {
+				console.log('❌ Session refresh failed - redirecting to auth');
+				goto('/auth');
+			}
+		} catch (error) {
+			console.error('❌ Session recovery failed:', error);
+			goto('/auth');
+		}
+	}
+
+	/**
+	 * Handle connection recovery after PWA resume
+	 */
+	async function handleConnectionRecovery() {
+		try {
+			// Reset PWA session manager state
+			pwaSessionManager.resetConnectionState();
+			
+			// Reset WebSocket connection state
+			wsChat.resetConnectionState();
+			
+			// Force session validation
+			const sessionValid = await pwaSessionManager.forceSessionValidation();
+			
+			if (sessionValid) {
+				// Force WebSocket reconnection
+				wsChat.forceReconnect();
+				
+				// Reload current conversation if active
+				if (activeConversationId) {
+					console.log('🔄 Reloading active conversation after recovery...');
+					await handleConversationSelect(activeConversationId);
+				}
+				
+				console.log('✅ Connection recovery completed');
+			} else {
+				console.log('❌ Session validation failed during recovery');
+				goto('/auth');
+			}
+		} catch (error) {
+			console.error('❌ Connection recovery failed:', error);
+			// Don't redirect immediately, let user try manual refresh
+		}
+	}
 
 	onMount(() => {
 		// Check for welcome parameter
