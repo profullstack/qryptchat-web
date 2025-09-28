@@ -8,8 +8,8 @@
  * Example: QCA1B2C3D4
  */
 
-// Character set excluding confusing characters (O, 0)
-const CHARS = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789';
+// Character set: 0-9 and A-Z (including 0 and O as requested)
+const CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const PREFIX = 'qryptchat';
 const IDENTIFIER_LENGTH = 17; // qryptchat + 8 characters
 const BODY_LENGTH = 8;
@@ -53,16 +53,11 @@ export function validateUniqueIdentifier(identifier) {
         return false;
     }
     
-    // Check character set (no O, 0, lowercase, or special characters)
+    // Check character set (0-9 and A-Z only)
     const body = trimmed.slice(PREFIX.length);
-    const validPattern = /^[A-Z1-9]{8}$/;
+    const validPattern = /^[0-9A-Z]{8}$/;
     
     if (!validPattern.test(body)) {
-        return false;
-    }
-    
-    // Additional check to ensure no confusing characters
-    if (body.includes('O') || body.includes('0')) {
         return false;
     }
     
@@ -70,9 +65,9 @@ export function validateUniqueIdentifier(identifier) {
 }
 
 /**
- * Format a unique identifier for display with dashes for readability
+ * Format a unique identifier for display (no formatting, just return as-is)
  * @param {string|null|undefined} identifier - The identifier to format
- * @returns {string} Formatted identifier (qryptchatXXXX-XXXX) or original if invalid
+ * @returns {string} Identifier as-is (no special characters)
  */
 export function formatUniqueIdentifier(identifier) {
     if (!identifier || typeof identifier !== 'string') {
@@ -81,41 +76,37 @@ export function formatUniqueIdentifier(identifier) {
     
     const trimmed = identifier.trim();
     
-    // Only format if it's a valid identifier
+    // Only return if it's a valid identifier, otherwise return as-is
     if (!validateUniqueIdentifier(trimmed)) {
         return trimmed;
     }
     
-    // Format as qryptchatXXXX-XXXX
-    const prefix = trimmed.slice(0, PREFIX.length);
-    const part1 = trimmed.slice(PREFIX.length, PREFIX.length + 4);
-    const part2 = trimmed.slice(PREFIX.length + 4, PREFIX.length + 8);
-    
-    return `${prefix}${part1}-${part2}`;
+    // Return as-is (no formatting with dashes)
+    return trimmed;
 }
 
 /**
- * Parse a formatted identifier back to its original format
- * @param {string|null|undefined} formattedIdentifier - The formatted identifier to parse
+ * Parse a user input identifier back to its original format
+ * @param {string|null|undefined} userInput - The user input identifier to parse
  * @returns {string} Original identifier format or empty string if invalid
  */
-export function parseUniqueIdentifier(formattedIdentifier) {
-    if (!formattedIdentifier || typeof formattedIdentifier !== 'string') {
+export function parseUniqueIdentifier(userInput) {
+    if (!userInput || typeof userInput !== 'string') {
         return '';
     }
     
-    // Normalize: trim, lowercase prefix, uppercase body, remove dashes and spaces
-    const trimmed = formattedIdentifier.trim();
+    // Normalize: trim, remove any spaces, dashes, underscores
+    const cleaned = userInput.trim().replace(/[-\s_]/g, '');
     
     // Handle case where it starts with qryptchat (case insensitive)
-    const prefixMatch = trimmed.match(/^qryptchat/i);
+    const prefixMatch = cleaned.match(/^qryptchat/i);
     if (prefixMatch) {
-        const body = trimmed.slice(prefixMatch[0].length).toUpperCase().replace(/[-\s_]/g, '');
+        const body = cleaned.slice(prefixMatch[0].length).toUpperCase();
         return PREFIX + body;
     }
     
-    // Fallback: just remove dashes, underscores and spaces, normalize case
-    return trimmed.toLowerCase().replace(/[-\s_]/g, '').replace(/^qryptchat/, PREFIX);
+    // If it doesn't start with qryptchat, return cleaned and normalized
+    return cleaned.toUpperCase();
 }
 
 /**

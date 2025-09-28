@@ -14,7 +14,7 @@ describe('Unique Identifier Utils', () => {
         it('should generate a unique identifier with qryptchat prefix', () => {
             const identifier = generateUniqueIdentifier();
             expect(identifier).to.be.a('string');
-            expect(identifier).to.match(/^qryptchat[A-Z1-9]{8}$/);
+            expect(identifier).to.match(/^qryptchat[0-9A-Z]{8}$/);
         });
 
         it('should generate different identifiers on multiple calls', () => {
@@ -28,12 +28,12 @@ describe('Unique Identifier Utils', () => {
             expect(identifier).to.have.length(17); // qryptchat + 8 characters
         });
 
-        it('should not include confusing characters (O, 0)', () => {
+        it('should only include alphanumeric characters (0-9A-Z)', () => {
             // Generate multiple identifiers to test character set
             for (let i = 0; i < 100; i++) {
                 const identifier = generateUniqueIdentifier();
-                expect(identifier).to.not.include('O');
-                expect(identifier).to.not.include('0');
+                const body = identifier.slice(9); // Remove qryptchat prefix
+                expect(body).to.match(/^[0-9A-Z]{8}$/);
             }
         });
     });
@@ -43,6 +43,7 @@ describe('Unique Identifier Utils', () => {
             expect(validateUniqueIdentifier('qryptchatA1B2C3D4')).to.be.true;
             expect(validateUniqueIdentifier('qryptchatXYZ12345')).to.be.true;
             expect(validateUniqueIdentifier('qryptchat9876ABCD')).to.be.true;
+            expect(validateUniqueIdentifier('qryptchat0O1I2L3M')).to.be.true; // Now allows 0, O, I, L
         });
 
         it('should reject identifiers without qryptchat prefix', () => {
@@ -58,10 +59,10 @@ describe('Unique Identifier Utils', () => {
         });
 
         it('should reject identifiers with invalid characters', () => {
-            expect(validateUniqueIdentifier('qryptchatA1B2C3O4')).to.be.false; // Contains O
-            expect(validateUniqueIdentifier('qryptchatA1B2C304')).to.be.false; // Contains 0
             expect(validateUniqueIdentifier('qryptchatA1B2C3d4')).to.be.false; // Contains lowercase
             expect(validateUniqueIdentifier('qryptchatA1B2C3@4')).to.be.false; // Contains special char
+            expect(validateUniqueIdentifier('qryptchatA1B2-C34')).to.be.false; // Contains hyphen
+            expect(validateUniqueIdentifier('qryptchatA1B2_C34')).to.be.false; // Contains underscore
         });
 
         it('should reject null, undefined, and empty strings', () => {
@@ -73,9 +74,10 @@ describe('Unique Identifier Utils', () => {
     });
 
     describe('formatUniqueIdentifier', () => {
-        it('should format identifier with dashes for readability', () => {
-            expect(formatUniqueIdentifier('qryptchatA1B2C3D4')).to.equal('qryptchatA1B2-C3D4');
-            expect(formatUniqueIdentifier('qryptchatXYZ12345')).to.equal('qryptchatXYZ1-2345');
+        it('should return identifier as-is (no formatting)', () => {
+            expect(formatUniqueIdentifier('qryptchatA1B2C3D4')).to.equal('qryptchatA1B2C3D4');
+            expect(formatUniqueIdentifier('qryptchatXYZ12345')).to.equal('qryptchatXYZ12345');
+            expect(formatUniqueIdentifier('qryptchat0O1I2L3M')).to.equal('qryptchat0O1I2L3M');
         });
 
         it('should handle invalid identifiers gracefully', () => {
@@ -86,9 +88,10 @@ describe('Unique Identifier Utils', () => {
     });
 
     describe('parseUniqueIdentifier', () => {
-        it('should parse formatted identifiers back to original format', () => {
+        it('should parse user input back to original format', () => {
             expect(parseUniqueIdentifier('qryptchatA1B2-C3D4')).to.equal('qryptchatA1B2C3D4');
             expect(parseUniqueIdentifier('qryptchatXYZ1-2345')).to.equal('qryptchatXYZ12345');
+            expect(parseUniqueIdentifier('qryptchat_A1B2C3D4')).to.equal('qryptchatA1B2C3D4');
         });
 
         it('should handle unformatted identifiers', () => {
@@ -118,7 +121,7 @@ describe('Unique Identifier Utils', () => {
         });
 
         it('should handle round-trip formatting correctly', () => {
-            const testIds = ['qryptchatA1B2C3D4', 'qryptchatXYZ12345', 'qryptchat9876ABCD'];
+            const testIds = ['qryptchatA1B2C3D4', 'qryptchatXYZ12345', 'qryptchat9876ABCD', 'qryptchat0O1I2L3M'];
             
             testIds.forEach(id => {
                 const formatted = formatUniqueIdentifier(id);
