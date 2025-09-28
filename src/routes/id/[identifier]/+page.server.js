@@ -7,14 +7,15 @@ import { validateUniqueIdentifier } from '$lib/utils/unique-identifier.js';
 export async function load({ params, url }) {
 	const { identifier } = params;
 	
-	// Validate the identifier format
-	if (!validateUniqueIdentifier(identifier)) {
+	// Parse and validate the identifier format (handle user input variations)
+	const parsedIdentifier = identifier.toLowerCase().trim();
+	if (!validateUniqueIdentifier(parsedIdentifier)) {
 		throw error(400, 'Invalid Profile ID: The profile ID format is invalid. Profile IDs should start with qryptchat_.');
 	}
 
 	try {
 		// Look up the user by unique identifier using our API
-		const response = await fetch(`${url.origin}/api/users/by-id/${identifier}`);
+		const response = await fetch(`${url.origin}/api/users/by-id/${parsedIdentifier}`);
 		
 		if (!response.ok) {
 			if (response.status === 404) {

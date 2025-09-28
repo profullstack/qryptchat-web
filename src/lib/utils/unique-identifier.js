@@ -10,13 +10,13 @@
 
 // Character set excluding confusing characters (O, 0)
 const CHARS = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789';
-const PREFIX = 'qryptchat_';
-const IDENTIFIER_LENGTH = 18; // qryptchat_ + 8 characters
+const PREFIX = 'qryptchat';
+const IDENTIFIER_LENGTH = 17; // qryptchat + 8 characters
 const BODY_LENGTH = 8;
 
 /**
  * Generate a new unique identifier
- * @returns {string} A unique identifier in format qryptchat_ + 8 characters
+ * @returns {string} A unique identifier in format qryptchat + 8 characters
  */
 export function generateUniqueIdentifier() {
     let result = PREFIX;
@@ -72,7 +72,7 @@ export function validateUniqueIdentifier(identifier) {
 /**
  * Format a unique identifier for display with dashes for readability
  * @param {string|null|undefined} identifier - The identifier to format
- * @returns {string} Formatted identifier (qryptchat_XXXX-XXXX) or original if invalid
+ * @returns {string} Formatted identifier (qryptchatXXXX-XXXX) or original if invalid
  */
 export function formatUniqueIdentifier(identifier) {
     if (!identifier || typeof identifier !== 'string') {
@@ -86,7 +86,7 @@ export function formatUniqueIdentifier(identifier) {
         return trimmed;
     }
     
-    // Format as qryptchat_XXXX-XXXX
+    // Format as qryptchatXXXX-XXXX
     const prefix = trimmed.slice(0, PREFIX.length);
     const part1 = trimmed.slice(PREFIX.length, PREFIX.length + 4);
     const part2 = trimmed.slice(PREFIX.length + 4, PREFIX.length + 8);
@@ -107,15 +107,15 @@ export function parseUniqueIdentifier(formattedIdentifier) {
     // Normalize: trim, lowercase prefix, uppercase body, remove dashes and spaces
     const trimmed = formattedIdentifier.trim();
     
-    // Handle case where it starts with qryptchat_ (case insensitive)
-    const prefixMatch = trimmed.match(/^qryptchat_/i);
+    // Handle case where it starts with qryptchat (case insensitive)
+    const prefixMatch = trimmed.match(/^qryptchat/i);
     if (prefixMatch) {
-        const body = trimmed.slice(prefixMatch[0].length).toUpperCase().replace(/[-\s]/g, '');
+        const body = trimmed.slice(prefixMatch[0].length).toUpperCase().replace(/[-\s_]/g, '');
         return PREFIX + body;
     }
     
-    // Fallback: just remove dashes and spaces, normalize case
-    return trimmed.toLowerCase().replace(/[-\s]/g, '').replace(/^qryptchat_/, PREFIX);
+    // Fallback: just remove dashes, underscores and spaces, normalize case
+    return trimmed.toLowerCase().replace(/[-\s_]/g, '').replace(/^qryptchat/, PREFIX);
 }
 
 /**

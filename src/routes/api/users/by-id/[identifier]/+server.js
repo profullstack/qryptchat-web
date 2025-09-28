@@ -23,7 +23,7 @@ export async function GET({ params }) {
 			return json(
 				{
 					error: 'Invalid identifier format',
-					details: 'Identifier must be in format qryptchat_ + 8 alphanumeric characters'
+					details: 'Identifier must be in format qryptchat + 8 alphanumeric characters'
 				},
 				{ status: 400 }
 			);
