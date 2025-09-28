@@ -544,7 +544,7 @@
 	}
 
 	.message-bubble.own-bubble .message-text {
-		text-align: right;
+		text-align: left;
 	}
 	
 	.message-text {
