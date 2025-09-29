@@ -552,6 +552,31 @@
 		font-size: 0.875rem;
 	}
 
+	/* Code block styling */
+	.message-text :global(pre) {
+		background: rgba(0, 0, 0, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 0.375rem;
+		padding: 0.75rem;
+		margin: 0.5rem 0;
+		overflow-x: auto;
+		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+		font-size: 0.8125rem;
+		line-height: 1.3;
+	}
+
+	.message-bubble:not(.own-bubble) .message-text :global(pre) {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		color: var(--color-text-primary);
+	}
+
+	.message-text :global(code) {
+		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+		font-size: 0.8125rem;
+		white-space: pre-wrap;
+	}
+
 	/* Fix link styling in message bubbles */
 	.message-text :global(a) {
 		color: inherit;

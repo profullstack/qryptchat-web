@@ -18,9 +18,14 @@ function escapeHtml(text) {
 }
 
 /**
- * Converts https:// URLs in text to clickable HTML links that open in new tabs
- * @param {string|null|undefined} text - Input text that may contain URLs
- * @returns {string} Text with URLs converted to HTML links
+ * Converts text formatting to HTML with support for:
+ * - https:// URLs to clickable HTML links
+ * - newlines (\n) to <br> tags
+ * - code blocks (```...```) to <pre><code> elements
+ * - tabs (\t) to 4 non-breaking spaces
+ * - multiple spaces to non-breaking spaces for preserved indentation
+ * @param {string|null|undefined} text - Input text that may contain URLs, newlines, code blocks, tabs, and spaces
+ * @returns {string} Text with all formatting converted to HTML while maintaining XSS protection
  */
 export function convertUrlsToLinks(text) {
 	// Handle null, undefined, or empty input
@@ -28,25 +33,33 @@ export function convertUrlsToLinks(text) {
 		return '';
 	}
 
-	// Regex pattern to match https:// URLs
-	// This pattern matches:
-	// - https:// (required prefix)
-	// - domain name with optional subdomains
-	// - optional port
-	// - optional path with various characters
-	// - optional query parameters
-	// - optional fragment
-	// - Excludes trailing punctuation that's likely sentence punctuation
+	// First, handle code blocks (```...```) to protect them from other processing
+	const codeBlockRegex = /```([\s\S]*?)```/g;
+	const codeBlocks = [];
+	let textWithPlaceholders = text;
+	let codeMatch;
+	let codeIndex = 0;
+
+	// Extract code blocks and replace with placeholders
+	while ((codeMatch = codeBlockRegex.exec(text)) !== null) {
+		const placeholder = `__CODE_BLOCK_${codeIndex}__`;
+		const codeContent = codeMatch[1];
+		codeBlocks.push(`<pre><code>${escapeHtml(codeContent)}</code></pre>`);
+		textWithPlaceholders = textWithPlaceholders.replace(codeMatch[0], placeholder);
+		codeIndex++;
+	}
+
+	// Reset regex for URL processing
 	const httpsUrlRegex = /https?:\/\/[^\s<>"'()[\]{}]+[^\s<>"'()[\]{}.,;!?]/g;
 
 	let result = '';
 	let lastIndex = 0;
 	let match;
 
-	// Process each URL match
-	while ((match = httpsUrlRegex.exec(text)) !== null) {
+	// Process each URL match in the text with code block placeholders
+	while ((match = httpsUrlRegex.exec(textWithPlaceholders)) !== null) {
 		// Add escaped text before the URL
-		const beforeUrl = text.slice(lastIndex, match.index);
+		const beforeUrl = textWithPlaceholders.slice(lastIndex, match.index);
 		result += escapeHtml(beforeUrl);
 
 		// Add the URL as a clickable link
@@ -57,8 +70,25 @@ export function convertUrlsToLinks(text) {
 	}
 
 	// Add any remaining text after the last URL, escaped
-	const remainingText = text.slice(lastIndex);
+	const remainingText = textWithPlaceholders.slice(lastIndex);
 	result += escapeHtml(remainingText);
+
+	// Convert newlines to <br> tags
+	result = result.replace(/\n/g, '<br>');
+
+	// Convert tabs to 4 non-breaking spaces
+	result = result.replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+
+	// Convert multiple consecutive spaces to non-breaking spaces (preserve spacing)
+	result = result.replace(/ {2,}/g, (match) => {
+		return '&nbsp;'.repeat(match.length);
+	});
+
+	// Restore code blocks from placeholders
+	codeBlocks.forEach((codeBlock, index) => {
+		const placeholder = `__CODE_BLOCK_${index}__`;
+		result = result.replace(placeholder, codeBlock);
+	});
 
 	return result;
 }
