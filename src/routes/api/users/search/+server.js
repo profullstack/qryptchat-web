@@ -21,11 +21,11 @@ export async function GET(event) {
 		const searchQuery = query.trim().toLowerCase();
 		
 		// Enhanced fuzzy search across multiple fields with relevance scoring
-		// Search by username, display_name (full name), and phone_number
+		// Search by username, display_name (full name), phone_number, and unique_identifier
 		const { data, error } = await supabase
 			.from('users')
-			.select('id, username, display_name, avatar_url, phone_number')
-			.or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%,phone_number.ilike.%${searchQuery}%`)
+			.select('id, username, display_name, avatar_url, phone_number, unique_identifier')
+			.or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%,phone_number.ilike.%${searchQuery}%,unique_identifier.ilike.%${searchQuery}%`)
 			.neq('id', user.id) // Exclude current user
 			.limit(50); // Get more results for better sorting
 	
@@ -40,6 +40,7 @@ export async function GET(event) {
 				const username = (u.username || '').toLowerCase();
 				const displayName = (u.display_name || '').toLowerCase();
 				const phoneNumber = (u.phone_number || '').toLowerCase();
+				const uniqueIdentifier = (u.unique_identifier || '').toLowerCase();
 				
 				// Calculate relevance score
 				let score = 0;
@@ -47,16 +48,19 @@ export async function GET(event) {
 				// Exact matches get highest score
 				if (username === searchQuery) score += 100;
 				if (displayName === searchQuery) score += 90;
+				if (uniqueIdentifier === searchQuery) score += 95; // High priority for unique ID
 				if (phoneNumber === searchQuery) score += 80;
 				
 				// Starts with matches get high score
 				if (username.startsWith(searchQuery)) score += 70;
 				if (displayName.startsWith(searchQuery)) score += 60;
+				if (uniqueIdentifier.startsWith(searchQuery)) score += 75; // High priority for unique ID
 				if (phoneNumber.startsWith(searchQuery)) score += 50;
 				
 				// Contains matches get lower score
 				if (username.includes(searchQuery)) score += 30;
 				if (displayName.includes(searchQuery)) score += 25;
+				if (uniqueIdentifier.includes(searchQuery)) score += 35; // Higher priority for unique ID
 				if (phoneNumber.includes(searchQuery)) score += 20;
 				
 				// Word boundary matches (for full names)
@@ -81,6 +85,7 @@ export async function GET(event) {
 			username: u.username,
 			display_name: u.display_name,
 			avatar_url: u.avatar_url,
+			unique_identifier: u.unique_identifier,
 			// Only show partial phone for privacy
 			phone_partial: u.phone_number ? `***-***-${u.phone_number.slice(-4)}` : null
 		}));
