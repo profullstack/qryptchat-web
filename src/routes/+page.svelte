@@ -1,15 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { isAuthenticated } from '$lib/stores/auth.js';
 	import { t } from '$lib/stores/i18n.js';
-
-	// Redirect authenticated users to chat
-	onMount(() => {
-		if ($isAuthenticated) {
-			goto('/chat');
-		}
-	});
 </script>
 
 <div class="hero">
