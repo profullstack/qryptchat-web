@@ -518,7 +518,7 @@
 <style>
 	.chat-sidebar {
 		width: 320px;
-		height: 100vh;
+		height: 100%;
 		background: var(--color-bg-primary);
 		border-right: 1px solid var(--color-border-primary);
 		box-shadow:
