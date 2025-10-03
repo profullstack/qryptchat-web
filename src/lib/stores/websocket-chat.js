@@ -644,16 +644,25 @@ function createWebSocketChatStore() {
 		
 		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
 		
-		// Get current state to check if this is the active conversation
+		// Get current state to check if this is the active conversation and if we're the sender
 		let currentState;
 		const unsubscribe = subscribe(state => {
 			currentState = state;
 		});
 		unsubscribe(); // Immediately unsubscribe after getting the state
 		
+		// Check if we're the sender of this message
+		const isSender = currentState.user && message.sender_id === currentState.user.id;
+		
 		// If shouldReloadMessages is true, reload all messages to get proper encrypted content
+		// BUT skip reload for the sender since they already added the message locally
 		if (shouldReloadMessages) {
 			console.log(`🔐 [NEW] Message ${message.id} requires message reload for proper encrypted content`);
+			
+			if (isSender) {
+				console.log(`🔐 [NEW] Skipping reload for sender - message already added locally`);
+				return; // Sender already added the message in sendChatMessage
+			}
 			
 			if (currentState.activeConversation === message.conversation_id) {
 				console.log(`🔐 [NEW] Reloading messages for active conversation ${message.conversation_id}`);
