@@ -625,24 +625,26 @@ function createWebSocketChatStore() {
 		
 		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
 		
+		// Get current state to check if this is the active conversation
+		let currentState;
+		const unsubscribe = subscribe(state => {
+			currentState = state;
+		});
+		unsubscribe(); // Immediately unsubscribe after getting the state
+		
 		// If shouldReloadMessages is true, reload all messages to get proper encrypted content
 		if (shouldReloadMessages) {
 			console.log(`🔐 [NEW] Message ${message.id} requires message reload for proper encrypted content`);
-			
-			// Get current state to check if this is the active conversation
-			let currentState;
-			const unsubscribe = subscribe(state => {
-				currentState = state;
-			});
-			unsubscribe(); // Immediately unsubscribe after getting the state
 			
 			if (currentState.activeConversation === message.conversation_id) {
 				console.log(`🔐 [NEW] Reloading messages for active conversation ${message.conversation_id}`);
 				await loadMessages(message.conversation_id);
 				return; // loadMessages will handle adding the message with proper decryption
 			} else {
-				console.log(`🔐 [NEW] Message ${message.id} is for inactive conversation, skipping reload`);
-				return; // Don't add messages for inactive conversations
+				console.log(`🔐 [NEW] Message ${message.id} is for inactive conversation, refreshing conversation list`);
+				// Refresh the conversation list to update unread counts and last message
+				await loadConversations();
+				return; // Don't add messages for inactive conversations, but update the list
 			}
 		}
 		
