@@ -721,7 +721,10 @@
 	.sidebar-content {
 		flex: 1;
 		overflow-y: auto;
+		overflow-x: hidden;
 		padding: 0.5rem 0;
+		min-height: 0; /* Important for flex scrolling */
+		-webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 	}
 
 	.section {
@@ -862,22 +865,31 @@
 		}
 	}
 
-	/* Scrollbar styling */
+	/* Scrollbar styling - Enhanced visibility for PWA */
 	.sidebar-content::-webkit-scrollbar {
-		width: 6px;
+		width: 8px;
 	}
 
 	.sidebar-content::-webkit-scrollbar-track {
-		background: transparent;
+		background: var(--color-bg-secondary);
+		border-radius: 4px;
+		margin: 4px 0;
 	}
 
 	.sidebar-content::-webkit-scrollbar-thumb {
 		background: var(--color-border-primary);
-		border-radius: 3px;
+		border-radius: 4px;
+		border: 2px solid var(--color-bg-secondary);
 	}
 
 	.sidebar-content::-webkit-scrollbar-thumb:hover {
 		background: var(--color-text-secondary);
+	}
+
+	/* Firefox scrollbar */
+	.sidebar-content {
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-border-primary) var(--color-bg-secondary);
 	}
 
 	/* Note to Self section styles */
