@@ -536,26 +536,8 @@ function createWebSocketChatStore() {
 					sentMessage.content = content; // Use original content as fallback
 				}
 				
-				// Add the message to the sender's own message list immediately
-				// The sender is excluded from broadcasts, so we need to add it manually
-				update(state => {
-					// Only add if it's for the active conversation
-					if (state.activeConversation === conversationId) {
-						// Avoid duplicates
-						const exists = state.messages.some(msg => msg.id === sentMessage.id);
-						if (!exists) {
-							console.log(`🔐 [SENT] Adding sent message to sender's state: "${sentMessage.content}"`);
-							return {
-								...state,
-								messages: [...state.messages, sentMessage]
-							};
-						} else {
-							console.log(`🔐 [SENT] Message ${sentMessage.id} already exists in state, skipping`);
-						}
-					}
-					return state;
-				});
-				
+				// Don't add message locally - let the broadcast handle it for everyone including sender
+				// This ensures consistency and avoids race conditions
 				return { success: true, data: sentMessage };
 			}
 		} catch (error) {
@@ -644,25 +626,17 @@ function createWebSocketChatStore() {
 		
 		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
 		
-		// Get current state to check if this is the active conversation and if we're the sender
+		// Get current state to check if this is the active conversation
 		let currentState;
 		const unsubscribe = subscribe(state => {
 			currentState = state;
 		});
 		unsubscribe(); // Immediately unsubscribe after getting the state
 		
-		// Check if we're the sender of this message
-		const isSender = currentState.user && message.sender_id === currentState.user.id;
-		
 		// If shouldReloadMessages is true, reload all messages to get proper encrypted content
-		// BUT skip reload for the sender since they already added the message locally
+		// This applies to ALL users including the sender for consistency
 		if (shouldReloadMessages) {
 			console.log(`🔐 [NEW] Message ${message.id} requires message reload for proper encrypted content`);
-			
-			if (isSender) {
-				console.log(`🔐 [NEW] Skipping reload for sender - message already added locally`);
-				return; // Sender already added the message in sendChatMessage
-			}
 			
 			if (currentState.activeConversation === message.conversation_id) {
 				console.log(`🔐 [NEW] Reloading messages for active conversation ${message.conversation_id}`);
