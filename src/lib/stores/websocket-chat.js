@@ -536,7 +536,26 @@ function createWebSocketChatStore() {
 					sentMessage.content = content; // Use original content as fallback
 				}
 				
-				// Message will be added via broadcast, but return decrypted version for immediate display
+				// Add the message to the sender's own message list immediately
+				// The sender is excluded from broadcasts, so we need to add it manually
+				update(state => {
+					// Only add if it's for the active conversation
+					if (state.activeConversation === conversationId) {
+						// Avoid duplicates
+						const exists = state.messages.some(msg => msg.id === sentMessage.id);
+						if (!exists) {
+							console.log(`🔐 [SENT] Adding sent message to sender's state: "${sentMessage.content}"`);
+							return {
+								...state,
+								messages: [...state.messages, sentMessage]
+							};
+						} else {
+							console.log(`🔐 [SENT] Message ${sentMessage.id} already exists in state, skipping`);
+						}
+					}
+					return state;
+				});
+				
 				return { success: true, data: sentMessage };
 			}
 		} catch (error) {
