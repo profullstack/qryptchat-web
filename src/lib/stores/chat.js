@@ -1,48 +1,48 @@
+
 /**
- * @fileoverview Chat store for managing conversations, messages, groups, and real-time updates
- * Handles Discord/Telegram-like chat functionality with groups, rooms, and direct messages
+ * @fileoverview SSE + POST-based chat store for QryptChat
+ * Replaces WebSocket with Server-Sent Events for receiving and POST for sending
  */
 
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
-import { createSupabaseClient } from '$lib/supabase.js';
+import { MESSAGE_TYPES } from '$lib/api/protocol.js';
+import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
+import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
+import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 /**
- * @typedef {Object} Conversation
- * @property {string} conversation_id
- * @property {'direct' | 'group' | 'room'} conversation_type
- * @property {string} conversation_name
- * @property {string|null} conversation_avatar_url
- * @property {string|null} group_id
- * @property {string|null} group_name
- * @property {number} participant_count
- * @property {string|null} latest_message_id
- * @property {string|null} latest_message_content
- * @property {string|null} latest_message_sender_id
- * @property {string|null} latest_message_sender_username
- * @property {string|null} latest_message_created_at
- * @property {number} unread_count
- * @property {boolean} is_archived
- * @property {string|null} archived_at
+ * @typedef {Object} ChatState
+ * @property {Array} conversations - User's conversations
+ * @property {Array} groups - User's groups
+ * @property {string|null} activeConversation - Currently active conversation ID
+ * @property {Array} messages - Messages for active conversation
+ * @property {boolean} loading - Loading state
+ * @property {string|null} error - Error message
+ * @property {Array} typingUsers - Users currently typing
+ * @property {boolean} connected - SSE connection status
+ * @property {boolean} authenticated - Authentication status
+ * @property {Object|null} user - Current user data
  */
 
-/**
- * @typedef {Object} Group
- * @property {string} group_id
- * @property {string} group_name
- * @property {string|null} group_description
- * @property {string|null} group_avatar_url
- * @property {string} user_role
- * @property {number} room_count
- * @property {number} member_count
- * @property {string} latest_activity
- */
+// Create writable store
+const chatState = writable(/** @type {ChatState} */ ({
+	conversations: [],
+	groups: [],
+	activeConversation: null,
+	messages: [],
+	loading: false,
+	error: null,
+	typingUsers: [],
+	connected: false,
+	authenticated: false,
+	user: null
+}));
 
 /**
- * @typedef {Object} Message
- * @property {string} id
- * @property {string} conversation_id
- * @property {string} sender_id
+ * SSE + POST-based chat store
+ */
+function createChatStore() {
  * @property {string|null} reply_to_id
  * @property {'text' | 'image' | 'file' | 'system'} message_type
  * @property {string} encrypted_content
