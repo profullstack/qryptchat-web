@@ -1,4 +1,3 @@
-
 /**
  * @fileoverview SSE + POST-based chat store for QryptChat
  * Replaces WebSocket with Server-Sent Events for receiving and POST for sending
@@ -43,868 +42,629 @@ const chatState = writable(/** @type {ChatState} */ ({
  * SSE + POST-based chat store
  */
 function createChatStore() {
- * @property {string|null} reply_to_id
- * @property {'text' | 'image' | 'file' | 'system'} message_type
- * @property {string} encrypted_content
- * @property {string|null} content_hash
- * @property {Object} metadata
- * @property {string|null} edited_at
- * @property {string|null} deleted_at
- * @property {string} created_at
- * @property {Object|null} sender
- * @property {Object|null} reply_to
- */
-
-/**
- * @typedef {Object} ChatState
- * @property {Conversation[]} conversations
- * @property {Group[]} groups
- * @property {string|null} activeConversation
- * @property {Message[]} messages
- * @property {boolean} loading
- * @property {string|null} error
- * @property {string[]} typingUsers
- * @property {Object} realtimeChannels
- */
-
-// Create writable store
-const chatState = writable(/** @type {ChatState} */ ({
-	conversations: [],
-	groups: [],
-	activeConversation: null,
-	messages: [],
-	loading: false,
-	error: null,
-	typingUsers: [],
-	realtimeChannels: {}
-}));
-
-/**
- * Chat store with methods for managing conversations, messages, and real-time updates
- */
-function createChatStore() {
 	const { subscribe, set, update } = chatState;
 
-	// Get Supabase client
-	const getSupabase = () => {
-		if (!browser) return null;
-		return createSupabaseClient();
-	};
+	let eventSource = null;
+	let reconnectAttempts = 0;
+	let maxReconnectAttempts = 5;
+	let reconnectDelay = 1000;
+	let maxReconnectDelay = 30000;
+	let typingTimeout = null;
+	let reconnectTimeout = null;
+	let connectionToken = null;
+	let lastEventTime = null;
 
-	return {
-		subscribe,
+	/**
+	 * Connect to SSE server
+	 * @param {string} token - Authentication token
+	 */
+	async function connect(token) {
+		if (!browser) return;
 
-		/**
-		 * Load user conversations (direct chats, groups, and rooms)
-		 * @param {string} userId
-		 * @param {boolean} includeArchived - Whether to include archived conversations
-		 */
-		async loadConversations(userId, includeArchived = false) {
-			if (!browser) return;
+		// Store token for reconnection attempts
+		connectionToken = token;
 
-			update(state => ({ ...state, loading: true, error: null }));
+		// If already connected, don't reconnect
+		if (eventSource?.readyState === EventSource.OPEN) {
+			console.log('📡 SSE already connected');
+			return;
+		}
 
-			try {
-				const response = await fetch('/api/chat/conversations', {
-					method: 'GET',
-					credentials: 'include'
+		// Clean up existing connection
+		if (eventSource) {
+			console.log('📡 Closing existing SSE connection');
+			eventSource.close();
+		}
+
+		const url = `/api/events`;
+		console.log(`📡 Connecting to SSE (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts + 1}):`, url);
+
+		try {
+			eventSource = new EventSource(url);
+
+			eventSource.addEventListener('open', async () => {
+				console.log('✅ SSE connected successfully');
+				reconnectAttempts = 0;
+				lastEventTime = Date.now();
+
+				// Clear any pending reconnection timeout
+				if (reconnectTimeout) {
+					clearTimeout(reconnectTimeout);
+					reconnectTimeout = null;
+				}
+
+				update(state => ({ ...state, connected: true, error: null }));
+
+				// Initialize encryption
+				console.log('🔐 Initializing multi-recipient encryption...');
+				await multiRecipientEncryption.initialize();
+				await publicKeyService.initialize();
+				await publicKeyService.initializeUserEncryption();
+				console.log('🔐 Multi-recipient encryption initialized');
+
+				// Mark as authenticated (SSE endpoint already validated token)
+				update(state => ({ ...state, authenticated: true }));
+			});
+
+			// Handle CONNECTED event
+			eventSource.addEventListener('CONNECTED', (event) => {
+				const data = JSON.parse(event.data);
+				console.log('📡 SSE CONNECTED event:', data);
+				lastEventTime = Date.now();
+			});
+
+			// Handle NEW_MESSAGE events
+			eventSource.addEventListener(MESSAGE_TYPES.NEW_MESSAGE, (event) => {
+				lastEventTime = Date.now();
+				const data = JSON.parse(event.data);
+				handleNewMessage(data.data).catch(error => {
+					console.error('Error handling new message:', error);
 				});
+			});
 
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
+			// Handle USER_TYPING events
+			eventSource.addEventListener(MESSAGE_TYPES.USER_TYPING, (event) => {
+				lastEventTime = Date.now();
+				const data = JSON.parse(event.data);
+				handleTypingUpdate(data.data);
+			});
 
-				const { conversations } = await response.json();
+			// Handle CONVERSATION_CREATED events
+			eventSource.addEventListener(MESSAGE_TYPES.CONVERSATION_CREATED, (event) => {
+				lastEventTime = Date.now();
+				const data = JSON.parse(event.data);
+				console.log('📡 New conversation created:', data);
+				// Reload conversations to include the new one
+				loadConversations();
+			});
 
-				update(state => ({
-					...state,
-					conversations: conversations || [],
-					loading: false,
-					error: null
-				}));
-			} catch (error) {
-				console.error('Failed to load conversations:', error);
-				update(state => ({
-					...state,
-					conversations: [],
-					loading: false,
-					error: 'Failed to load conversations'
-				}));
-			}
-		},
+			// Handle generic message events
+			eventSource.addEventListener('message', (event) => {
+				lastEventTime = Date.now();
+				console.log('📡 SSE message event:', event.data);
+			});
 
-		/**
-		 * Refresh conversations without showing loading state
-		 * Used to update unread counts after marking messages as read
-		 * @param {boolean} includeArchived - Whether to include archived conversations
-		 */
-		async refreshConversations(includeArchived = false) {
-			if (!browser) return;
+			eventSource.addEventListener('error', (error) => {
+				console.error('❌ SSE error:', error);
 
-			try {
-				const params = new URLSearchParams();
-				if (includeArchived) {
-					params.append('include_archived', 'true');
-				}
+				// EventSource automatically reconnects, but we track it
+				if (eventSource.readyState === EventSource.CLOSED) {
+					console.log('📡 SSE connection closed');
+					update(state => ({
+						...state,
+						connected: false,
+						authenticated: false
+					}));
 
-				const response = await fetch(`/api/chat/conversations?${params.toString()}`, {
-					method: 'GET',
-					credentials: 'include'
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
-
-				const { conversations } = await response.json();
-
-				update(state => ({
-					...state,
-					conversations: conversations || []
-				}));
-			} catch (error) {
-				console.error('Failed to refresh conversations:', error);
-			}
-		},
-
-		/**
-		 * Load user groups
-		 * @param {string} userId
-		 */
-		async loadGroups(userId) {
-			if (!browser) return;
-
-			update(state => ({ ...state, loading: true, error: null }));
-
-			try {
-				const response = await fetch('/api/chat/groups', {
-					method: 'GET',
-					credentials: 'include'
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
-
-				const { groups } = await response.json();
-
-				update(state => ({
-					...state,
-					groups: groups || [],
-					loading: false,
-					error: null
-				}));
-			} catch (error) {
-				console.error('Failed to load groups:', error);
-				update(state => ({
-					...state,
-					groups: [],
-					loading: false,
-					error: 'Failed to load groups'
-				}));
-			}
-		},
-
-		/**
-		 * Set active conversation and load its messages
-		 * @param {string} conversationId
-		 * @param {string} userId
-		 */
-		async setActiveConversation(conversationId, userId) {
-			if (!browser) return;
-
-			update(state => ({ ...state, loading: true, error: null }));
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				// Load messages for the conversation
-				const { data, error } = await supabase
-					.from('messages')
-					.select(`
-						*,
-						sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
-					`)
-					.eq('conversation_id', conversationId)
-					.is('deleted_at', null)
-					.order('created_at', { ascending: true })
-					.limit(50);
-
-				// If we have messages, load reply data separately
-				if (data && data.length > 0) {
-					const replyIds = data
-						.filter(msg => msg.reply_to_id)
-						.map(msg => msg.reply_to_id);
-
-					if (replyIds.length > 0) {
-						const { data: replyData } = await supabase
-							.from('messages')
-							.select('id, encrypted_content, sender_id')
-							.in('id', replyIds);
-
-						// Map reply data to messages
-						if (replyData) {
-							data.forEach(msg => {
-								if (msg.reply_to_id) {
-									msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
-								}
-							});
-						}
+					// Attempt manual reconnection if needed
+					if (connectionToken && reconnectAttempts < maxReconnectAttempts) {
+						scheduleReconnection();
+					} else if (reconnectAttempts >= maxReconnectAttempts) {
+						console.error('❌ Max reconnection attempts reached');
+						update(state => ({
+							...state,
+							error: 'Connection failed after multiple attempts. Please refresh the page.'
+						}));
 					}
 				}
+			});
 
-				if (error) throw error;
+		} catch (error) {
+			console.error('❌ Failed to create SSE connection:', error);
+			update(state => ({
+				...state,
+				error: 'Failed to connect',
+				connected: false
+			}));
+
+			if (connectionToken && reconnectAttempts < maxReconnectAttempts) {
+				scheduleReconnection();
+			}
+		}
+	}
+
+	/**
+	 * Schedule reconnection attempt
+	 */
+	function scheduleReconnection() {
+		reconnectAttempts++;
+		const delay = Math.min(reconnectDelay * Math.pow(2, reconnectAttempts - 1), maxReconnectDelay);
+		
+		console.log(`🔄 Scheduling reconnection attempt ${reconnectAttempts} in ${delay}ms`);
+		
+		reconnectTimeout = setTimeout(() => {
+			if (connectionToken) {
+				connect(connectionToken);
+			}
+		}, delay);
+	}
+
+	/**
+	 * Disconnect from SSE server
+	 */
+	function disconnect() {
+		if (eventSource) {
+			eventSource.close();
+			eventSource = null;
+		}
+
+		if (reconnectTimeout) {
+			clearTimeout(reconnectTimeout);
+			reconnectTimeout = null;
+		}
+
+		update(state => ({
+			...state,
+			connected: false,
+			authenticated: false,
+			user: null
+		}));
+	}
+
+	/**
+	 * Make authenticated POST request
+	 * @param {string} endpoint - API endpoint
+	 * @param {Object} data - Request data
+	 * @returns {Promise<Object>} Response data
+	 */
+	async function apiPost(endpoint, data = {}) {
+		try {
+			const response = await fetch(endpoint, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(data),
+				credentials: 'include' // Include cookies for authentication
+			});
+
+			if (!response.ok) {
+				const error = await response.json().catch(() => ({ error: 'Request failed' }));
+				throw new Error(error.error || `HTTP ${response.status}`);
+			}
+
+			return await response.json();
+		} catch (error) {
+			console.error(`API POST ${endpoint} failed:`, error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Load user conversations
+	 */
+	async function loadConversations() {
+		try {
+			update(state => ({ ...state, loading: true }));
+
+			const response = await apiPost('/api/conversations/load');
+
+			if (response.success) {
+				update(state => ({
+					...state,
+					conversations: response.conversations,
+					loading: false,
+					error: null
+				}));
+			}
+		} catch (error) {
+			console.error('Failed to load conversations:', error);
+			update(state => ({
+				...state,
+				loading: false,
+				error: 'Failed to load conversations'
+			}));
+		}
+	}
+
+	/**
+	 * Join a conversation
+	 * @param {string} conversationId - Conversation ID
+	 */
+	async function joinConversation(conversationId) {
+		try {
+			const response = await apiPost('/api/conversations/join', { conversationId });
+
+			if (response.success) {
+				console.log('✅ Successfully joined conversation room:', conversationId);
+
+				// Ensure user encryption is initialized
+				console.log(`🔑 Ensuring user encryption is ready for conversation: ${conversationId}`);
+				try {
+					await publicKeyService.initializeUserEncryption();
+					console.log(`🔑 ✅ User encryption ready for conversation: ${conversationId}`);
+				} catch (keyError) {
+					console.error(`🔑 ❌ Failed to ensure user encryption:`, keyError);
+				}
+			}
+		} catch (error) {
+			console.error('Failed to join conversation:', error);
+			update(state => ({
+				...state,
+				error: 'Failed to join conversation'
+			}));
+		}
+	}
+
+	/**
+	 * Leave a conversation
+	 * @param {string} conversationId - Conversation ID
+	 */
+	async function leaveConversation(conversationId) {
+		try {
+			await apiPost('/api/conversations/leave', { conversationId });
+		} catch (error) {
+			console.error('Failed to leave conversation:', error);
+		}
+	}
+
+	/**
+	 * Load messages for a conversation
+	 * @param {string} conversationId - Conversation ID
+	 */
+	async function loadMessages(conversationId) {
+		try {
+			update(state => ({ ...state, loading: true }));
+
+			const response = await apiPost('/api/messages/load', { conversationId });
+
+			if (response.success) {
+				// Decrypt all loaded messages
+				const messages = response.messages || [];
+				console.log(`🔐 [LOAD] Processing ${messages.length} messages for decryption`);
+
+				for (const message of messages) {
+					if (message.encrypted_content) {
+						try {
+							console.log(`🔐 [LOAD] Decrypting message ${message.id}`);
+
+							const decryptedContent = await postQuantumEncryption.decryptFromSender(
+								message.encrypted_content,
+								''
+							);
+
+							message.content = decryptedContent;
+							console.log(`🔐 [LOAD] ✅ Decrypted message ${message.id}`);
+						} catch (error) {
+							console.error(`🔐 [LOAD] ❌ Failed to decrypt message ${message.id}:`, error);
+
+							const errorMsg = error instanceof Error ? error.message : String(error);
+							if (errorMsg.includes('Algorithm mismatch') || errorMsg.includes('invalid encapsulation key')) {
+								message.content = '[Message encrypted with incompatible keys - please ask sender to resend]';
+							} else if (errorMsg.includes('tag')) {
+								message.content = '[Message integrity check failed - please ask sender to resend]';
+							} else if (errorMsg.includes('ML-KEM')) {
+								message.content = '[Message encrypted with different ML-KEM algorithm - please ask sender to resend]';
+							} else {
+								message.content = '[Message content unavailable - please ask sender to resend]';
+							}
+						}
+					} else {
+						console.log(`🔐 [LOAD] ⚠️ Message ${message.id} has no encrypted_content`);
+						message.content = '[No content]';
+					}
+				}
 
 				update(state => ({
 					...state,
 					activeConversation: conversationId,
-					messages: data || [],
+					messages: messages,
 					loading: false,
 					error: null,
-					typingUsers: [] // Clear typing indicators when switching conversations
-				}));
-
-				// Mark messages as read and refresh unread counts
-				if (data && data.length > 0) {
-					const messageIds = data
-						.filter(msg => msg.sender_id !== userId)
-						.map(msg => msg.id);
-					
-					if (messageIds.length > 0) {
-						await this.markMessagesAsRead(messageIds, userId);
-						// Refresh conversations to update unread counts
-						await this.refreshConversations();
-					}
-				}
-
-			} catch (error) {
-				console.error('Failed to set active conversation:', error);
-				update(state => ({
-					...state,
-					loading: false,
-					error: 'Failed to load conversation'
+					typingUsers: []
 				}));
 			}
-		},
-
-		/**
-		 * Send a message to a conversation
-		 * @param {Object} messageData
-		 * @param {string} userId
-		 * @returns {Promise<{success: boolean, data?: Message, error?: string}>}
-		 */
-		async sendMessage(messageData, userId) {
-			if (!browser) return { success: false, error: 'Not in browser environment' };
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				const { data, error } = await supabase
-					.from('messages')
-					.insert([{
-						...messageData,
-						sender_id: userId,
-						created_at: new Date().toISOString()
-					}])
-					.select(`
-						*,
-						sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
-					`)
-					.single();
-
-				if (error) throw error;
-
-				// Add message to local state immediately for optimistic updates
-				update(state => ({
-					...state,
-					messages: [...state.messages, data]
-				}));
-
-				return { success: true, data };
-			} catch (error) {
-				console.error('Failed to send message:', error);
-				return { success: false, error: 'Failed to send message' };
-			}
-		},
-
-		/**
-		 * Load more messages (pagination)
-		 * @param {string} conversationId
-		 * @param {string} beforeMessageId
-		 */
-		async loadMoreMessages(conversationId, beforeMessageId) {
-			if (!browser) return;
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				// Get the timestamp of the before message
-				const { data: beforeMessage } = await supabase
-					.from('messages')
-					.select('created_at')
-					.eq('id', beforeMessageId)
-					.single();
-
-				if (!beforeMessage) return;
-
-				const { data, error } = await supabase
-					.from('messages')
-					.select(`
-						*,
-						sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
-					`)
-					.eq('conversation_id', conversationId)
-					.is('deleted_at', null)
-					.lt('created_at', beforeMessage.created_at)
-					.order('created_at', { ascending: false })
-					.limit(50);
-
-				// If we have messages, load reply data separately
-				if (data && data.length > 0) {
-					const replyIds = data
-						.filter(msg => msg.reply_to_id)
-						.map(msg => msg.reply_to_id);
-
-					if (replyIds.length > 0) {
-						const { data: replyData } = await supabase
-							.from('messages')
-							.select('id, encrypted_content, sender_id')
-							.in('id', replyIds);
-
-						// Map reply data to messages
-						if (replyData) {
-							data.forEach(msg => {
-								if (msg.reply_to_id) {
-									msg.reply_to = replyData.find(reply => reply.id === msg.reply_to_id);
-								}
-							});
-						}
-					}
-				}
-
-				if (error) throw error;
-
-				// Prepend older messages to the beginning of the array
-				update(state => ({
-					...state,
-					messages: [...(data || []).reverse(), ...state.messages]
-				}));
-
-			} catch (error) {
-				console.error('Failed to load more messages:', error);
-			}
-		},
-
-		/**
-		 * Mark messages as read
-		 * @param {string[]} messageIds
-		 * @param {string} authUserId - Supabase Auth user ID
-		 */
-		async markMessagesAsRead(messageIds, authUserId) {
-			if (!browser || !messageIds.length) return;
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				// Get internal user ID from auth user ID
-				const { data: userData, error: userError } = await supabase
-					.from('users')
-					.select('id')
-					.eq('auth_user_id', authUserId)
-					.single();
-
-				if (userError || !userData) {
-					console.error('Failed to get internal user ID:', userError);
-					return;
-				}
-
-				const internalUserId = userData.id;
-
-				const readStatuses = messageIds.map(messageId => ({
-					message_id: messageId,
-					user_id: internalUserId, // Use internal user ID, not auth user ID
-					status: 'read',
-					timestamp: new Date().toISOString()
-				}));
-
-				await supabase
-					.from('message_status')
-					.upsert(readStatuses, { onConflict: 'message_id,user_id' });
-
-				console.log(`Marked ${messageIds.length} messages as read for internal user ${internalUserId}`);
-
-			} catch (error) {
-				console.error('Failed to mark messages as read:', error);
-			}
-		},
-
-		/**
-		 * Create a new group with default room
-		 * @param {Object} groupData
-		 * @param {string} userId
-		 * @returns {Promise<{success: boolean, data?: any, error?: string}>}
-		 */
-		async createGroup(groupData, userId) {
-			if (!browser) return { success: false, error: 'Not in browser environment' };
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				const { data, error } = await supabase.rpc('create_group_with_default_room', {
-					group_name: groupData.name,
-					group_description: groupData.description || null,
-					creator_id: userId,
-					is_public_group: groupData.isPublic || false
-				});
-
-				if (error) throw error;
-
-				// Reload groups to reflect the new group
-				await this.loadGroups(userId);
-
-				return { success: true, data: data[0] };
-			} catch (error) {
-				console.error('Failed to create group:', error);
-				return { success: false, error: 'Failed to create group' };
-			}
-		},
-
-		/**
-		 * Join a group by invite code
-		 * @param {string} inviteCode
-		 * @param {string} userId
-		 * @returns {Promise<{success: boolean, data?: any, error?: string}>}
-		 */
-		async joinGroupByInvite(inviteCode, userId) {
-			if (!browser) return { success: false, error: 'Not in browser environment' };
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				const { data, error } = await supabase.rpc('join_group_by_invite', {
-					invite_code_param: inviteCode,
-					user_id_param: userId
-				});
-
-				if (error) throw error;
-
-				const result = data[0];
-				if (!result.success) {
-					return { success: false, error: result.message };
-				}
-
-				// Reload groups and conversations to reflect the new membership
-				await Promise.all([
-					this.loadGroups(userId),
-					this.loadConversations(userId)
-				]);
-
-				return { success: true, data: result };
-			} catch (error) {
-				console.error('Failed to join group:', error);
-				return { success: false, error: 'Failed to join group' };
-			}
-		},
-
-		/**
-		 * Create a direct conversation with another user
-		 * @param {string} userId
-		 * @param {string} otherUserId
-		 * @returns {Promise<{success: boolean, data?: string, error?: string}>}
-		 */
-		async createDirectConversation(userId, otherUserId) {
-			if (!browser) return { success: false, error: 'Not in browser environment' };
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				const { data, error } = await supabase.rpc('create_direct_conversation', {
-					user1_id: userId,
-					user2_id: otherUserId
-				});
-
-				if (error) throw error;
-
-				// Reload conversations to include the new one
-				await this.loadConversations(userId);
-
-				return { success: true, data };
-			} catch (error) {
-				console.error('Failed to create direct conversation:', error);
-				return { success: false, error: 'Failed to create conversation' };
-			}
-		},
-
-		/**
-		 * Subscribe to real-time updates for a conversation
-		 * @param {string} conversationId
-		 * @param {Object} callbacks
-		 */
-		subscribeToConversation(conversationId, callbacks = {}) {
-			if (!browser) return null;
-
-			const supabase = getSupabase();
-			if (!supabase) return null;
-
-			const channel = supabase
-				.channel(`conversation:${conversationId}`)
-				.on(
-					'postgres_changes',
-					{
-						event: 'INSERT',
-						schema: 'public',
-						table: 'messages',
-						filter: `conversation_id=eq.${conversationId}`
-					},
-					(payload) => {
-						this.handleNewMessage(payload.new);
-						callbacks.onNewMessage?.(payload.new);
-					}
-				)
-				.on(
-					'postgres_changes',
-					{
-						event: 'UPDATE',
-						schema: 'public',
-						table: 'typing_indicators',
-						filter: `conversation_id=eq.${conversationId}`
-					},
-					(payload) => {
-						this.handleTypingChange(payload.new);
-						callbacks.onTypingChange?.(payload.new);
-					}
-				)
-				.subscribe();
-
-			// Store channel reference for cleanup
+		} catch (error) {
+			console.error('Failed to load messages:', error);
 			update(state => ({
 				...state,
-				realtimeChannels: {
-					...state.realtimeChannels,
-					[conversationId]: channel
-				}
+				loading: false,
+				error: 'Failed to load messages'
 			}));
+		}
+	}
 
-			return channel;
-		},
+	/**
+	 * Send a message
+	 * @param {string} conversationId - Conversation ID
+	 * @param {string} content - Message content
+	 * @param {string} messageType - Message type (default: 'text')
+	 * @param {string} replyToId - ID of message being replied to
+	 */
+	async function sendChatMessage(conversationId, content, messageType = 'text', replyToId = null) {
+		try {
+			// Encrypt message for all conversation participants
+			console.log(`🔐 [SEND] Encrypting message for conversation: ${conversationId}`);
+			const encryptedContents = await multiRecipientEncryption.encryptForConversation(conversationId, content);
 
-		/**
-		 * Handle new message from real-time subscription
-		 * @param {Message} message
-		 */
-		handleNewMessage(message) {
-			update(state => {
-				// Avoid duplicates
-				const exists = state.messages.some(msg => msg.id === message.id);
-				if (exists) return state;
+			const payload = {
+				conversationId,
+				encryptedContents,
+				messageType
+			};
 
-				// Add message to current conversation if it matches
-				const newMessages = state.activeConversation === message.conversation_id
-					? [...state.messages, message]
-					: state.messages;
+			if (replyToId) {
+				payload.replyToId = replyToId;
+			}
 
-				// Update conversation unread count if message is from a different conversation
-				const updatedConversations = state.conversations.map(conv => {
-					// Handle both conversation_id and id fields (API returns conversation_id, some places use id)
-					const convId = conv.conversation_id || conv.id;
-					if (convId === message.conversation_id) {
-						// Only increment unread count if this isn't the active conversation
-						const shouldIncrementUnread = state.activeConversation !== message.conversation_id;
-						return {
-							...conv,
-							unread_count: shouldIncrementUnread ? (conv.unread_count || 0) + 1 : conv.unread_count,
-							latest_message_id: message.id,
-							latest_message_content: message.encrypted_content,
-							latest_message_sender_id: message.sender_id,
-							latest_message_created_at: message.created_at
-						};
-					}
-					return conv;
-				});
+			const response = await apiPost('/api/messages/send', payload);
 
-				return {
-					...state,
-					messages: newMessages,
-					conversations: updatedConversations
-				};
-			});
-		},
+			if (response.success) {
+				// Decrypt the sent message for immediate display
+				const sentMessage = response.message;
+				if (sentMessage.encrypted_content) {
+					try {
+						console.log(`🔐 [SENT] Decrypting sent message ${sentMessage.id}`);
 
-		/**
-		 * Handle typing indicator changes
-		 * @param {Object} typingData
-		 */
-		handleTypingChange(typingData) {
-			update(state => {
-				const { user_id, is_typing } = typingData;
-				let newTypingUsers = [...state.typingUsers];
+						const decryptedContent = await postQuantumEncryption.decryptFromSender(
+							sentMessage.encrypted_content,
+							''
+						);
 
-				if (is_typing) {
-					if (!newTypingUsers.includes(user_id)) {
-						newTypingUsers.push(user_id);
+						sentMessage.content = decryptedContent;
+						console.log(`🔐 [SENT] ✅ Decrypted sent message ${sentMessage.id}`);
+					} catch (error) {
+						console.error(`🔐 [SENT] ❌ Failed to decrypt sent message:`, error);
+						sentMessage.content = content; // Fallback to original
 					}
 				} else {
-					newTypingUsers = newTypingUsers.filter(id => id !== user_id);
+					sentMessage.content = content;
 				}
 
-				return {
-					...state,
-					typingUsers: newTypingUsers
-				};
-			});
-		},
-
-		/**
-		 * Set typing indicator for current user
-		 * @param {string} conversationId
-		 * @param {string} userId
-		 * @param {boolean} isTyping
-		 */
-		async setTypingIndicator(conversationId, userId, isTyping) {
-			if (!browser) return;
-
-			try {
-				const supabase = getSupabase();
-				if (!supabase) throw new Error('Supabase client not available');
-
-				await supabase
-					.from('typing_indicators')
-					.upsert(
-						{
-							conversation_id: conversationId,
-							user_id: userId,
-							is_typing: isTyping,
-							updated_at: new Date().toISOString()
-						},
-						{ onConflict: 'conversation_id,user_id' }
-					);
-			} catch (error) {
-				console.error('Failed to set typing indicator:', error);
+				// Don't add message locally - let SSE broadcast handle it
+				return { success: true, data: sentMessage };
 			}
-		},
+		} catch (error) {
+			console.error('Failed to send message:', error);
 
-		/**
-		 * Search conversations by name
-		 * @param {string} query
-		 * @returns {Conversation[]}
-		 */
-		searchConversations(query) {
-			const state = get(chatState);
-			if (!query.trim()) return state.conversations;
+			let errorMessage = 'Failed to send message';
 
-			const lowerQuery = query.toLowerCase();
-			return state.conversations.filter(conv =>
-				conv.conversation_name?.toLowerCase().includes(lowerQuery)
-			);
-		},
-
-		/**
-		 * Filter conversations by type
-		 * @param {'direct' | 'group' | 'room'} type
-		 * @returns {Conversation[]}
-		 */
-		filterConversationsByType(type) {
-			const state = get(chatState);
-			return state.conversations.filter(conv => conv.conversation_type === type);
-		},
-
-		/**
-		 * Archive a conversation
-		 * @param {string} conversationId
-		 * @returns {Promise<{success: boolean, error?: string}>}
-		 */
-		async archiveConversation(conversationId) {
-			if (!browser) return { success: false, error: 'Not in browser environment' };
-
-			try {
-				const response = await fetch('/api/chat/conversations', {
-					method: 'PATCH',
-					credentials: 'include',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({
-						conversation_id: conversationId,
-						action: 'archive'
-					})
-				});
-
-				const result = await response.json();
-
-				if (!response.ok) {
-					throw new Error(result.error || 'Failed to archive conversation');
+			if (error && error.message) {
+				if (error.message.includes('KYBER') && error.message.includes('Nuclear Key Reset')) {
+					errorMessage = 'Encryption failed due to key format issues. Both you and the recipient need to use the Nuclear Key Reset option in Settings.';
+				} else if (error.message.includes('invalid encapsulation key')) {
+					errorMessage = 'Encryption failed due to key compatibility issues. Both participants need to reset their encryption keys.';
+				} else if (error.message.includes('Failed to encrypt message for any participants')) {
+					errorMessage = 'Failed to encrypt message for any participants. Try using the Nuclear Key Reset option in Settings.';
 				}
-
-				// Update local state to mark conversation as archived
-				update(state => ({
-					...state,
-					conversations: state.conversations.map(conv =>
-						conv.conversation_id === conversationId
-							? { ...conv, is_archived: true, archived_at: new Date().toISOString() }
-							: conv
-					)
-				}));
-
-				return { success: true };
-			} catch (error) {
-				console.error('Failed to archive conversation:', error);
-				return { success: false, error: error.message };
-			}
-		},
-
-		/**
-		 * Unarchive a conversation
-		 * @param {string} conversationId
-		 * @returns {Promise<{success: boolean, error?: string}>}
-		 */
-		async unarchiveConversation(conversationId) {
-			if (!browser) return { success: false, error: 'Not in browser environment' };
-
-			try {
-				const response = await fetch('/api/chat/conversations', {
-					method: 'PATCH',
-					credentials: 'include',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({
-						conversation_id: conversationId,
-						action: 'unarchive'
-					})
-				});
-
-				const result = await response.json();
-
-				if (!response.ok) {
-					throw new Error(result.error || 'Failed to unarchive conversation');
-				}
-
-				// Update local state to mark conversation as unarchived
-				update(state => ({
-					...state,
-					conversations: state.conversations.map(conv =>
-						conv.conversation_id === conversationId
-							? { ...conv, is_archived: false, archived_at: null }
-							: conv
-					)
-				}));
-
-				return { success: true };
-			} catch (error) {
-				console.error('Failed to unarchive conversation:', error);
-				return { success: false, error: error.message };
-			}
-		},
-
-		/**
-		 * Load archived conversations
-		 * @returns {Promise<void>}
-		 */
-		async loadArchivedConversations() {
-			if (!browser) return;
-
-			update(state => ({ ...state, loading: true, error: null }));
-
-			try {
-				const response = await fetch('/api/chat/conversations?archived_only=true', {
-					method: 'GET',
-					credentials: 'include'
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
-
-				const { conversations } = await response.json();
-
-				update(state => ({
-					...state,
-					conversations: conversations || [],
-					loading: false,
-					error: null
-				}));
-			} catch (error) {
-				console.error('Failed to load archived conversations:', error);
-				update(state => ({
-					...state,
-					conversations: [],
-					loading: false,
-					error: 'Failed to load archived conversations'
-				}));
-			}
-		},
-
-		/**
-		 * Filter conversations by archived status
-		 * @param {boolean} archivedStatus - true for archived, false for active
-		 * @returns {Conversation[]}
-		 */
-		filterConversationsByArchivedStatus(archivedStatus) {
-			const state = get(chatState);
-			return state.conversations.filter(conv => conv.is_archived === archivedStatus);
-		},
-
-		/**
-		 * Get unread message count
-		 * @param {boolean} includeArchived - Whether to include archived conversations in count
-		 * @returns {number}
-		 */
-		getTotalUnreadCount(includeArchived = false) {
-			const state = get(chatState);
-			return state.conversations
-				.filter(conv => includeArchived || !conv.is_archived)
-				.reduce((total, conv) => total + conv.unread_count, 0);
-		},
-
-		/**
-		 * Clean up real-time subscriptions
-		 */
-		cleanup() {
-			const state = get(chatState);
-			const supabase = getSupabase();
-			
-			if (supabase && state.realtimeChannels) {
-				Object.values(state.realtimeChannels).forEach(channel => {
-					if (channel && typeof channel.unsubscribe === 'function') {
-						channel.unsubscribe();
-					}
-				});
 			}
 
-			update(state => ({
-				...state,
-				realtimeChannels: {}
-			}));
-		},
-
-		// Utility methods for testing and state management
-		setConversations(conversations) {
-			update(state => ({ ...state, conversations }));
-		},
-
-		setMessages(messages) {
-			update(state => ({ ...state, messages }));
-		},
-
-		setError(error) {
-			update(state => ({ ...state, error }));
-		},
-
-		clearError() {
-			update(state => ({ ...state, error: null }));
+			return { success: false, error: errorMessage };
 		}
+	}
+
+	/**
+	 * Start typing indicator
+	 * @param {string} conversationId - Conversation ID
+	 */
+	async function startTyping(conversationId) {
+		try {
+			await apiPost('/api/typing/start', { conversationId });
+		} catch (error) {
+			console.error('Failed to start typing:', error);
+		}
+	}
+
+	/**
+	 * Stop typing indicator
+	 * @param {string} conversationId - Conversation ID
+	 */
+	async function stopTyping(conversationId) {
+		try {
+			await apiPost('/api/typing/stop', { conversationId });
+		} catch (error) {
+			console.error('Failed to stop typing:', error);
+		}
+	}
+
+	/**
+	 * Set typing indicator with auto-stop
+	 * @param {string} conversationId - Conversation ID
+	 */
+	function setTyping(conversationId) {
+		if (typingTimeout) {
+			clearTimeout(typingTimeout);
+		}
+
+		startTyping(conversationId);
+
+		typingTimeout = setTimeout(() => {
+			stopTyping(conversationId);
+		}, 3000);
+	}
+
+	/**
+	 * Handle new message from SSE broadcast
+	 * @param {Object} messagePayload - Message payload from broadcast
+	 */
+	async function handleNewMessage(messagePayload) {
+		const message = messagePayload.message;
+		const shouldReloadMessages = messagePayload.shouldReloadMessages;
+
+		console.log(`🔐 [NEW] Processing new message ${message.id} for conversation ${message.conversation_id}`);
+
+		// Get current state
+		let currentState;
+		const unsubscribe = subscribe(state => {
+			currentState = state;
+		});
+		unsubscribe();
+
+		// If shouldReloadMessages, reload all messages
+		if (shouldReloadMessages) {
+			console.log(`🔐 [NEW] Message ${message.id} requires message reload`);
+
+			if (currentState.activeConversation === message.conversation_id) {
+				console.log(`🔐 [NEW] Reloading messages for active conversation`);
+				await loadMessages(message.conversation_id);
+				return;
+			} else {
+				console.log(`🔐 [NEW] Message for inactive conversation, refreshing list`);
+				await loadConversations();
+				return;
+			}
+		}
+
+		// Decrypt message
+		if (message.encrypted_content) {
+			try {
+				console.log(`🔐 [NEW] Decrypting new message ${message.id}`);
+
+				const decryptedContent = await postQuantumEncryption.decryptFromSender(
+					message.encrypted_content,
+					''
+				);
+
+				message.content = decryptedContent;
+				console.log(`🔐 [NEW] ✅ Decrypted new message ${message.id}`);
+			} catch (error) {
+				console.error(`🔐 [NEW] ❌ Failed to decrypt message:`, error);
+
+				const errorMsg = error instanceof Error ? error.message : String(error);
+				if (errorMsg.includes('Algorithm mismatch') || errorMsg.includes('invalid encapsulation key')) {
+					message.content = '[Message encrypted with incompatible keys - please ask sender to resend]';
+				} else if (errorMsg.includes('tag')) {
+					message.content = '[Message integrity check failed - please ask sender to resend]';
+				} else if (errorMsg.includes('ML-KEM')) {
+					message.content = '[Message encrypted with different ML-KEM algorithm - please ask sender to resend]';
+				} else {
+					message.content = '[Message content unavailable - please ask sender to resend]';
+				}
+			}
+		} else if (message.content) {
+			console.log(`🔐 [NEW] ⚠️ Message has content but no encrypted_content`);
+		} else {
+			console.log(`🔐 [NEW] ⚠️ Message has no content`);
+			message.content = '[No content]';
+		}
+
+		// Update state
+		update(state => {
+			if (state.activeConversation === message.conversation_id) {
+				const exists = state.messages.some(msg => msg.id === message.id);
+				if (!exists) {
+					console.log(`🔐 [NEW] Adding message to state`);
+					return {
+						...state,
+						messages: [...state.messages, message]
+					};
+				}
+			}
+			return state;
+		});
+	}
+
+	/**
+	 * Handle typing indicator update
+	 * @param {Object} typingData - Typing data
+	 */
+	function handleTypingUpdate(typingData) {
+		update(state => {
+			const { userId, isTyping } = typingData;
+			let newTypingUsers = [...state.typingUsers];
+
+			if (isTyping) {
+				if (!newTypingUsers.includes(userId)) {
+					newTypingUsers.push(userId);
+				}
+			} else {
+				newTypingUsers = newTypingUsers.filter(id => id !== userId);
+			}
+
+			return {
+				...state,
+				typingUsers: newTypingUsers
+			};
+		});
+	}
+
+	/**
+	 * Create a new conversation
+	 * @param {Object} conversationData - Conversation data
+	 */
+	async function createConversation(conversationData) {
+		try {
+			const response = await apiPost('/api/conversations/create', conversationData);
+
+			if (response.success) {
+				const newConversation = response.conversation;
+				const conversationId = newConversation.id;
+
+				console.log(`🔑 Ensuring user encryption for new conversation: ${conversationId}`);
+				await publicKeyService.initializeUserEncryption();
+
+				await loadConversations();
+				return { success: true, data: newConversation };
+			}
+		} catch (error) {
+			console.error('Failed to create conversation:', error);
+			return { success: false, error: 'Failed to create conversation' };
+		}
+	}
+
+	return {
+		subscribe,
+
+		// Connection management
+		connect,
+		disconnect,
+
+		// Conversation management
+		loadConversations,
+		joinConversation,
+		leaveConversation,
+		createConversation,
+
+		// Message management
+		loadMessages,
+		sendMessage: sendChatMessage,
+
+		// Typing indicators
+		startTyping,
+		stopTyping,
+		setTyping,
+
+		// Utility methods
+		setError: (error) => update(state => ({ ...state, error })),
+		clearError: () => update(state => ({ ...state, error: null })),
+
+		// Get current state
+		getState: () => {
+			let currentState;
+			subscribe(state => currentState = state)();
+			return currentState;
+		},
+
+		// For compatibility with WebRTC (returns null since no WebSocket)
+		getWebSocket: () => null
 	};
 }
 
 // Create and export the chat store
 export const chat = createChatStore();
+
+// Maintain backward compatibility
+export const wsChat = chat;
 
 // Derived stores for convenience
 export const conversations = derived(chat, $chat => $chat.conversations);
@@ -914,20 +674,13 @@ export const messages = derived(chat, $chat => $chat.messages);
 export const isLoading = derived(chat, $chat => $chat.loading);
 export const chatError = derived(chat, $chat => $chat.error);
 export const typingUsers = derived(chat, $chat => $chat.typingUsers);
-export const totalUnreadCount = derived(chat, $chat => 
-	$chat.conversations.reduce((total, conv) => total + conv.unread_count, 0)
-);
+export const isConnected = derived(chat, $chat => $chat.connected);
+export const isAuthenticated = derived(chat, $chat => $chat.authenticated);
+export const currentUser = derived(chat, $chat => $chat.user);
 
-// Helper function to get store value (for testing)
-function get(store) {
-	let value;
-	store.subscribe(v => value = v)();
-	return value;
-}
-
-// Clean up subscriptions when the page unloads
+// Clean up on page unload
 if (browser) {
 	window.addEventListener('beforeunload', () => {
-		chat.cleanup();
+		chat.disconnect();
 	});
 }
