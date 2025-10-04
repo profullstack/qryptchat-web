@@ -164,6 +164,41 @@
 		}
 	}
 
+	/**
+	 * Parse CSV content and return first N rows
+	 * @param {string} csvContent - The CSV file content
+	 * @param {number} maxRows - Maximum number of rows to return (default: 10)
+	 * @returns {{ headers: string[], rows: string[][], totalRows: number }}
+	 */
+	function parseCSVPreview(csvContent, maxRows = 10) {
+		if (!csvContent) return { headers: [], rows: [], totalRows: 0 };
+		
+		const lines = csvContent.split('\n').filter(line => line.trim());
+		const totalRows = lines.length - 1; // Exclude header
+		
+		if (lines.length === 0) return { headers: [], rows: [], totalRows: 0 };
+		
+		// Parse header
+		const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+		
+		// Parse first N data rows
+		const rows = lines.slice(1, maxRows + 1).map(line =>
+			line.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''))
+		);
+		
+		return { headers, rows, totalRows };
+	}
+
+	/**
+	 * Check if file is a CSV file
+	 * @param {any} file
+	 * @returns {boolean}
+	 */
+	function isCSVFile(file) {
+		return file.mimeType === 'text/csv' ||
+		       file.originalFilename?.toLowerCase().endsWith('.csv');
+	}
+
 	// Load files when message has attachments
 	$effect(() => {
 		console.log(`📁 [DEBUG] MessageItem effect - Message ID: ${message.id}, has_attachments: ${message.has_attachments}, files.length: ${files.length}`);
@@ -357,6 +392,76 @@
 										{/if}
 									{:catch error}
 										<div class="media-error">Error loading audio</div>
+									{/await}
+								</div>
+							{:else if isCSVFile(file)}
+								<!-- CSV file preview with first 10 rows -->
+								<div class="csv-attachment">
+									<div class="csv-header">
+										<div class="csv-info">
+											<span class="csv-icon">📊</span>
+											<div class="csv-details">
+												<span class="csv-filename">{displayFilename}</span>
+												<span class="csv-size">{formatFileSize(file.fileSize)}</span>
+											</div>
+										</div>
+										<button class="download-btn" onclick={() => downloadFile(file)} title="Download CSV" aria-label="Download CSV file">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+												<path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+											</svg>
+										</button>
+									</div>
+									{#await decryptFileContent(file.id)}
+										<div class="csv-loading">
+											<div class="loading-spinner"></div>
+											<span>Loading CSV preview...</span>
+										</div>
+									{:then decryptedData}
+										{@const csvText = atob(decryptedData.content)}
+										{@const csvData = parseCSVPreview(csvText, 10)}
+										{#if csvData.headers.length > 0}
+											<div class="csv-preview">
+												<div class="csv-table-wrapper">
+													<table class="csv-table">
+														<thead>
+															<tr>
+																{#each csvData.headers as header}
+																	<th>{header}</th>
+																{/each}
+															</tr>
+														</thead>
+														<tbody>
+															{#each csvData.rows as row}
+																<tr>
+																	{#each row as cell}
+																		<td>{cell}</td>
+																	{/each}
+																</tr>
+															{/each}
+														</tbody>
+													</table>
+												</div>
+												{#if csvData.totalRows > 10}
+													<div class="csv-footer">
+														<span class="csv-row-count">
+															Showing first 10 of {csvData.totalRows} rows
+														</span>
+														<button class="csv-download-full" onclick={() => downloadFile(file)}>
+															Download full CSV
+														</button>
+													</div>
+												{/if}
+											</div>
+										{:else}
+											<div class="csv-empty">Empty CSV file</div>
+										{/if}
+									{:catch error}
+										<div class="csv-error">
+											<p>Error loading CSV: {error.message}</p>
+											<button onclick={() => downloadFile(file)} class="error-download-btn">
+												Download Instead
+											</button>
+										</div>
 									{/await}
 								</div>
 							{:else}
@@ -954,5 +1059,203 @@
 
   .read-more-btn:hover {
     background: var(--color-primary-600);
+  /* CSV attachment styles */
+  .csv-attachment {
+    margin-bottom: 0.75rem;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .message-bubble:not(.own-bubble) .csv-attachment {
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+  }
+
+  .csv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .message-bubble:not(.own-bubble) .csv-header {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .csv-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .csv-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .csv-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .csv-filename {
+    font-weight: 500;
+    font-size: 0.8rem;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+  }
+
+  .csv-size {
+    font-size: 0.7rem;
+    opacity: 0.7;
+    display: block;
+    margin-top: 0.125rem;
+  }
+
+  .csv-preview {
+    padding: 0.75rem;
+  }
+
+  .csv-table-wrapper {
+    overflow-x: auto;
+    max-width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .message-bubble:not(.own-bubble) .csv-table-wrapper {
+    border: 1px solid var(--color-border);
+  }
+
+  .csv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.1);
+  }
+
+  .message-bubble:not(.own-bubble) .csv-table {
+    background: var(--color-surface);
+  }
+
+  .csv-table thead {
+    background: rgba(0, 0, 0, 0.2);
+    position: sticky;
+    top: 0;
+  }
+
+  .message-bubble:not(.own-bubble) .csv-table thead {
+    background: var(--color-background);
+  }
+
+  .csv-table th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    white-space: nowrap;
+  }
+
+  .message-bubble:not(.own-bubble) .csv-table th {
+    border-bottom: 2px solid var(--color-border);
+  }
+
+  .csv-table td {
+    padding: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .message-bubble:not(.own-bubble) .csv-table td {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .csv-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .message-bubble:not(.own-bubble) .csv-table tbody tr:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .csv-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .message-bubble:not(.own-bubble) .csv-footer {
+    border-top: 1px solid var(--color-border);
+  }
+
+  .csv-row-count {
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+
+  .csv-download-full {
+    padding: 0.375rem 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: inherit;
+  }
+
+  .message-bubble:not(.own-bubble) .csv-download-full {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+
+  .csv-download-full:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .message-bubble:not(.own-bubble) .csv-download-full:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .csv-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    font-size: 0.8rem;
+    color: var(--color-error-text, #c53030);
+    background: var(--color-error-background, #fee);
+    border-radius: 0.5rem;
+    margin: 0.5rem;
+  }
+  .csv-loading,
+  .csv-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    font-size: 0.8rem;
+    opacity: 0.7;
+  }
   }
 </style>
