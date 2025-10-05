@@ -16,14 +16,28 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return json({ error: 'Missing conversationId' }, { status: 400 });
 		}
 
-		const { user } = locals;
+		const { supabase, user: authUser } = locals;
+
+		// Get internal user ID from auth user ID
+		const { data: userData, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', authUser.id)
+			.single();
+
+		if (userError || !userData) {
+			console.error('User lookup failed:', userError);
+			return json({ error: 'User not found' }, { status: 404 });
+		}
+
+		const userId = userData.id;
 
 		// Broadcast typing stopped to conversation
 		sseManager.broadcastToRoom(conversationId, MESSAGE_TYPES.USER_TYPING, {
-			userId: user.id,
+			userId,
 			conversationId,
 			isTyping: false
-		}, user.id);
+		}, userId);
 
 		return json({ success: true });
 	} catch (error) {

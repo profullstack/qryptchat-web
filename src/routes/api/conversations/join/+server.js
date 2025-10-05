@@ -15,10 +15,24 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return json({ error: 'Missing conversationId' }, { status: 400 });
 		}
 
-		const { user } = locals;
+		const { supabase, user: authUser } = locals;
+
+		// Get internal user ID from auth user ID
+		const { data: userData, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', authUser.id)
+			.single();
+
+		if (userError || !userData) {
+			console.error('User lookup failed:', userError);
+			return json({ error: 'User not found' }, { status: 404 });
+		}
+
+		const userId = userData.id;
 
 		// Join SSE room for real-time updates
-		sseManager.joinRoom(user.id, conversationId);
+		sseManager.joinRoom(userId, conversationId);
 
 		return json({ success: true });
 	} catch (error) {

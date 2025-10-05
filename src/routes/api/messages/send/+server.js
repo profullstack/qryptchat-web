@@ -53,7 +53,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 		// Insert message into database (without encrypted_content in main table)
 		const messageData = {
 			conversation_id: conversationId,
-			sender_id: user.id,
+			sender_id: userId,
 			message_type: messageType,
 			encrypted_content: Buffer.from(''), // Empty buffer - actual content stored in message_recipients
 			...(replyToId && { reply_to_id: replyToId }),
