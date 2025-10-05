@@ -22,14 +22,28 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return json({ error: 'encryptedContents must be an object with user_id -> encrypted_content mappings' }, { status: 400 });
 		}
 
-		const { supabase, user } = locals;
+		const { supabase, user: authUser } = locals;
+
+		// Get internal user ID from auth user ID
+		const { data: userData, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', authUser.id)
+			.single();
+
+		if (userError || !userData) {
+			console.error('📨 [SSE-SEND] User lookup failed:', userError);
+			return json({ error: 'User not found' }, { status: 404 });
+		}
+
+		const userId = userData.id;
 
 		// Verify user can access this conversation
 		const { data: participant, error: participantError } = await supabase
 			.from('conversation_participants')
 			.select('id, role')
 			.eq('conversation_id', conversationId)
-			.eq('user_id', user.id)
+			.eq('user_id', userId)
 			.single();
 
 		if (participantError || !participant) {
