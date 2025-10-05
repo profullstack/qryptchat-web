@@ -84,7 +84,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			// Check if this message has per-user encrypted content in message_recipients
 			if (msg.message_recipients && msg.message_recipients.length > 0) {
 				// Find the encrypted content for this specific user
-				const userRecipient = msg.message_recipients.find(r => r.recipient_user_id === user.id);
+				const userRecipient = msg.message_recipients.find(r => r.recipient_user_id === userId);
 				
 				if (userRecipient && userRecipient.encrypted_content) {
 					// Database stores base64 as TEXT, convert back to JSON for client-side decryption
