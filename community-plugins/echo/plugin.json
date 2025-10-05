@@ -1,0 +1,16 @@
+{
+  "name": "echo",
+  "version": "1.0.0",
+  "description": "Simple echo plugin that repeats your message",
+  "author": "QryptChat Community",
+  "commands": [
+    {
+      "command": "/echo",
+      "description": "Echo back the provided message"
+    },
+    {
+      "command": "/help",
+      "description": "Show echo plugin help"
+    }
+  ]
+}
