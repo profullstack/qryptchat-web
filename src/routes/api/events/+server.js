@@ -23,8 +23,23 @@ export async function GET(event) {
 			return new Response('Unauthorized', { status: 401 });
 		}
 
-		const userId = session.user.id;
-		console.log(`📡 [SSE] User ${userId} authenticated`);
+		const authUserId = session.user.id;
+		console.log(`📡 [SSE] Auth user ${authUserId} authenticated`);
+
+		// Get internal user ID from auth user ID
+		const { data: userData, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', authUserId)
+			.single();
+
+		if (userError || !userData) {
+			console.error('📡 [SSE] User lookup failed:', userError);
+			return new Response('User not found', { status: 404 });
+		}
+
+		const userId = userData.id;
+		console.log(`📡 [SSE] Internal user ID: ${userId}`);
 
 		// Create a readable stream for SSE
 		const stream = new ReadableStream({
@@ -47,7 +62,7 @@ export async function GET(event) {
 					}
 				};
 
-				// Add connection to SSE manager
+				// Add connection to SSE manager with internal user ID
 				sseManager.addConnection(responseWriter, userId);
 
 				// Send initial connection success message
