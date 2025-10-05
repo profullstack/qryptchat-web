@@ -19,6 +19,33 @@
  	// Convert URLs to clickable links
  	const contentWithLinks = $derived(convertUrlsToLinks(decryptedContent));
  	
+ 	// Detect ASCII art: multiple lines with special characters commonly used in ASCII art
+ 	const isAsciiArt = $derived(() => {
+ 		const lines = decryptedContent.split('\n').filter((/** @type {string} */ line) => line.trim().length > 0);
+ 		if (lines.length < 3) return false;
+ 		
+ 		// Check if multiple lines contain ASCII art characters
+ 		const asciiArtChars = /[│┤┐└┴┬├─┼╔╗╚╝║═╠╣╩╦╬▀▄█▌▐░▒▓■□▪▫◘◙◚◛◜◝◞◟◠◡◢◣◤◥●◦◯◰◱◲◳◴◵◶◷◸◹◺◻◼◽◾◿]/;
+ 		const commonAsciiChars = /[|\/\\\_\-\+\*\#\@\%\&\$\^\~\`\(\)\[\]\{\}<>]/g;
+ 		
+ 		const linesWithAsciiArt = lines.filter((/** @type {string} */ line) => {
+ 			// Check for box drawing or special Unicode characters
+ 			if (asciiArtChars.test(line)) return true;
+ 			
+ 			// Check for common ASCII art patterns (at least 3 special chars in a line)
+ 			const specialCharCount = (line.match(commonAsciiChars) || []).length;
+ 			if (specialCharCount >= 3) return true;
+ 			
+ 			// Check for repeated patterns typical of ASCII art (like "88" or "***")
+ 			// This catches figlet-style ASCII art made from repeated characters
+ 			if (/(.)\1{2,}/.test(line) && line.length > 5) return true;
+ 			
+ 			return false;
+ 		});
+ 		
+ 		return linesWithAsciiArt.length >= 3;
+ 	});
+ 	
  	// File attachment state
  	let files = $state(/** @type {any[]} */ ([]));
  	let isLoadingFiles = $state(false);
@@ -235,7 +262,7 @@
 		{/if}
 
 		<div class="message-bubble" class:own-bubble={isOwn}>
-			<div class="message-text">
+			<div class="message-text" class:ascii-art={isAsciiArt}>
 				{@html contentWithLinks}
 			</div>
 			
@@ -659,6 +686,15 @@
 	.message-text {
 		line-height: 1.4;
 		font-size: 0.875rem;
+	}
+
+	.message-text.ascii-art {
+		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+		font-size: 0.75rem;
+		line-height: 1.2;
+		white-space: pre;
+		overflow-x: auto;
+		letter-spacing: 0;
 	}
 
 	/* Code block styling */
