@@ -18,6 +18,7 @@
 	let selectedFiles = $state(/** @type {File[]} */ ([]));
 	let uploadError = $state('');
 	let isEncryptionError = $state(false); // Track if error is encryption-related
+	let isAsciiArt = $state(false); // Track if message should be displayed as ASCII art
 
 	const currentUser = $derived($user);
 
@@ -262,12 +263,14 @@
 				selectedFiles = [];
 				messageText = '';
 			} else {
-				// Send text-only message
-				const result = await wsChat.sendMessage(conversationId, content, 'text');
+				// Send text-only message with metadata
+				const metadata = isAsciiArt ? { isAsciiArt: true } : undefined;
+				const result = await wsChat.sendMessage(conversationId, content, 'text', metadata);
 				if (result && !result.success) {
 					throw new Error(result.error || 'Failed to send message');
 				}
 				messageText = '';
+				isAsciiArt = false; // Reset checkbox after sending
 			}
 
 		} catch (error) {
@@ -404,6 +407,14 @@
 			></textarea>
 			
 			<div class="input-actions">
+				<label class="ascii-checkbox" title="Display as ASCII art">
+					<input
+						type="checkbox"
+						bind:checked={isAsciiArt}
+						disabled={disabled || isUploadingFiles}
+					/>
+					<span class="checkbox-label">ASCII</span>
+				</label>
 				<button
 					type="button"
 					class="attach-button"
@@ -661,6 +672,44 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-shrink: 0;
+	}
+
+	.ascii-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		cursor: pointer;
+		user-select: none;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.375rem;
+		transition: background 0.2s ease;
+	}
+
+	.ascii-checkbox:hover {
+		background: var(--color-surface-hover);
+	}
+
+	.ascii-checkbox input[type="checkbox"] {
+		cursor: pointer;
+		width: 14px;
+		height: 14px;
+	}
+
+	.ascii-checkbox input[type="checkbox"]:disabled {
+		cursor: not-allowed;
+		opacity: 0.5;
+	}
+
+	.checkbox-label {
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.025em;
+	}
+
+	.ascii-checkbox:has(input:checked) .checkbox-label {
+		color: var(--color-primary-500);
 	}
 
 	.attach-button,

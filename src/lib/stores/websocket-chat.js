@@ -484,9 +484,10 @@ function createWebSocketChatStore() {
 	 * @param {string} conversationId - Conversation ID
 	 * @param {string} content - Message content
 	 * @param {string} messageType - Message type (default: 'text')
+	 * @param {Object} metadata - Optional metadata (e.g., { isAsciiArt: true })
 	 * @param {string} replyToId - ID of message being replied to
 	 */
-	async function sendChatMessage(conversationId, content, messageType = 'text', replyToId = null) {
+	async function sendChatMessage(conversationId, content, messageType = 'text', metadata = null, replyToId = null) {
 		try {
 			// Encrypt message for all conversation participants using multi-recipient encryption
 			console.log(`🔐 [SEND] Encrypting message for all participants in conversation: ${conversationId}`);
@@ -497,6 +498,10 @@ function createWebSocketChatStore() {
 				encryptedContents, // Now sending per-participant encrypted contents
 				messageType
 			};
+			
+			if (metadata) {
+				payload.metadata = metadata;
+			}
 			
 			if (replyToId) {
 				payload.replyToId = replyToId;

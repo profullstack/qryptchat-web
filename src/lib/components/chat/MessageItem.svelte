@@ -19,32 +19,8 @@
  	// Convert URLs to clickable links
  	const contentWithLinks = $derived(convertUrlsToLinks(decryptedContent));
  	
- 	// Detect ASCII art: multiple lines with special characters commonly used in ASCII art
- 	const isAsciiArt = $derived(() => {
- 		const lines = decryptedContent.split('\n').filter((/** @type {string} */ line) => line.trim().length > 0);
- 		if (lines.length < 3) return false;
- 		
- 		// Check if multiple lines contain ASCII art characters
- 		const asciiArtChars = /[│┤┐└┴┬├─┼╔╗╚╝║═╠╣╩╦╬▀▄█▌▐░▒▓■□▪▫◘◙◚◛◜◝◞◟◠◡◢◣◤◥●◦◯◰◱◲◳◴◵◶◷◸◹◺◻◼◽◾◿]/;
- 		const commonAsciiChars = /[|\/\\\_\-\+\*\#\@\%\&\$\^\~\`\(\)\[\]\{\}<>]/g;
- 		
- 		const linesWithAsciiArt = lines.filter((/** @type {string} */ line) => {
- 			// Check for box drawing or special Unicode characters
- 			if (asciiArtChars.test(line)) return true;
- 			
- 			// Check for common ASCII art patterns (at least 3 special chars in a line)
- 			const specialCharCount = (line.match(commonAsciiChars) || []).length;
- 			if (specialCharCount >= 3) return true;
- 			
- 			// Check for repeated patterns typical of ASCII art (like "88" or "***")
- 			// This catches figlet-style ASCII art made from repeated characters
- 			if (/(.)\1{2,}/.test(line) && line.length > 5) return true;
- 			
- 			return false;
- 		});
- 		
- 		return linesWithAsciiArt.length >= 3;
- 	});
+ 	// Check if message should be displayed as ASCII art from metadata
+ 	const isAsciiArt = $derived(message.metadata?.isAsciiArt === true);
  	
  	// File attachment state
  	let files = $state(/** @type {any[]} */ ([]));
