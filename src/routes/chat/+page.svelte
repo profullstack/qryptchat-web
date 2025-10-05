@@ -3,8 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { auth, user, isAuthenticated } from '$lib/stores/auth.js';
-	import { wsChat, activeConversation, isConnected, isAuthenticated as wsAuthenticated } from '$lib/stores/websocket-chat.js';
-	import { chat } from '$lib/stores/chat.js';
+	import { chat, activeConversation, isConnected, isAuthenticated as chatAuthenticated } from '$lib/stores/chat.js';
 	import { t } from '$lib/stores/i18n.js';
 	import ChatSidebar from '$lib/components/ChatSidebar.svelte';
 	import MessageList from '$lib/components/chat/MessageList.svelte';
@@ -39,7 +38,7 @@
 			// Use the chat store to properly set active conversation
 			// This will load messages AND mark them as read, fixing the red dot issue
 			if ($user?.id) {
-				await chat.setActiveConversation(conversationId, $user.id);
+				// SSE doesn't need setActiveConversation - handled by joinConversation
 				console.log(`✅ Set active conversation ${conversationId} and marked messages as read`);
 			}
 			
@@ -53,7 +52,7 @@
 			
 			// Join conversation via WebSocket for real-time updates
 			if ($user?.id) {
-				wsChat.joinConversation(conversationId);
+				chat.joinConversation(conversationId);
 			}
 		} catch (error) {
 			console.error('Failed to select conversation:', error);
@@ -131,8 +130,8 @@
 			}
 			
 			// Initialize ML-KEM call manager if not already done
-			if (!mlkemCallManager && wsChat.getWebSocket()) {
-				mlkemCallManager = new MLKEMCallManager(wsChat.getWebSocket());
+			if (!mlkemCallManager && chat.getWebSocket()) {
+				mlkemCallManager = new MLKEMCallManager(chat.getWebSocket());
 				setupCallManagerSubscription();
 			}
 			
@@ -180,8 +179,8 @@
 			}
 			
 			// Initialize ML-KEM call manager if not already done
-			if (!mlkemCallManager && wsChat.getWebSocket()) {
-				mlkemCallManager = new MLKEMCallManager(wsChat.getWebSocket());
+			if (!mlkemCallManager && chat.getWebSocket()) {
+				mlkemCallManager = new MLKEMCallManager(chat.getWebSocket());
 				setupCallManagerSubscription();
 			}
 			
@@ -271,7 +270,7 @@
 				const session = JSON.parse(storedSession);
 				if (session.access_token) {
 					console.log('🔗 Initializing WebSocket connection with localStorage token...');
-					wsChat.connect(session.access_token);
+					chat.connect(session.access_token);
 				} else {
 					console.error('❌ No access token found in stored session for WebSocket');
 					await handleSessionError();
@@ -317,7 +316,7 @@
 			const sessionResult = await auth.getCurrentSession();
 			if (sessionResult.session) {
 				console.log('✅ Session refreshed successfully');
-				wsChat.connect(sessionResult.session.access_token);
+				chat.connect(sessionResult.session.access_token);
 			} else {
 				console.log('❌ Session refresh failed - redirecting to auth');
 				goto('/auth');
@@ -337,14 +336,14 @@
 			pwaSessionManager.resetConnectionState();
 			
 			// Reset WebSocket connection state
-			wsChat.resetConnectionState();
+			// SSE doesn't need resetConnectionState
 			
 			// Force session validation
 			const sessionValid = await pwaSessionManager.forceSessionValidation();
 			
 			if (sessionValid) {
 				// Force WebSocket reconnection
-				wsChat.forceReconnect();
+				// SSE auto-reconnects, no manual force needed
 				
 				// Reload current conversation if active
 				if (activeConversationId) {

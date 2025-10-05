@@ -1,6 +1,6 @@
 <script>
 	import { onMount, tick } from 'svelte';
-	import { wsChat, messages as messagesStore, typingUsers as typingUsersStore } from '$lib/stores/websocket-chat.js';
+	import { chat, messages as messagesStore, typingUsers as typingUsersStore } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import MessageItem from './MessageItem.svelte';
 	import TypingIndicator from './TypingIndicator.svelte';
@@ -37,9 +37,9 @@
 		try {
 			if (currentUser?.id) {
 				// Join the conversation room
-				await wsChat.joinConversation(conversationId);
+				await chat.joinConversation(conversationId);
 				// Load messages for the conversation
-				await wsChat.loadMessages(conversationId);
+				await chat.loadMessages(conversationId);
 				shouldScrollToBottom = true;
 			}
 		} catch (error) {
@@ -50,7 +50,7 @@
 	async function loadMessages() {
 		try {
 			if (currentUser?.id) {
-				await wsChat.loadMessages(conversationId);
+				await chat.loadMessages(conversationId);
 				shouldScrollToBottom = true;
 			}
 		} catch (error) {

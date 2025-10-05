@@ -1,6 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
-	import { wsChat, activeConversation } from '$lib/stores/websocket-chat.js';
+	import { chat, activeConversation } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 	import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
@@ -46,12 +46,12 @@
 			}
 
 			// Set typing indicator
-			wsChat.setTyping(conversationId);
+			chat.setTyping(conversationId);
 
 			// Clear typing indicator after 3 seconds of inactivity
 			typingTimeout = setTimeout(() => {
 				if (conversationId && currentUser?.id) {
-					wsChat.stopTyping(conversationId);
+					chat.stopTyping(conversationId);
 				}
 			}, 3000);
 		}
@@ -152,7 +152,7 @@
 		try {
 			if (hasFiles) {
 				// First send a message to get the message ID
-				const messageResult = await wsChat.sendMessage(
+				const messageResult = await chat.sendMessage(
 					conversationId,
 					content || '[File attachment]',
 					'file'
@@ -253,7 +253,7 @@
 				// Update the message to set has_attachments=true (the database trigger should handle this automatically)
 				// Force refresh the conversation to show updated message with attachments
 				try {
-					await wsChat.loadMessages(conversationId);
+					await chat.loadMessages(conversationId);
 					console.log(`📁 ✅ Refreshed messages to show file attachments`);
 				} catch (refreshError) {
 					console.error(`📁 ⚠️ Failed to refresh messages:`, refreshError);
@@ -265,7 +265,7 @@
 			} else {
 				// Send text-only message with metadata
 				const metadata = isAsciiArt ? { isAsciiArt: true } : undefined;
-				const result = await wsChat.sendMessage(conversationId, content, 'text', metadata);
+				const result = await chat.sendMessage(conversationId, content, 'text', metadata);
 				if (result && !result.success) {
 					throw new Error(result.error || 'Failed to send message');
 				}
@@ -313,7 +313,7 @@
 				clearTimeout(typingTimeout);
 			}
 			if (conversationId && currentUser?.id) {
-				wsChat.stopTyping(conversationId);
+				chat.stopTyping(conversationId);
 			}
 		};
 	});
