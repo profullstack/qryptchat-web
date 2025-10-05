@@ -1,6 +1,6 @@
 /**
  * @fileoverview Load Messages API Endpoint
- * Handles loading messages for a conversation
+ * Handles loading messages for a conversation with user-specific encrypted content
  */
 
 import { json } from '@sveltejs/kit';
@@ -17,35 +17,97 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		const { supabase, user } = locals;
 
-		// Build query
+		console.log('📨 [SSE-LOAD] Loading messages:', {
+			conversationId,
+			userId: user.id,
+			limit,
+			before
+		});
+
+		// Verify user can access this conversation
+		const { data: participant, error: participantError } = await supabase
+			.from('conversation_participants')
+			.select('id')
+			.eq('conversation_id', conversationId)
+			.eq('user_id', user.id)
+			.single();
+
+		if (participantError || !participant) {
+			console.error('📨 [SSE-LOAD] Access denied:', participantError);
+			return json({ error: 'Access denied to conversation' }, { status: 403 });
+		}
+
+		// Load messages with user-specific encrypted content
 		let query = supabase
 			.from('messages')
-			.select('*')
+			.select(`
+				*,
+				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
+				message_recipients!inner(encrypted_content, recipient_user_id)
+			`)
 			.eq('conversation_id', conversationId)
-			.order('created_at', { ascending: false })
+			.eq('message_recipients.recipient_user_id', user.id)
+			.is('deleted_at', null)
+			.order('created_at', { ascending: true })
 			.limit(limit);
 
 		if (before) {
 			query = query.lt('created_at', before);
 		}
 
-		const { data: messages, error } = await query;
+		const { data: messages, error: messagesError } = await query;
 
-		if (error) {
-			console.error('Failed to load messages:', error);
+		if (messagesError) {
+			console.error('📨 [SSE-LOAD] Failed to load messages:', messagesError);
 			return json({ error: 'Failed to load messages' }, { status: 500 });
 		}
+
+		console.log('📨 [SSE-LOAD] Loaded', messages?.length || 0, 'messages');
+
+		// Process messages and add user-specific encrypted content
+		const processedMessages = (messages || []).map(msg => {
+			if (msg.message_recipients && msg.message_recipients.length > 0) {
+				// Database stores base64 as TEXT, convert back to JSON for client-side decryption
+				const base64Content = msg.message_recipients[0].encrypted_content;
+				console.log('🔐 [SSE-LOAD] Processing message:', {
+					messageId: msg.id,
+					base64Length: base64Content?.length || 0
+				});
+				
+				try {
+					// Convert base64 back to JSON string for client-side decryption
+					const decodedContent = Buffer.from(base64Content, 'base64').toString('utf8');
+					msg.encrypted_content = decodedContent;
+					console.log('🔐 [SSE-LOAD] ✅ Decoded message', msg.id);
+				} catch (error) {
+					console.error('🔐 [SSE-LOAD] ❌ Failed to decode base64:', error);
+					msg.encrypted_content = base64Content;
+				}
+			}
+			// Remove the message_recipients array as it's no longer needed
+			delete msg.message_recipients;
+			return msg;
+		});
 
 		// Join conversation room for real-time updates
 		sseManager.joinRoom(user.id, conversationId);
 
+		// Update user activity
+		try {
+			await supabase.rpc('update_user_activity', { user_uuid: user.id });
+		} catch (activityError) {
+			console.error('Failed to update user activity:', activityError);
+		}
+
+		console.log('📨 [SSE-LOAD] ✅ Returning', processedMessages.length, 'messages');
+
 		return json({
 			success: true,
-			messages: messages.reverse(),
-			hasMore: messages.length === limit
+			messages: processedMessages,
+			hasMore: processedMessages.length === limit
 		});
 	} catch (error) {
-		console.error('Load messages error:', error);
+		console.error('📨 [SSE-LOAD] Exception:', error);
 		return json({ error: 'Internal server error' }, { status: 500 });
 	}
 });
