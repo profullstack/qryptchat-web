@@ -65,8 +65,22 @@ export async function GET({ params, request }) {
 		
 		const { user, supabaseClient } = auth;
 		
+		// Get internal user ID from auth user ID
+		const { data: userData, error: userError } = await supabaseClient
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !userData) {
+			console.error('User lookup failed:', userError);
+			return json({ error: 'User not found' }, { status: 404 });
+		}
+
+		const userId = userData.id;
+		
 		// Fetch the message with user-specific encrypted content
-		const { data: message, error: messageError } = await supabaseClient
+		const { data: message, error: messageError} = await supabaseClient
 			.from('messages')
 			.select(`
 				*,
@@ -74,7 +88,7 @@ export async function GET({ params, request }) {
 				message_recipients!inner(encrypted_content)
 			`)
 			.eq('id', messageId)
-			.eq('message_recipients.recipient_user_id', user.id)
+			.eq('message_recipients.recipient_user_id', userId)
 			.single();
 		
 		if (messageError) {

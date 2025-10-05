@@ -121,7 +121,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		// Update sender's activity
 		try {
-			await supabase.rpc('update_user_activity', { user_uuid: user.id });
+			await supabase.rpc('update_user_activity', { user_uuid: userId });
 		} catch (activityError) {
 			console.error('Failed to update user activity:', activityError);
 		}

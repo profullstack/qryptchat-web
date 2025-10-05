@@ -52,16 +52,16 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return json({ error: 'Access denied to conversation' }, { status: 403 });
 		}
 
-		// Load messages with user-specific encrypted content
-		// Use left join to support both old messages (without message_recipients) and new ones
+		// Load messages with user-specific encrypted content (matching WebSocket implementation)
 		let query = supabase
 			.from('messages')
 			.select(`
 				*,
 				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
-				message_recipients!left(encrypted_content, recipient_user_id)
+				message_recipients!inner(encrypted_content, recipient_user_id)
 			`)
 			.eq('conversation_id', conversationId)
+			.eq('message_recipients.recipient_user_id', userId)
 			.is('deleted_at', null)
 			.order('created_at', { ascending: true })
 			.limit(limit);
