@@ -16,24 +16,11 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		const { supabase, user: authUser } = locals;
 
-		// Get internal user ID from auth user ID
-		const { data: userData, error: userError } = await supabase
-			.from('users')
-			.select('id')
-			.eq('auth_user_id', authUser.id)
-			.single();
-
-		if (userError || !userData) {
-			console.error('User lookup failed:', userError);
-			return json({ error: 'User not found' }, { status: 404 });
-		}
-
-		const userId = userData.id;
-
-		// Call the archive_conversation database function with internal user ID
+		// Call the archive_conversation database function with auth user ID
+		// The function will handle the conversion to internal user ID
 		const { data: success, error: archiveError } = await supabase.rpc('archive_conversation', {
 			conversation_uuid: conversationId,
-			user_uuid: userId
+			user_uuid: authUser.id
 		});
 
 		if (archiveError) {
