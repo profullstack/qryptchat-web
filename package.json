@@ -52,6 +52,7 @@
 	"dependencies": {
 		"@noble/ciphers": "^2.0.0",
 		"@noble/hashes": "^2.0.0",
+		"@profullstack/text-type-detection": "^1.0.0",
 		"@supabase/ssr": "^0.7.0",
 		"@supabase/supabase-js": "^2.56.0",
 		"dilithium-crystals": "^1.0.6",

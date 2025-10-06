@@ -4,6 +4,7 @@
 	import { user } from '$lib/stores/auth.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 	import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
+	import { detectAsciiArt } from '$lib/utils/ascii-art-detection.js';
 
 	let { conversationId = null, disabled = false } = $props();
 
@@ -19,6 +20,7 @@
 	let uploadError = $state('');
 	let isEncryptionError = $state(false); // Track if error is encryption-related
 	let isAsciiArt = $state(false); // Track if message should be displayed as ASCII art
+	let isAsciiArtAutoDetected = $state(false); // Track if ASCII art was auto-detected
 
 	const currentUser = $derived($user);
 
@@ -38,6 +40,17 @@
 	}
 
 	function handleInput() {
+		// Auto-detect ASCII art in the message text
+		if (messageText.trim()) {
+			isAsciiArtAutoDetected = detectAsciiArt(messageText);
+			// Only auto-set if user hasn't manually overridden
+			if (!isAsciiArt && isAsciiArtAutoDetected) {
+				isAsciiArt = true;
+			}
+		} else {
+			isAsciiArtAutoDetected = false;
+		}
+
 		// Handle typing indicators
 		if (conversationId && currentUser?.id) {
 			// Clear existing timeout
@@ -407,13 +420,23 @@
 			></textarea>
 			
 			<div class="input-actions">
-				<label class="ascii-checkbox" title="Display as ASCII art">
+				<label
+					class="ascii-checkbox"
+					class:auto-detected={isAsciiArtAutoDetected}
+					title={isAsciiArtAutoDetected ? "ASCII art auto-detected (click to override)" : "Display as ASCII art"}
+				>
 					<input
 						type="checkbox"
 						bind:checked={isAsciiArt}
 						disabled={disabled || isUploadingFiles}
 					/>
-					<span class="checkbox-label">ASCII</span>
+					<span class="checkbox-label">
+						{#if isAsciiArtAutoDetected}
+							ASCII ✓
+						{:else}
+							ASCII
+						{/if}
+					</span>
 				</label>
 				<button
 					type="button"
@@ -710,6 +733,16 @@
 
 	.ascii-checkbox:has(input:checked) .checkbox-label {
 		color: var(--color-primary-500);
+	}
+
+	.ascii-checkbox.auto-detected {
+		background: var(--color-primary-50, #f0f9ff);
+		border: 1px solid var(--color-primary-200, #bfdbfe);
+	}
+
+	.ascii-checkbox.auto-detected .checkbox-label {
+		color: var(--color-primary-600, #2563eb);
+		font-weight: 600;
 	}
 
 	.attach-button,

@@ -14,6 +14,9 @@ importers:
       '@noble/hashes':
         specifier: ^2.0.0
         version: 2.0.0
+      '@profullstack/text-type-detection':
+        specifier: ^1.0.0
+        version: 1.0.0
       '@supabase/ssr':
         specifier: ^0.7.0
         version: 0.7.0(@supabase/supabase-js@2.57.4)
@@ -1085,6 +1088,10 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@profullstack/text-type-detection@1.0.0':
+    resolution: {integrity: sha512-3tG0Icz2gwLfwbOwdYxgCTTcjCyAAhEnU82ReIrbOQiN8f3R84WrPLWfE4Pqg/ce57VFVPpNkSmd5doaXKV+dw==}
+    engines: {node: '>=20.0.0'}
 
   '@rollup/plugin-babel@5.3.1':
     resolution: {integrity: sha512-WFfdLWU/xVWKeRQnKmIAQULUI7Il0gZnBIH/ZFO069wYIfPu+8zrfp/KMW0atmELoRDq8FbiP3VCss9MhCut7Q==}
@@ -4421,6 +4428,8 @@ snapshots:
     optional: true
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@profullstack/text-type-detection@1.0.0': {}
 
   '@rollup/plugin-babel@5.3.1(@babel/core@7.28.4)(rollup@2.79.2)':
     dependencies:

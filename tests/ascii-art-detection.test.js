@@ -1,122 +1,103 @@
-/**
- * Test suite for ASCII art detection in message rendering
- * Tests the isAsciiArt detection logic
- */
-
-import { describe, it } from 'node:test';
-import assert from 'node:assert';
-
-/**
- * Detect ASCII art: multiple lines with special characters commonly used in ASCII art
- * @param {string} content - The message content to check
- * @returns {boolean} - True if content appears to be ASCII art
- */
-function isAsciiArt(content) {
-	const lines = content.split('\n').filter(line => line.trim().length > 0);
-	if (lines.length < 3) return false;
-	
-	// Check if multiple lines contain ASCII art characters
-	const asciiArtChars = /[│┤┐└┴┬├─┼╔╗╚╝║═╠╣╩╦╬▀▄█▌▐░▒▓■□▪▫◘◙◚◛◜◝◞◟◠◡◢◣◤◥●◦◯◰◱◲◳◴◵◶◷◸◹◺◻◼◽◾◿]/;
-	const commonAsciiChars = /[|\/\\\_\-\+\*\#\@\%\&\$\^\~\`\(\)\[\]\{\}<>]/g;
-	
-	const linesWithAsciiArt = lines.filter(line => {
-		// Check for box drawing or special Unicode characters
-		if (asciiArtChars.test(line)) return true;
-		
-		// Check for common ASCII art patterns (at least 3 special chars in a line)
-		const specialCharCount = (line.match(commonAsciiChars) || []).length;
-		if (specialCharCount >= 3) return true;
-		
-		// Check for repeated patterns typical of ASCII art (like "88" or "***")
-		// This catches figlet-style ASCII art made from repeated characters
-		if (/(.)\1{2,}/.test(line) && line.length > 5) return true;
-		
-		return false;
-	});
-	
-	return linesWithAsciiArt.length >= 3;
-}
+import { describe, it, expect } from 'vitest';
+import { detectAsciiArt } from '../src/lib/utils/ascii-art-detection.js';
 
 describe('ASCII Art Detection', () => {
-	it('should detect ASCII art with box drawing characters', () => {
-		const asciiArt = `
-88                                           88 
-88                                           88 
-88                                           88 
-88,dPPYba,  8b,dPPYba,  ,adPPYba, ,adPPYYba, 88   ,d8 
-88P'    "8a 88P'   "Y8 a8P_____88 ""     \`Y8 88 ,a8" 
-88       d8 88         8PP""""""" ,adPPPPP88 8888[ 
-88b,   ,a8" 88         "8b,   ,aa 88,    ,88 88\`"Yba, 
-8Y"Ybbd8"'  88          \`"Ybbd8"' \`"8bbdP"Y8 88   \`Y8a
-		`;
-		
-		assert.strictEqual(isAsciiArt(asciiArt), true, 'Should detect ASCII art with special characters');
-	});
+	describe('detectAsciiArt', () => {
+		it('should detect simple ASCII art with box drawing characters', () => {
+			const text = `
+┌─────────┐
+│  Hello  │
+└─────────┘
+			`.trim();
+			expect(detectAsciiArt(text)).to.be.true;
+		});
 
-	it('should detect ASCII art with box characters', () => {
-		const boxArt = `
-╔═══════════════╗
-║   Hello Box   ║
-║   ASCII Art   ║
-╚═══════════════╝
-		`;
-		
-		assert.strictEqual(isAsciiArt(boxArt), true, 'Should detect box drawing ASCII art');
-	});
-
-	it('should detect ASCII art with common characters', () => {
-		const simpleArt = `
+		it('should detect ASCII art with multiple lines of special characters', () => {
+			const text = `
   /\\_/\\  
  ( o.o ) 
   > ^ <
- /|   |\\
-(_|   |_)
-		`;
-		
-		assert.strictEqual(isAsciiArt(simpleArt), true, 'Should detect simple ASCII art');
-	});
+			`.trim();
+			expect(detectAsciiArt(text)).to.be.true;
+		});
 
-	it('should not detect regular text as ASCII art', () => {
-		const regularText = 'This is just a regular message with no ASCII art';
-		
-		assert.strictEqual(isAsciiArt(regularText), false, 'Should not detect regular text as ASCII art');
-	});
+		it('should detect ASCII art with repeating patterns', () => {
+			const text = `
+*****
+*   *
+*   *
+*****
+			`.trim();
+			expect(detectAsciiArt(text)).to.be.true;
+		});
 
-	it('should not detect short multi-line text as ASCII art', () => {
-		const shortText = `
-Line 1
-Line 2
-		`;
-		
-		assert.strictEqual(isAsciiArt(shortText), false, 'Should not detect short text as ASCII art');
-	});
+		it('should not detect regular text as ASCII art', () => {
+			const text = 'This is just a normal message with some text.';
+			expect(detectAsciiArt(text)).to.be.false;
+		});
 
-	it('should not detect code snippets as ASCII art', () => {
-		const codeSnippet = `
-function hello() {
-  console.log("Hello");
-}
-		`;
-		
-		assert.strictEqual(isAsciiArt(codeSnippet), false, 'Should not detect code as ASCII art');
-	});
+		it('should not detect text with occasional special characters', () => {
+			const text = 'Hey! How are you? :) Let\'s meet @ 5pm.';
+			expect(detectAsciiArt(text)).to.be.false;
+		});
 
-	it('should detect banner-style ASCII art', () => {
-		const banner = `
-***********************
-*   WELCOME MESSAGE   *
-*   ASCII ART DEMO    *
-***********************
-		`;
-		
-		assert.strictEqual(isAsciiArt(banner), true, 'Should detect banner-style ASCII art');
-	});
+		it('should detect ASCII art with high density of special characters', () => {
+			const text = `
+    ___
+   /   \\
+  |  o  |
+   \\___/
+			`.trim();
+			expect(detectAsciiArt(text)).to.be.true;
+		});
 
-	it('should handle empty strings', () => {
-		assert.strictEqual(isAsciiArt(''), false, 'Should handle empty strings');
-	});
+		it('should handle empty strings', () => {
+			expect(detectAsciiArt('')).to.be.false;
+		});
 
-	it('should handle single line strings', () => {
-		assert.strictEqual(isAsciiArt('Single line'), false, 'Should handle single line strings');
+		it('should handle single line with special characters', () => {
+			const text = '═══════════════';
+			expect(detectAsciiArt(text)).to.be.true;
+		});
+
+		it('should not detect code snippets as ASCII art', () => {
+			const text = 'const x = 10;\nif (x > 5) {\n  console.log("hi");\n}';
+			expect(detectAsciiArt(text)).to.be.false;
+		});
+
+		it('should detect banner-style ASCII art', () => {
+			const text = `
+╔═══════════════╗
+║   WELCOME!    ║
+╚═══════════════╝
+			`.trim();
+			expect(detectAsciiArt(text)).to.be.true;
+		});
+
+		it('should detect ASCII art with mixed characters', () => {
+			const text = `
+  _____
+ /     \\
+|  ^_^  |
+ \\_____/
+			`.trim();
+			expect(detectAsciiArt(text)).to.be.true;
+		});
+
+		it('should not detect URLs as ASCII art', () => {
+			const text = 'Check out https://example.com/path?query=value';
+			expect(detectAsciiArt(text)).to.be.false;
+		});
+
+		it('should detect table-like ASCII structures', () => {
+			const text = `
++-------+-------+
+| Col 1 | Col 2 |
++-------+-------+
+| A     | B     |
++-------+-------+
+			`.trim();
+			expect(detectAsciiArt(text)).to.be.true;
+		});
 	});
 });
