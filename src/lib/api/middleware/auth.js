@@ -13,20 +13,21 @@ import { createSupabaseServerClient } from '$lib/supabase.js';
 export async function authenticateRequest(event) {
 	try {
 		const supabase = createSupabaseServerClient(event);
-		const { data: { session }, error } = await supabase.auth.getSession();
+		// Use getUser() instead of getSession() for security - it validates the JWT with the auth server
+		const { data: { user }, error } = await supabase.auth.getUser();
 
-		if (error || !session) {
-			console.error('📡 [AUTH] Session error:', error?.message || 'No session');
+		if (error || !user) {
+			console.error('📡 [AUTH] Authentication error:', error?.message || 'No user');
 			return {
 				success: false,
 				error: 'Unauthorized'
 			};
 		}
 
-		console.log('📡 [AUTH] User authenticated:', session.user.id);
+		console.log('📡 [AUTH] User authenticated:', user.id);
 		return {
 			success: true,
-			user: session.user,
+			user,
 			supabase
 		};
 	} catch (error) {

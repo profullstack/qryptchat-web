@@ -14,16 +14,16 @@ export async function GET(event) {
 	console.log('📡 [SSE] New connection request');
 
 	try {
-		// Authenticate the user
+		// Authenticate the user using getUser() for security
 		const supabase = createSupabaseServerClient(event);
-		const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+		const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-		if (sessionError || !session) {
-			console.error('📡 [SSE] Authentication failed:', sessionError?.message || 'No session');
+		if (userError || !user) {
+			console.error('📡 [SSE] Authentication failed:', userError?.message || 'No user');
 			return new Response('Unauthorized', { status: 401 });
 		}
 
-		const authUserId = session.user.id;
+		const authUserId = user.id;
 		console.log(`📡 [SSE] Auth user ${authUserId} authenticated`);
 
 		// Get internal user ID from auth user ID
