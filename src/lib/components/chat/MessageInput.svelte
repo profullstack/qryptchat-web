@@ -4,7 +4,7 @@
 	import { user } from '$lib/stores/auth.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 	import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
-	import { detectAsciiArt } from '$lib/utils/ascii-art-detection.js';
+	import { detectTextFormat } from '@profullstack/text-type-detection';
 
 	let { conversationId = null, disabled = false } = $props();
 
@@ -40,9 +40,10 @@
 	}
 
 	function handleInput() {
-		// Auto-detect ASCII art in the message text
+		// Auto-detect ASCII art in the message text using @profullstack/text-type-detection
 		if (messageText.trim()) {
-			isAsciiArtAutoDetected = detectAsciiArt(messageText);
+			const detection = detectTextFormat(messageText);
+			isAsciiArtAutoDetected = detection.text_format === 'ascii';
 			// Only auto-set if user hasn't manually overridden
 			if (!isAsciiArt && isAsciiArtAutoDetected) {
 				isAsciiArt = true;

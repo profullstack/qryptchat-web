@@ -9,6 +9,7 @@ import { MESSAGE_TYPES } from '$lib/api/protocol.js';
 import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
 import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '$lib/crypto/public-key-service.js';
+import * as conversationUtils from '$lib/utils/conversation-utils.js';
 
 /**
  * @typedef {Object} ChatState
@@ -627,6 +628,20 @@ function createChatStore() {
 		}
 	}
 
+	/**
+	 * Archive a conversation
+	 * @param {string} conversationId - Conversation ID
+	 */
+	const archiveConversation = (conversationId) =>
+		conversationUtils.archiveConversation(apiPost, loadConversations, conversationId);
+
+	/**
+	 * Unarchive a conversation
+	 * @param {string} conversationId - Conversation ID
+	 */
+	const unarchiveConversation = (conversationId) =>
+		conversationUtils.unarchiveConversation(apiPost, loadConversations, conversationId);
+
 	return {
 		subscribe,
 
@@ -639,6 +654,8 @@ function createChatStore() {
 		joinConversation,
 		leaveConversation,
 		createConversation,
+		archiveConversation,
+		unarchiveConversation,
 
 		// Message management
 		loadMessages,

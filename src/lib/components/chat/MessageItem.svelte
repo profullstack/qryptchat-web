@@ -2,6 +2,7 @@
  	import { user } from '$lib/stores/auth.js';
  	import { convertUrlsToLinks } from '$lib/utils/url-link-converter.js';
  	import { decryptFileContent, downloadDecryptedFile, createDecryptedMediaUrl } from '$lib/utils/file-decryption.js';
+ 	import { detectTextFormat } from '@profullstack/text-type-detection';
  	import { onMount } from 'svelte';
  
  	let {
@@ -16,11 +17,29 @@
  	// Use the already-decrypted content from WebSocket store
  	const decryptedContent = $derived(message.content || '');
  	
- 	// Convert URLs to clickable links
- 	const contentWithLinks = $derived(convertUrlsToLinks(decryptedContent));
+ 	// Detect text format automatically
+ 	const detectedFormat = $derived(detectTextFormat(decryptedContent));
  	
- 	// Check if message should be displayed as ASCII art from metadata
- 	const isAsciiArt = $derived(message.metadata?.isAsciiArt === true);
+ 	// Check if message should be displayed as ASCII art from metadata (manual override)
+ 	// or from automatic detection
+ 	const isAsciiArt = $derived(
+ 		message.metadata?.isAsciiArt === true ||
+ 		detectedFormat.type === 'ascii-art'
+ 	);
+ 	
+ 	// Check if content is a code block
+ 	const isCodeBlock = $derived(
+ 		detectedFormat.type === 'code' ||
+ 		detectedFormat.language !== null
+ 	);
+ 	
+ 	// Check if content is markdown
+ 	const isMarkdown = $derived(detectedFormat.type === 'markdown');
+ 	
+ 	// Convert URLs to clickable links (only for plain text)
+ 	const contentWithLinks = $derived(
+ 		detectedFormat.type === 'plain' ? convertUrlsToLinks(decryptedContent) : decryptedContent
+ 	);
  	
  	// File attachment state
  	let files = $state(/** @type {any[]} */ ([]));
@@ -238,8 +257,21 @@
 		{/if}
 
 		<div class="message-bubble" class:own-bubble={isOwn}>
-			<div class="message-text" class:ascii-art={isAsciiArt}>
-				{@html contentWithLinks}
+			<div
+				class="message-text"
+				class:ascii-art={isAsciiArt}
+				class:code-block={isCodeBlock}
+				class:markdown={isMarkdown}
+			>
+				{#if isAsciiArt}
+					<pre class="ascii-art-content">{decryptedContent}</pre>
+				{:else if isCodeBlock}
+					<pre class="code-block-content"><code class="language-{detectedFormat.language || 'plaintext'}">{decryptedContent}</code></pre>
+				{:else if isMarkdown}
+					{@html contentWithLinks}
+				{:else}
+					{@html contentWithLinks}
+				{/if}
 			</div>
 			
 			<!-- File attachments -->
@@ -665,12 +697,55 @@
 	}
 
 	.message-text.ascii-art {
+		padding: 0;
+	}
+
+	.ascii-art-content {
 		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
 		font-size: 0.75rem;
 		line-height: 1.2;
 		white-space: pre;
 		overflow-x: auto;
 		letter-spacing: 0;
+		margin: 0;
+		padding: 0;
+		background: transparent;
+		border: none;
+	}
+
+	.message-text.code-block {
+		padding: 0;
+	}
+
+	.code-block-content {
+		font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+		font-size: 0.8125rem;
+		line-height: 1.3;
+		white-space: pre;
+		overflow-x: auto;
+		margin: 0;
+		padding: 0.75rem;
+		background: rgba(0, 0, 0, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 0.375rem;
+	}
+
+	.message-bubble:not(.own-bubble) .code-block-content {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		color: var(--color-text-primary);
+	}
+
+	.code-block-content code {
+		font-family: inherit;
+		font-size: inherit;
+		background: transparent;
+		border: none;
+		padding: 0;
+	}
+
+	.message-text.markdown {
+		/* Markdown-specific styling can be added here */
 	}
 
 	/* Code block styling */
