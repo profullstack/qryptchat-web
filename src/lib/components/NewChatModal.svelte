@@ -1,6 +1,23 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
+
+import ChatRequestPromptModal from './ChatRequestPromptModal.svelte';
+let showChatPrompt = $state(false);
+let chatPromptResolve;
+function showChatRequestPrompt() {
+	return new Promise((resolve) => {
+		showChatPrompt = true;
+		chatPromptResolve = resolve;
+	});
+}
+
+// Chat request prompt setting
+let promptChatRequests = false;
+if (typeof window !== 'undefined') {
+	const saved = localStorage.getItem('promptChatRequests');
+	promptChatRequests = saved === 'true';
+}
 	
 	const dispatch = createEventDispatcher();
 	
@@ -98,31 +115,41 @@
 		
 		isCreating = true;
 		try {
-			const response = await fetch('/api/chat/conversations', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					type: selectedUsers.length === 1 ? 'direct' : 'group',
-					participant_ids: selectedUsers.map(u => u.id),
-					name: selectedUsers.length > 1 ? `Chat with ${selectedUsers.map(u => u.display_name || u.username).join(', ')}` : undefined
-				})
-			});
-			
-			const data = await response.json();
-			
-			if (response.ok) {
-				dispatch('conversationCreated', {
-					conversationId: data.conversation_id,
-					type: selectedUsers.length === 1 ? 'direct' : 'group',
-					participants: selectedUsers
-				});
-				closeModal();
-			} else {
-				console.error('Create conversation error:', data.error);
-				alert('Failed to create conversation: ' + data.error);
-			}
+
+		 // If chat request prompt is enabled, show custom modal before creating
+		 if (promptChatRequests) {
+			 const accepted = await showChatRequestPrompt();
+			 if (!accepted) {
+				 isCreating = false;
+				 return;
+			 }
+		 }
+
+		 const response = await fetch('/api/chat/conversations', {
+			 method: 'POST',
+			 headers: {
+				 'Content-Type': 'application/json'
+			 },
+			 body: JSON.stringify({
+				 type: selectedUsers.length === 1 ? 'direct' : 'group',
+				 participant_ids: selectedUsers.map(u => u.id),
+				 name: selectedUsers.length > 1 ? `Chat with ${selectedUsers.map(u => u.display_name || u.username).join(', ')}` : undefined
+			 })
+		 });
+
+		 const data = await response.json();
+
+		 if (response.ok) {
+			 dispatch('conversationCreated', {
+				 conversationId: data.conversation_id,
+				 type: selectedUsers.length === 1 ? 'direct' : 'group',
+				 participants: selectedUsers
+			 });
+			 closeModal();
+		 } else {
+			 console.error('Create conversation error:', data.error);
+			 alert('Failed to create conversation: ' + data.error);
+		 }
 		} catch (error) {
 			console.error('Create conversation error:', error);
 			alert('Failed to create conversation');
@@ -427,6 +454,13 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showChatPrompt}
+	<ChatRequestPromptModal
+		on:accept={() => { showChatPrompt = false; chatPromptResolve(true); }}
+		on:reject={() => { showChatPrompt = false; chatPromptResolve(false); }}
+	/>
 {/if}
 
 <style>
