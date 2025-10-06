@@ -16,10 +16,10 @@ export async function GET(event) {
 	try {
 		// Authenticate the user using getUser() for security
 		const supabase = createSupabaseServerClient(event);
-		const { data: { user }, error: userError } = await supabase.auth.getUser();
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-		if (userError || !user) {
-			console.error('📡 [SSE] Authentication failed:', userError?.message || 'No user');
+		if (authError || !user) {
+			console.error('📡 [SSE] Authentication failed:', authError?.message || 'No user');
 			return new Response('Unauthorized', { status: 401 });
 		}
 
