@@ -1,0 +1,16 @@
+/* TEAM */
+Developer: Profullstack, Inc.
+Site: https://profullstack.com
+Location: USA
+
+/* THANKS */
+Node.js community
+
+/* SITE */
+Last update: 2025/01/05
+Standards: ES2024+, ESM
+Components: Node.js, Mocha, Chai, ESLint, Prettier
+Software: VS Code
+
+/* SPEC */
+humans.txt spec: https://humanstxt.org/
