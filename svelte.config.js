@@ -6,7 +6,11 @@ const config = {
 		// Use Node.js adapter for Railway deployment
 		adapter: adapter({
 			out: 'build'
-		})
+		}),
+		alias: {
+			$lib: './src/lib',
+			'$lib/*': './src/lib/*'
+		}
 	}
 };
 
