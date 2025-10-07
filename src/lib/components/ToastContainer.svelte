@@ -1,31 +1,31 @@
 <script>
 	import { onMount } from 'svelte';
-	
-	let { 
-		type = 'info', 
-		title = '', 
-		message = '', 
+
+	let {
+		type = 'info',
+		title = '',
+		message = '',
 		onAccept = null,
 		onDismiss = null,
 		acceptText = 'Accept',
 		dismissText = 'Dismiss',
 		visible = false
 	} = $props();
-	
+
 	function handleAccept() {
 		visible = false;
 		if (onAccept) {
 			onAccept();
 		}
 	}
-	
+
 	function handleDismiss() {
 		visible = false;
 		if (onDismiss) {
 			onDismiss();
 		}
 	}
-	
+
 	/**
 	 * @param {string} type
 	 */
@@ -59,7 +59,7 @@
 					{getIcon(type)}
 				{/if}
 			</div>
-			
+
 			<div class="toast-text">
 				{#if title}
 					<h3 class="toast-title">{title}</h3>
@@ -68,7 +68,7 @@
 					<p class="toast-message">{message}</p>
 				{/if}
 			</div>
-			
+
 			<button
 				onclick={handleDismiss}
 				class="toast-close"
@@ -80,7 +80,7 @@
 				</svg>
 			</button>
 		</div>
-		
+
 		{#if onAccept}
 			<div class="toast-actions">
 				<button
@@ -160,8 +160,11 @@
 
 	.toast-install .toast-content {
 		background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
-		border-color: var(--color-primary-400);
-		color: white;
+		border: 1px solid var(--color-primary-400);
+		color: var(--color-bg-primary);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
+		padding: var(--space-4);
 	}
 
 	.toast-content::before {
@@ -185,6 +188,13 @@
 		flex-shrink: 0;
 		line-height: 1;
 		filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+	}
+
+	.app-icon {
+		width: 50px;
+		height: 50px;
+		border-radius: 8px;
+		display: block;
 	}
 
 	.toast-icon.pulse {
@@ -277,13 +287,13 @@
 	}
 
 	.toast-button-secondary {
-		background: rgba(255, 255, 255, 0.15);
-		color: inherit;
-		border: 1px solid rgba(255, 255, 255, 0.2);
+		background: var(--color-primary-300);
+		color: Black; 
+		border: 1px solid var(--color-bg-primary);
+		font-weight: 500;
 	}
 
 	.toast-button-secondary:hover {
-		background: rgba(255, 255, 255, 0.25);
 		transform: translateY(-1px);
 	}
 
@@ -356,6 +366,12 @@
 
 		.toast-content {
 			padding: 1rem;
+		}
+
+		.app-icon {
+			width: 45px;
+			height: 45px;
+			border-radius: 6px;
 		}
 
 		.toast-actions {
