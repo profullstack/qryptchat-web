@@ -11,6 +11,8 @@
 	import AdvancedKeyDiagnostic from '$lib/components/settings/AdvancedKeyDiagnostic.svelte';
 	import CompleteKeyReset from '$lib/components/settings/CompleteKeyReset.svelte';
 	import KeyResetStatus from '$lib/components/settings/KeyResetStatus.svelte';
+
+	import ChatRequestSettings from '$lib/components/settings/ChatRequestSettings.svelte';
 	
 	let user = $state(null);
 	let loading = $state(true);
@@ -234,6 +236,11 @@
 						bind:user={user}
 						on:updated={handleSMSSettingsUpdated}
 					/>
+				</section>
+
+				<section class="settings-section">
+					<!-- Chat Request Prompt Option -->
+					<ChatRequestSettings />
 				</section>
 				
 				<section class="settings-section">
