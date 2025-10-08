@@ -115,6 +115,80 @@ TWILIO_PHONE_NUMBER=your_twilio_phone
 PUBLIC_APP_URL=http://localhost:8080
 ```
 
+### Using Production API in Local Development
+
+If you want to run the frontend locally while connecting to your production Supabase instance (useful for testing or development without setting up a local database), follow these steps:
+
+#### 1. Get Production Credentials
+
+From your Supabase project dashboard:
+- Navigate to **Settings** → **API**
+- Copy your **Project URL** (e.g., `https://xxxxx.supabase.co`)
+- Copy your **anon/public key**
+- Copy your **service_role key** (keep this secure!)
+
+#### 2. Configure Environment Variables
+
+Update your `.env` file with production values:
+
+```env
+# Point to production Supabase
+PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=your_production_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_production_service_role_key
+
+# Keep local development settings
+PORT=8080
+PUBLIC_APP_URL=http://localhost:8080
+NODE_ENV=development
+
+# Production Twilio credentials (if testing SMS)
+TWILIO_ACCOUNT_SID=your_production_twilio_sid
+TWILIO_AUTH_TOKEN=your_production_twilio_token
+TWILIO_PHONE_NUMBER=your_production_twilio_phone
+```
+
+#### 3. Important Considerations
+
+⚠️ **Security Warnings:**
+- Never commit production credentials to version control
+- Use production credentials only in secure local environments
+- Consider using a separate "staging" Supabase project for development
+- Be cautious when testing features that modify production data
+
+💡 **Best Practices:**
+- Test destructive operations on a staging environment first
+- Use Row Level Security (RLS) policies to protect production data
+- Monitor your Supabase dashboard for unexpected activity
+- Consider creating a separate test user account for development
+
+#### 4. Verify Connection
+
+Start your development server:
+
+```bash
+pnpm dev
+```
+
+The app should now connect to your production Supabase instance. You can verify by:
+- Checking the browser console for connection logs
+- Attempting to sign in with a production account
+- Monitoring the Supabase dashboard for API requests
+
+#### 5. Switching Back to Local Development
+
+To switch back to local Supabase:
+
+```bash
+# Start local Supabase
+pnpx supabase start
+
+# Update .env with local credentials
+PUBLIC_SUPABASE_URL=http://localhost:54321
+PUBLIC_SUPABASE_ANON_KEY=your_local_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_local_service_role_key
+```
+
 ## 🔒 Security Model
 
 QryptChat implements a **zero-knowledge post-quantum architecture** where:
