@@ -6,6 +6,7 @@
 import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
 import { SMSDebugLogger, formatSMSError } from '$lib/utils/sms-debug.js';
+import { getSMSErrorDetails } from '$lib/utils/twilio-validator.js';
 
 /**
  * Validate phone number format
@@ -86,36 +87,44 @@ export async function POST(event) {
 				environment: process.env.NODE_ENV
 			});
 			
-			logger.error('SMS sending failed', errorInfo);
+			// Get detailed error information with Twilio-specific handling
+			const errorDetails = getSMSErrorDetails(smsError);
+			
+			logger.error('SMS sending failed', {
+				...errorInfo,
+				errorDetails
+			});
 			
 			// Log to console for production debugging
 			console.error('SMS sending error:', {
 				...errorInfo,
+				errorDetails,
 				logs: logger.getLogsAsString()
 			});
 
-			// Return user-friendly error message
-			let userMessage = 'Failed to send SMS. Please try again.';
-			if (smsError.message?.includes('Invalid phone number')) {
-				userMessage = 'Invalid phone number. Please check the format and try again.';
-			} else if (smsError.message?.includes('SMS not configured')) {
-				userMessage = 'SMS service is temporarily unavailable. Please try again later.';
-			} else if (smsError.message?.includes('Too many requests')) {
-				userMessage = 'Too many attempts. Please wait a few minutes before trying again.';
-			} else if (smsError.message?.includes('Signups not allowed')) {
-				userMessage = 'SMS authentication is currently unavailable. Please contact support.';
+			// Determine HTTP status code
+			let statusCode = 500;
+			if (smsError.status === 429) {
+				statusCode = 429;
+			} else if (errorDetails.actionRequired === 'CONFIGURE_TWILIO') {
+				statusCode = 503; // Service Unavailable
+			} else if (errorDetails.actionRequired === 'FIX_PHONE_FORMAT') {
+				statusCode = 400; // Bad Request
 			}
 
 			return json(
 				{
-					error: userMessage,
+					error: errorDetails.userMessage,
 					code: smsError.status || 'SMS_SEND_FAILED',
+					...(errorDetails.suggestion && { suggestion: errorDetails.suggestion }),
+					...(errorDetails.actionRequired && { actionRequired: errorDetails.actionRequired }),
 					...(process.env.NODE_ENV === 'development' && {
 						debug: errorInfo,
-						logs: logger.getLogs()
+						logs: logger.getLogs(),
+						twilioErrorCode: errorDetails.twilioErrorCode
 					})
 				},
-				{ status: smsError.status === 429 ? 429 : 500 }
+				{ status: statusCode }
 			);
 		}
 
