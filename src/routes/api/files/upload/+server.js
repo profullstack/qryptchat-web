@@ -33,9 +33,7 @@ export async function POST(event) {
 		// Parse the multipart form data
 		const formData = await event.request.formData();
 		const encryptedContents = formData.get('encryptedContents');
-		const originalFilename = formData.get('originalFilename');
-		const mimeType = formData.get('mimeType');
-		const fileSize = formData.get('fileSize');
+		const encryptedMetadata = formData.get('encryptedMetadata');
 		const conversationId = formData.get('conversationId');
 		const messageId = formData.get('messageId');
 
@@ -45,9 +43,15 @@ export async function POST(event) {
 			return error(400, 'No encrypted content provided');
 		}
 
-		if (!conversationId || !messageId || !originalFilename || !mimeType || !fileSize) {
-			console.error('📁 [FILE-UPLOAD] Missing required fields');
-			return error(400, 'Missing required fields');
+		// Check for missing or empty required fields
+		const missingFields = [];
+		if (!conversationId) missingFields.push('conversationId');
+		if (!messageId) missingFields.push('messageId');
+		if (!encryptedMetadata) missingFields.push('encryptedMetadata');
+
+		if (missingFields.length > 0) {
+			console.error('📁 [FILE-UPLOAD] Missing required fields:', missingFields.join(', '));
+			return error(400, `Missing required fields: ${missingFields.join(', ')}`);
 		}
 
 		// Validate user has access to the conversation
@@ -77,7 +81,7 @@ export async function POST(event) {
 			return error(404, 'Message not found or unauthorized');
 		}
 
-		console.log(`📁 [FILE-UPLOAD] Processing encrypted file: ${originalFilename} (${fileSize} bytes)`);
+		console.log(`📁 [FILE-UPLOAD] Processing encrypted file with encrypted metadata`);
 
 		// Generate file ID and storage path (use auth user ID for storage path to match RLS policy)
 		const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
