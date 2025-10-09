@@ -256,6 +256,7 @@
 					}
 
 					// Step 3: Complete the upload by saving metadata
+					// Include the encrypted metadata we created earlier
 					const completeResponse = await fetch('/api/files/upload-complete', {
 						method: 'POST',
 						headers: {
@@ -264,7 +265,10 @@
 						body: JSON.stringify({
 							storagePath,
 							fileId,
-							metadata
+							metadata: {
+								...metadata,
+								encryptedMetadata: encryptedDbMetadata // Add encrypted metadata
+							}
 						})
 					});
 

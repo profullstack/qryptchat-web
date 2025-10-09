@@ -92,7 +92,8 @@ export async function POST(event) {
 
 		console.log(`📁 [UPLOAD-URL] ✅ Signed URL generated successfully`);
 
-		// Return the signed upload URL and metadata
+		// Return the signed upload URL and minimal metadata
+		// Do NOT return encryptedMetadata - client already has it
 		return json({
 			success: true,
 			uploadUrl: uploadData.signedUrl,
@@ -102,7 +103,6 @@ export async function POST(event) {
 			metadata: {
 				messageId,
 				conversationId,
-				encryptedMetadata, // Return encrypted metadata to client
 				mimeType,
 				fileSize: parseInt(fileSize)
 			}
