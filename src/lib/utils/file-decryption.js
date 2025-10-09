@@ -28,10 +28,10 @@ export async function decryptFileContent(fileId) {
 	// Parse encrypted contents
 	const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
 
-	// Get current user from WebSocket store
-	const { currentUser: wsUser } = await import('$lib/stores/websocket-chat.js');
+	// Get current user from auth store
+	const { user: authUser } = await import('$lib/stores/auth.js');
 	let user = null;
-	const unsubscribe = wsUser.subscribe((u) => user = u);
+	const unsubscribe = authUser.subscribe((u) => user = u);
 	unsubscribe();
 	
 	if (!user?.id) {

@@ -46,9 +46,10 @@
  	let isLoadingFiles = $state(false);
  	let fileLoadError = $state('');
  	let decryptedFilenames = $state(/** @type {Map<string, string>} */ (new Map()));
-
-  // Track expanded/collapsed state for text previews
-  let expandedFiles = $state(new Set());
+ 	let decryptedMetadata = $state(/** @type {Map<string, any>} */ (new Map()));
+ 
+ 	 // Track expanded/collapsed state for text previews
+ 	 let expandedFiles = $state(new Set());
 
   function toggleExpand(/** @type {string} */ fileId) {
     if (expandedFiles.has(fileId)) {
@@ -76,7 +77,8 @@
 		return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 	}
 
-	function getFileIcon(/** @type {string} */ mimeType) {
+	function getFileIcon(/** @type {string | undefined} */ mimeType) {
+		if (!mimeType) return '📎';
 		if (mimeType.startsWith('image/')) {
 			return '🖼️';
 		} else if (mimeType.startsWith('video/')) {
@@ -151,12 +153,15 @@
 
 	async function decryptFilename(/** @type {any} */ file) {
 		try {
-			console.log(`📁 [DECRYPT-FILENAME] Decrypting filename for file: ${file.id}`);
-			const { filename } = await decryptFileContent(file.id);
+			console.log(`📁 [DECRYPT-FILENAME] Decrypting metadata for file: ${file.id}`);
+			const { filename, metadata } = await decryptFileContent(file.id);
 			decryptedFilenames.set(file.id, filename);
+			if (metadata) {
+				decryptedMetadata.set(file.id, metadata);
+			}
 			console.log(`📁 [DECRYPT-FILENAME] ✅ Updated display filename for ${file.id}: ${filename}`);
 		} catch (error) {
-			console.error(`📁 [DECRYPT-FILENAME] ❌ Error decrypting filename:`, error);
+			console.error(`📁 [DECRYPT-FILENAME] ❌ Error decrypting metadata:`, error);
 		}
 	}
 
@@ -294,15 +299,18 @@
 					{:else}
 						{#each files as file}
 							{@const displayFilename = decryptedFilenames.get(file.id)}
-							{#if file.mimeType?.startsWith('image/')}
+							{@const fileMetadata = decryptedMetadata.get(file.id)}
+							{@const mimeType = fileMetadata?.mimeType}
+							{@const fileSize = fileMetadata?.size || 0}
+							{#if mimeType?.startsWith('image/')}
 								<!-- Inline image display -->
 								<div class="media-attachment">
 									<div class="media-header">
 										<div class="media-info">
-											<span class="media-icon">{getFileIcon(file.mimeType)}</span>
+											<span class="media-icon">{getFileIcon(mimeType)}</span>
 											<div class="media-details">
 												<span class="media-filename">{displayFilename}</span>
-												<span class="media-size">{formatFileSize(file.fileSize)}</span>
+												<span class="media-size">{formatFileSize(fileSize)}</span>
 											</div>
 										</div>
 										<button class="download-btn" onclick={() => downloadFile(file)} title="Download" aria-label="Download file">
@@ -328,15 +336,15 @@
 										<div class="media-error">Error loading image</div>
 									{/await}
 								</div>
-							{:else if file.mimeType?.startsWith('video/')}
+							{:else if mimeType?.startsWith('video/')}
 								<!-- Enhanced video display with PWA support -->
 								<div class="media-attachment">
 									<div class="media-header">
 										<div class="media-info">
-											<span class="media-icon">{getFileIcon(file.mimeType)}</span>
+											<span class="media-icon">{getFileIcon(mimeType)}</span>
 											<div class="media-details">
 												<span class="media-filename">{displayFilename}</span>
-												<span class="media-size">{formatFileSize(file.fileSize)}</span>
+												<span class="media-size">{formatFileSize(fileSize)}</span>
 											</div>
 										</div>
 										<button class="download-btn" onclick={() => downloadFile(file)} title="Download" aria-label="Download file">
@@ -397,15 +405,15 @@
 										</div>
 									{/await}
 								</div>
-							{:else if file.mimeType?.startsWith('audio/')}
+							{:else if mimeType?.startsWith('audio/')}
 								<!-- Inline audio display -->
 								<div class="media-attachment">
 									<div class="media-header">
 										<div class="media-info">
-											<span class="media-icon">{getFileIcon(file.mimeType)}</span>
+											<span class="media-icon">{getFileIcon(mimeType)}</span>
 											<div class="media-details">
 												<span class="media-filename">{displayFilename}</span>
-												<span class="media-size">{formatFileSize(file.fileSize)}</span>
+												<span class="media-size">{formatFileSize(fileSize)}</span>
 											</div>
 										</div>
 										<button class="download-btn" onclick={() => downloadFile(file)} title="Download" aria-label="Download file">
@@ -447,7 +455,7 @@
 											<div class="csv-info">
 												<div class="csv-filename">{displayFilename}</div>
 												<div class="csv-meta">
-													{formatFileSize(file.fileSize)}
+													{formatFileSize(fileSize)}
 													{#if csvData.totalRows > 0}
 														• {csvData.totalRows} row{csvData.totalRows !== 1 ? 's' : ''}
 													{/if}
@@ -495,7 +503,7 @@
 											<div class="file-icon">📊</div>
 											<div class="file-details">
 												<div class="file-name">{displayFilename}</div>
-												<div class="file-size">{formatFileSize(file.fileSize)} • Click to download</div>
+												<div class="file-size">{formatFileSize(fileSize)} • Click to download</div>
 											</div>
 										</div>
 										<div class="download-icon">
@@ -506,9 +514,8 @@
 									</button>
 								{/await}
 							{:else}
-								{@const displayFilename = decryptedFilenames.get(file.id) || 'file'}
 								<!-- Detect and preview text-based files -->
-								{#if file.mimeType?.startsWith('text/') || displayFilename.match(/\.(json|txt|md|csv|log|js)$/i)}
+								{#if mimeType?.startsWith('text/') || displayFilename?.match(/\.(json|txt|md|csv|log|js)$/i)}
 									<div class="text-preview">
 										<pre>
 											{#if displayFilename.endsWith('.js')}
@@ -532,11 +539,11 @@
 									<button type="button" class="file-attachment" onclick={() => downloadFile(file)} aria-label="Download {displayFilename}">
 										<div class="file-info">
 											<div class="file-icon">
-												{getFileIcon(file.mimeType)}
+												{getFileIcon(mimeType)}
 											</div>
 											<div class="file-details">
 												<div class="file-name">{displayFilename}</div>
-												<div class="file-size">{formatFileSize(file.fileSize)}</div>
+												<div class="file-size">{formatFileSize(fileSize)}</div>
 											</div>
 										</div>
 										<div class="download-icon">
