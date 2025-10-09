@@ -205,6 +205,21 @@
 					await multiRecipientEncryption.initialize();
 					const encryptedContents = await multiRecipientEncryption.encryptForConversation(conversationId, JSON.stringify(fileMetadata));
 
+					// Create metadata object for database (also encrypt this client-side)
+					const dbMetadata = {
+						filename: file.name,
+						mimeType: file.type,
+						size: file.size,
+						uploadedAt: new Date().toISOString(),
+						version: 3
+					};
+					
+					// Encrypt the database metadata for all conversation participants
+					const encryptedDbMetadata = await multiRecipientEncryption.encryptForConversation(
+						conversationId,
+						JSON.stringify(dbMetadata)
+					);
+
 					// Step 1: Get signed upload URL from server
 					const uploadUrlResponse = await fetch('/api/files/upload-url', {
 						method: 'POST',
@@ -214,9 +229,9 @@
 						body: JSON.stringify({
 							conversationId,
 							messageId,
-							originalFilename: file.name, // Keep for server-side logging/validation
-							mimeType: file.type,
-							fileSize: file.size
+							encryptedMetadata: encryptedDbMetadata, // Send encrypted metadata
+							mimeType: file.type, // Keep for server validation
+							fileSize: file.size  // Keep for server validation
 						})
 					});
 

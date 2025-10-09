@@ -28,9 +28,9 @@ export async function POST(event) {
 			return error(400, 'Missing required fields');
 		}
 
-		const { messageId, conversationId, originalFilename, mimeType, fileSize } = metadata;
+		const { messageId, conversationId, encryptedMetadata, mimeType, fileSize } = metadata;
 
-		if (!messageId || !conversationId || !originalFilename || !mimeType || fileSize == null) {
+		if (!messageId || !conversationId || !encryptedMetadata || !mimeType || fileSize == null) {
 			console.error('📁 [UPLOAD-COMPLETE] Missing metadata fields');
 			return error(400, 'Missing metadata fields');
 		}
@@ -90,11 +90,10 @@ export async function POST(event) {
 			return error(404, 'File not found in storage - upload may have failed');
 		}
 
-		console.log(`📁 [UPLOAD-COMPLETE] Processing completion for: ${originalFilename} (${fileSize} bytes)`);
+		console.log(`📁 [UPLOAD-COMPLETE] Processing completion for encrypted file (${fileSize} bytes)`);
 
 		// Save file metadata to database
-		// Note: Sensitive data (filename) is encrypted within the file content itself
-		// This metadata is just auxiliary information for the database
+		// The encrypted_metadata is already encrypted client-side for all conversation participants
 		const { data: dbData, error: dbError } = await supabase
 			.from('encrypted_files')
 			.insert({
@@ -102,13 +101,7 @@ export async function POST(event) {
 				storage_path: storagePath,
 				mime_type: mimeType,
 				file_size: parseInt(fileSize),
-				encrypted_metadata: {
-					id: fileId,
-					mimeType: mimeType,
-					size: parseInt(fileSize),
-					encryptedAt: new Date().toISOString(),
-					version: 3 // Version 3 = multi-recipient encryption with embedded filename
-				},
+				encrypted_metadata: encryptedMetadata, // Store encrypted metadata from client
 				created_by: user.id // Use auth user ID for RLS policy compatibility
 			})
 			.select()
@@ -125,7 +118,7 @@ export async function POST(event) {
 			return error(500, 'Failed to save file metadata');
 		}
 
-		console.log(`📁 [UPLOAD-COMPLETE] ✅ File upload completed successfully: ${originalFilename}`);
+		console.log(`📁 [UPLOAD-COMPLETE] ✅ File upload completed successfully`);
 
 		// Return success response
 		return json({
@@ -133,7 +126,6 @@ export async function POST(event) {
 			file: {
 				id: dbData.id,
 				messageId: messageId,
-				originalFilename: originalFilename,
 				mimeType: mimeType,
 				fileSize: parseInt(fileSize),
 				formattedSize: formatFileSize(parseInt(fileSize)),

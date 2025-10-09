@@ -34,13 +34,13 @@ export async function POST(event) {
 		const {
 			conversationId,
 			messageId,
-			originalFilename,
+			encryptedMetadata,
 			mimeType,
 			fileSize
 		} = await event.request.json();
 
 		// Validate inputs
-		if (!conversationId || !messageId || !originalFilename || !mimeType || !fileSize) {
+		if (!conversationId || !messageId || !encryptedMetadata || !mimeType || !fileSize) {
 			console.error('📁 [UPLOAD-URL] Missing required fields');
 			return error(400, 'Missing required fields');
 		}
@@ -72,7 +72,7 @@ export async function POST(event) {
 			return error(404, 'Message not found or unauthorized');
 		}
 
-		console.log(`📁 [UPLOAD-URL] Generating signed URL for: ${originalFilename} (${fileSize} bytes)`);
+		console.log(`📁 [UPLOAD-URL] Generating signed URL for encrypted file (${fileSize} bytes)`);
 
 		// Generate file ID and storage path (use auth user ID for storage path to match RLS policy)
 		const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
@@ -102,7 +102,7 @@ export async function POST(event) {
 			metadata: {
 				messageId,
 				conversationId,
-				originalFilename,
+				encryptedMetadata, // Return encrypted metadata to client
 				mimeType,
 				fileSize: parseInt(fileSize)
 			}
