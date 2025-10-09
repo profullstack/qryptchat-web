@@ -1,6 +1,8 @@
 // API endpoint for completing direct file upload after successful upload to Supabase Storage
 import { json, error } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
+import { sseManager } from '$lib/api/sse-manager.js';
+import { MESSAGE_TYPES } from '$lib/api/protocol.js';
 
 export async function POST(event) {
 	try {
@@ -118,6 +120,27 @@ export async function POST(event) {
 		}
 
 		console.log(`📁 [UPLOAD-COMPLETE] ✅ File upload completed successfully`);
+
+		// Fetch the updated message with has_attachments flag set by the database trigger
+		const { data: updatedMessage, error: fetchError } = await supabase
+			.from('messages')
+			.select(`
+				*,
+				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
+			`)
+			.eq('id', messageId)
+			.single();
+
+		if (fetchError) {
+			console.error('📁 [UPLOAD-COMPLETE] Failed to fetch updated message:', fetchError);
+		} else {
+			// Broadcast the updated message via SSE to notify all clients
+			console.log(`📁 [UPLOAD-COMPLETE] Broadcasting message update via SSE`);
+			sseManager.broadcastToRoom(conversationId, MESSAGE_TYPES.NEW_MESSAGE, {
+				message: updatedMessage,
+				shouldReloadMessages: true // Signal clients to reload messages to get file attachments
+			});
+		}
 
 		// Return success response
 		return json({
