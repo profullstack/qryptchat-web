@@ -162,7 +162,8 @@
 
 	async function downloadFile(/** @type {any} */ file) {
 		try {
-			console.log(`📁 [DOWNLOAD] Starting download for: ${file.originalFilename}`);
+			const displayName = decryptedFilenames.get(file.id) || 'file';
+			console.log(`📁 [DOWNLOAD] Starting download for: ${displayName}`);
 			const filename = await downloadDecryptedFile(file);
 			console.log(`📁 [DOWNLOAD] ✅ File downloaded: ${filename}`);
 		} catch (error) {
@@ -217,8 +218,9 @@
 	 * @returns {boolean}
 	 */
 	function isCSVFile(file) {
+		const filename = decryptedFilenames.get(file.id);
 		return file.mimeType === 'text/csv' ||
-		       file.originalFilename?.toLowerCase().endsWith('.csv');
+		       filename?.toLowerCase().endsWith('.csv');
 	}
 
 	// Load files when message has attachments
@@ -504,11 +506,12 @@
 									</button>
 								{/await}
 							{:else}
+								{@const displayFilename = decryptedFilenames.get(file.id) || 'file'}
 								<!-- Detect and preview text-based files -->
-								{#if file.mimeType?.startsWith('text/') || file.originalFilename.match(/\.(json|txt|md|csv|log|js)$/i)}
+								{#if file.mimeType?.startsWith('text/') || displayFilename.match(/\.(json|txt|md|csv|log|js)$/i)}
 									<div class="text-preview">
 										<pre>
-											{#if file.originalFilename.endsWith('.js')}
+											{#if displayFilename.endsWith('.js')}
 												{file.decryptedContent?.slice(0, 2000)}
 												{file.decryptedContent && file.decryptedContent.length > 2000 ? "\n[JavaScript files are limited to snippet view]" : ""}
 											{:else if expandedFiles?.has(file.id)}
@@ -518,7 +521,7 @@
 												{file.decryptedContent && file.decryptedContent.length > 2000 ? "\n... (read more below)" : ""}
 											{/if}
 										</pre>
-										{#if !file.originalFilename.endsWith('.js') && file.decryptedContent && file.decryptedContent.length > 2000}
+										{#if !displayFilename.endsWith('.js') && file.decryptedContent && file.decryptedContent.length > 2000}
 											<button class="read-more-btn" onclick={() => toggleExpand(file.id)}>
 												{expandedFiles.has(file.id) ? "Show less" : "Read more"}
 											</button>
@@ -526,13 +529,13 @@
 									</div>
 								{:else}
 									<!-- Default download-only display for non-text files -->
-									<button type="button" class="file-attachment" onclick={() => downloadFile(file)} aria-label="Download {file.originalFilename}">
+									<button type="button" class="file-attachment" onclick={() => downloadFile(file)} aria-label="Download {displayFilename}">
 										<div class="file-info">
 											<div class="file-icon">
 												{getFileIcon(file.mimeType)}
 											</div>
 											<div class="file-details">
-												<div class="file-name">{decryptedFilenames.get(file.id)}</div>
+												<div class="file-name">{displayFilename}</div>
 												<div class="file-size">{formatFileSize(file.fileSize)}</div>
 											</div>
 										</div>
