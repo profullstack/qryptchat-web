@@ -80,10 +80,10 @@ export async function decryptFileContent(fileId) {
 
 /**
  * Decrypt and download a file
- * @param {object} file - File object with id and mimeType
+ * @param {object} file - File object with id
  */
 export async function downloadDecryptedFile(file) {
-	const { content, filename } = await decryptFileContent(file.id);
+	const { content, filename, metadata } = await decryptFileContent(file.id);
 
 	// Convert base64 to binary
 	const binaryString = atob(content);
@@ -92,8 +92,11 @@ export async function downloadDecryptedFile(file) {
 		bytes[i] = binaryString.charCodeAt(i);
 	}
 
+	// Get mimeType from decrypted metadata
+	const mimeType = metadata?.mimeType || 'application/octet-stream';
+
 	// Create blob and download
-	const blob = new Blob([bytes], { type: file.mimeType });
+	const blob = new Blob([bytes], { type: mimeType });
 	const url = window.URL.createObjectURL(blob);
 	const link = document.createElement('a');
 	link.href = url;
@@ -108,11 +111,11 @@ export async function downloadDecryptedFile(file) {
 
 /**
  * Decrypt file and create media URL for preview
- * @param {object} file - File object with id and mimeType
+ * @param {object} file - File object with id
  * @returns {Promise<{url: string, filename: string}>}
  */
 export async function createDecryptedMediaUrl(file) {
-	const { content, filename } = await decryptFileContent(file.id);
+	const { content, filename, metadata } = await decryptFileContent(file.id);
 
 	// Convert base64 to binary
 	const binaryString = atob(content);
@@ -121,8 +124,11 @@ export async function createDecryptedMediaUrl(file) {
 		bytes[i] = binaryString.charCodeAt(i);
 	}
 
+	// Get mimeType from decrypted metadata
+	const mimeType = metadata?.mimeType || 'application/octet-stream';
+
 	// Create blob with proper MIME type
-	const blob = new Blob([bytes], { type: file.mimeType });
+	const blob = new Blob([bytes], { type: mimeType });
 	const mediaUrl = window.URL.createObjectURL(blob);
 
 	return { url: mediaUrl, filename };
