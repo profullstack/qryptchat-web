@@ -15,19 +15,8 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Clean up outdated caches
 cleanupOutdatedCaches();
 
-// Cache strategy for API calls
-registerRoute(
-	({ url }) => url.origin === 'https://your-project.supabase.co' && !url.pathname.includes('/auth/'),
-	new NetworkFirst({
-		cacheName: 'supabase-api-cache',
-		plugins: [
-			new ExpirationPlugin({
-				maxEntries: 100,
-				maxAgeSeconds: 60 * 60 * 24 // 24 hours
-			})
-		]
-	})
-);
+// Note: Direct Supabase API caching is disabled since we use SvelteKit API routes
+// If you need to cache direct Supabase calls, add a route here with your Supabase URL
 
 // Cache strategy for images
 registerRoute(
@@ -63,8 +52,9 @@ const bgSync = new BackgroundSync('message-queue', {
 });
 
 // Register background sync for message sending
+// Exclude SSE endpoints from being cached
 registerRoute(
-	({ url }) => url.pathname.includes('/api/messages'),
+	({ url }) => url.pathname.includes('/api/messages') && !url.pathname.includes('/api/events'),
 	new NetworkFirst({
 		cacheName: 'messages-cache',
 		plugins: [bgSync]
