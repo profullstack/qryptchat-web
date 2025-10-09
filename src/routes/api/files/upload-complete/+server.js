@@ -28,9 +28,9 @@ export async function POST(event) {
 			return error(400, 'Missing required fields');
 		}
 
-		const { messageId, conversationId, encryptedMetadata, mimeType, fileSize } = metadata;
+		const { messageId, conversationId, encryptedMetadata } = metadata;
 
-		if (!messageId || !conversationId || !encryptedMetadata || !mimeType || fileSize == null) {
+		if (!messageId || !conversationId || !encryptedMetadata) {
 			console.error('📁 [UPLOAD-COMPLETE] Missing metadata fields');
 			return error(400, 'Missing metadata fields');
 		}
@@ -90,17 +90,16 @@ export async function POST(event) {
 			return error(404, 'File not found in storage - upload may have failed');
 		}
 
-		console.log(`📁 [UPLOAD-COMPLETE] Processing completion for encrypted file (${fileSize} bytes)`);
+		console.log(`📁 [UPLOAD-COMPLETE] Processing completion for encrypted file`);
 
 		// Save file metadata to database
 		// The encrypted_metadata is already encrypted client-side for all conversation participants
+		// mime_type and file_size columns have been removed - all metadata is now E2E encrypted
 		const { data: dbData, error: dbError } = await supabase
 			.from('encrypted_files')
 			.insert({
 				message_id: messageId,
 				storage_path: storagePath,
-				mime_type: mimeType,
-				file_size: parseInt(fileSize),
 				encrypted_metadata: encryptedMetadata, // Store encrypted metadata from client
 				created_by: user.id // Use auth user ID for RLS policy compatibility
 			})
@@ -126,9 +125,6 @@ export async function POST(event) {
 			file: {
 				id: dbData.id,
 				messageId: messageId,
-				mimeType: mimeType,
-				fileSize: parseInt(fileSize),
-				formattedSize: formatFileSize(parseInt(fileSize)),
 				createdAt: dbData.created_at
 			}
 		});

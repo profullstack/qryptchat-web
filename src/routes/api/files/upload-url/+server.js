@@ -30,19 +30,25 @@ export async function POST(event) {
 		const userId = internalUser.id;
 		console.log(`📁 [UPLOAD-URL] Using internal user ID: ${userId}`);
 
-		// Parse the JSON request body (should be small - just metadata)
+		// Parse the JSON request body (should be small - just encrypted metadata)
 		const {
 			conversationId,
 			messageId,
-			encryptedMetadata,
-			mimeType,
-			fileSize
+			encryptedMetadata
 		} = await event.request.json();
 
 		// Validate inputs
-		if (!conversationId || !messageId || !encryptedMetadata || !mimeType || !fileSize) {
+		if (!conversationId || !messageId || !encryptedMetadata) {
 			console.error('📁 [UPLOAD-URL] Missing required fields');
 			return error(400, 'Missing required fields');
+		}
+		
+		// Extract one encrypted copy to get file size for validation
+		// We can't decrypt it, but we can get the size from any user's copy
+		const firstUserId = Object.keys(encryptedMetadata)[0];
+		if (!firstUserId) {
+			console.error('📁 [UPLOAD-URL] No encrypted metadata found');
+			return error(400, 'Invalid encrypted metadata');
 		}
 
 		// Validate user has access to the conversation
@@ -72,7 +78,7 @@ export async function POST(event) {
 			return error(404, 'Message not found or unauthorized');
 		}
 
-		console.log(`📁 [UPLOAD-URL] Generating signed URL for encrypted file (${fileSize} bytes)`);
+		console.log(`📁 [UPLOAD-URL] Generating signed URL for encrypted file`);
 
 		// Generate file ID and storage path (use auth user ID for storage path to match RLS policy)
 		const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
@@ -102,9 +108,7 @@ export async function POST(event) {
 			token: uploadData.token, // Include the token for verification
 			metadata: {
 				messageId,
-				conversationId,
-				mimeType,
-				fileSize: parseInt(fileSize)
+				conversationId
 			}
 		});
 

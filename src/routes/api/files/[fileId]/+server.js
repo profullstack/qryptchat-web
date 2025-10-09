@@ -40,8 +40,6 @@ export async function GET(event) {
 				id,
 				message_id,
 				storage_path,
-				mime_type,
-				file_size,
 				encrypted_metadata,
 				created_at,
 				messages!inner(
@@ -64,8 +62,6 @@ export async function GET(event) {
 			return error(404, 'File not found or unauthorized');
 		}
 
-		// Display filename will be extracted from encrypted content or fallback to generic name
-		let displayFilename = 'encrypted-file';
 		console.log(`📁 [FILE-DOWNLOAD] Processing encrypted file: ${fileId}`);
 
 		// Download encrypted file from storage
@@ -108,37 +104,33 @@ export async function GET(event) {
 		console.log(`📁 [FILE-DOWNLOAD] Decrypted content length:`, decryptedContent?.length);
 
 		// Parse the decrypted content to extract file metadata and content
-		let fileMetadata;
-		let actualFileContent;
+		const fileMetadata = JSON.parse(decryptedContent);
+		const actualFileContent = fileMetadata.content;
+		const displayFilename = fileMetadata.filename || 'encrypted-file';
 		
+		// Decrypt the encrypted_metadata to get mimeType
+		let mimeType = 'application/octet-stream';
 		try {
-			// Try to parse as JSON (new format with metadata)
-			fileMetadata = JSON.parse(decryptedContent);
-			if (fileMetadata.content && fileMetadata.filename) {
-				actualFileContent = fileMetadata.content;
-				displayFilename = fileMetadata.filename;
-				console.log(`📁 [FILE-DOWNLOAD] Using encrypted filename from metadata: ${displayFilename}`);
-			} else {
-				throw new Error('Invalid metadata format');
+			const userEncryptedMetadata = fileData.encrypted_metadata?.[userId] || fileData.encrypted_metadata?.[user.id];
+			if (userEncryptedMetadata) {
+				const decryptedMetadata = await postQuantumEncryption.decryptFromSender(userEncryptedMetadata, '');
+				const metadataObj = JSON.parse(decryptedMetadata);
+				mimeType = metadataObj.mimeType || 'application/octet-stream';
 			}
-		} catch (parseError) {
-			// Fallback to treating entire content as base64 file content (legacy format)
-			actualFileContent = decryptedContent;
-			console.log(`📁 [FILE-DOWNLOAD] Using legacy format, filename from database: ${displayFilename}`);
+		} catch (metaError) {
+			console.warn('📁 [FILE-DOWNLOAD] Could not decrypt metadata for mimeType');
 		}
 
 		// Convert base64 back to binary
 		const fileBuffer = Buffer.from(actualFileContent, 'base64');
 
-		console.log(`📁 [FILE-DOWNLOAD] File buffer length:`, fileBuffer.length);
-		console.log(`📁 [FILE-DOWNLOAD] File buffer first 10 bytes:`, fileBuffer.slice(0, 10));
 		console.log(`📁 [FILE-DOWNLOAD] ✅ File decrypted successfully: ${displayFilename}`);
 
 		// Return decrypted file with correct content length
 		return new Response(fileBuffer, {
 			status: 200,
 			headers: {
-				'Content-Type': fileData.mime_type,
+				'Content-Type': mimeType,
 				'Content-Length': fileBuffer.length.toString(),
 				'Content-Disposition': `attachment; filename="${encodeURIComponent(displayFilename)}"`,
 				'Cache-Control': 'private, no-cache, no-store, must-revalidate',

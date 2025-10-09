@@ -38,8 +38,6 @@ export async function GET(event) {
 				id,
 				message_id,
 				storage_path,
-				mime_type,
-				file_size,
 				encrypted_metadata,
 				created_at,
 				messages!inner(
@@ -80,18 +78,14 @@ export async function GET(event) {
 		console.log(`📁 [ENCRYPTED-FILE] ✅ Retrieved encrypted file data: ${fileId}`);
 
 		// Return encrypted file data for client-side decryption
-		// Note: filename is encrypted within the file contents JSON, not in database
-		// The encrypted_metadata field contains auxiliary info (not sensitive data)
+		// All metadata is E2E encrypted - client will decrypt it
 		return json({
 			success: true,
 			file: {
 				id: fileData.id,
 				messageId: fileData.message_id,
-				originalFilename: 'encrypted-file', // Filename is encrypted in content
-				mimeType: fileData.mime_type,
-				fileSize: fileData.file_size,
 				encryptedContents: encryptedContentsJson,
-				metadata: fileData.encrypted_metadata // Auxiliary metadata (not sensitive)
+				encryptedMetadata: fileData.encrypted_metadata // E2E encrypted metadata
 			}
 		});
 

@@ -221,6 +221,7 @@
 					);
 
 					// Step 1: Get signed upload URL from server
+					// Only send encrypted metadata - server doesn't need plain text info
 					const uploadUrlResponse = await fetch('/api/files/upload-url', {
 						method: 'POST',
 						headers: {
@@ -229,9 +230,7 @@
 						body: JSON.stringify({
 							conversationId,
 							messageId,
-							encryptedMetadata: encryptedDbMetadata, // Send encrypted metadata
-							mimeType: file.type, // Keep for server validation
-							fileSize: file.size  // Keep for server validation
+							encryptedMetadata: encryptedDbMetadata
 						})
 					});
 
