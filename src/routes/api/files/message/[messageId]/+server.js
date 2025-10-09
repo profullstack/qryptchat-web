@@ -39,8 +39,7 @@ export async function GET(event) {
 			.select(`
 				id,
 				message_id,
-				mime_type,
-				file_size,
+				encrypted_metadata,
 				created_at,
 				created_by,
 				messages!inner(
@@ -69,13 +68,12 @@ export async function GET(event) {
 
 		console.log(`📁 [FILES-BY-MESSAGE] Found ${files.length} files for message: ${messageId}`);
 
-		// Format file data for frontend (filename will be extracted client-side from encrypted content)
+		// Format file data for frontend
+		// All metadata is E2E encrypted - client will decrypt it
 		const formattedFiles = files.map(file => ({
 			id: file.id,
 			messageId: file.message_id,
-			originalFilename: 'encrypted-file', // Filename is encrypted in content, extracted client-side
-			mimeType: file.mime_type,
-			fileSize: file.file_size,
+			encryptedMetadata: file.encrypted_metadata, // Client will decrypt this
 			createdAt: file.created_at,
 			createdBy: file.created_by,
 			isOwner: file.created_by === userId
