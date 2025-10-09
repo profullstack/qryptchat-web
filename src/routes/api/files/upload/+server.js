@@ -1,7 +1,6 @@
 // API endpoint for encrypted file uploads
 import { json, error } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
-import { metadataEncryption } from '$lib/crypto/metadata-encryption.js';
 
 export async function POST(event) {
 	try {
@@ -102,30 +101,9 @@ export async function POST(event) {
 
 		console.log(`📁 [FILE-UPLOAD] File uploaded successfully:`, uploadData);
 
-		// Prepare metadata object
-		const metadata = {
-			id: fileId,
-			mimeType: mimeType,
-			size: parseInt(fileSize),
-			encryptedAt: new Date().toISOString(),
-			version: 3 // Version 3 = multi-recipient encryption with embedded filename
-		};
-
-		// Encrypt metadata for all conversation participants
-		let encryptedMetadata;
-		try {
-			console.log(`📁 [FILE-UPLOAD] Encrypting metadata for conversation participants`);
-			encryptedMetadata = await metadataEncryption.encryptMetadata(conversationId, metadata, supabase);
-			console.log(`📁 [FILE-UPLOAD] ✅ Metadata encrypted successfully`);
-		} catch (encryptError) {
-			console.error(`📁 [FILE-UPLOAD] ❌ Failed to encrypt metadata:`, encryptError);
-			// Fall back to storing unencrypted metadata if encryption fails
-			// This ensures backward compatibility and prevents upload failures
-			encryptedMetadata = metadata;
-			console.warn(`📁 [FILE-UPLOAD] ⚠️ Storing unencrypted metadata as fallback`);
-		}
-
 		// Save file metadata to database
+		// Note: Sensitive data (filename) is encrypted within the file content itself
+		// This metadata is just auxiliary information for the database
 		const { data: dbData, error: dbError } = await supabase
 			.from('encrypted_files')
 			.insert({
@@ -133,7 +111,13 @@ export async function POST(event) {
 				storage_path: storagePath,
 				mime_type: mimeType,
 				file_size: parseInt(fileSize),
-				encrypted_metadata: encryptedMetadata,
+				encrypted_metadata: {
+					id: fileId,
+					mimeType: mimeType,
+					size: parseInt(fileSize),
+					encryptedAt: new Date().toISOString(),
+					version: 3 // Version 3 = multi-recipient encryption with embedded filename
+				},
 				created_by: user.id // Use auth user ID for RLS policy compatibility
 			})
 			.select()
