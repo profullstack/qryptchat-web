@@ -112,8 +112,18 @@ export async function POST(event) {
 		};
 
 		// Encrypt metadata for all conversation participants
-		console.log(`📁 [FILE-UPLOAD] Encrypting metadata for conversation participants`);
-		const encryptedMetadata = await metadataEncryption.encryptMetadata(conversationId, metadata);
+		let encryptedMetadata;
+		try {
+			console.log(`📁 [FILE-UPLOAD] Encrypting metadata for conversation participants`);
+			encryptedMetadata = await metadataEncryption.encryptMetadata(conversationId, metadata, supabase);
+			console.log(`📁 [FILE-UPLOAD] ✅ Metadata encrypted successfully`);
+		} catch (encryptError) {
+			console.error(`📁 [FILE-UPLOAD] ❌ Failed to encrypt metadata:`, encryptError);
+			// Fall back to storing unencrypted metadata if encryption fails
+			// This ensures backward compatibility and prevents upload failures
+			encryptedMetadata = metadata;
+			console.warn(`📁 [FILE-UPLOAD] ⚠️ Storing unencrypted metadata as fallback`);
+		}
 
 		// Save file metadata to database
 		const { data: dbData, error: dbError } = await supabase
