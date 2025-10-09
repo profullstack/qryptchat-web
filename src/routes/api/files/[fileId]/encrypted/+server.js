@@ -1,6 +1,8 @@
 // API endpoint to get encrypted file data for client-side decryption
 import { json, error } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
+import { metadataEncryption } from '$lib/crypto/metadata-encryption.js';
+import { publicKeyService } from '$lib/crypto/public-key-service.js';
 
 export async function GET(event) {
 	try {
@@ -79,6 +81,40 @@ export async function GET(event) {
 
 		console.log(`📁 [ENCRYPTED-FILE] ✅ Retrieved encrypted file data: ${fileId}`);
 
+		// Decrypt metadata for current user
+		let decryptedMetadata = null;
+		try {
+			// Get the message to find the sender
+			const { data: messageData, error: msgError } = await supabase
+				.from('messages')
+				.select('sender_id, users!inner(public_key)')
+				.eq('id', fileData.message_id)
+				.single();
+
+			if (msgError || !messageData) {
+				console.warn('📁 [ENCRYPTED-FILE] Could not get sender info for metadata decryption:', msgError);
+			} else {
+				const senderPublicKey = messageData.users.public_key;
+				
+				// Get user's encrypted copy of metadata
+				const userEncryptedMetadata = fileData.encrypted_metadata?.[userId] || fileData.encrypted_metadata?.[user.id];
+				
+				if (userEncryptedMetadata && senderPublicKey) {
+					console.log(`📁 [ENCRYPTED-FILE] Decrypting metadata for user: ${userId}`);
+					decryptedMetadata = await metadataEncryption.decryptMetadata(
+						userEncryptedMetadata,
+						senderPublicKey
+					);
+					console.log(`📁 [ENCRYPTED-FILE] ✅ Metadata decrypted successfully`);
+				} else {
+					console.warn('📁 [ENCRYPTED-FILE] No encrypted metadata found for user or missing sender key');
+				}
+			}
+		} catch (metadataError) {
+			console.error('📁 [ENCRYPTED-FILE] Failed to decrypt metadata:', metadataError);
+			// Continue without metadata - not critical for file download
+		}
+
 		// Return encrypted file data for client-side decryption
 		// Note: filename is now encrypted within the file contents JSON, not in database
 		return json({
@@ -90,7 +126,7 @@ export async function GET(event) {
 				mimeType: fileData.mime_type,
 				fileSize: fileData.file_size,
 				encryptedContents: encryptedContentsJson,
-				metadata: fileData.encrypted_metadata
+				metadata: decryptedMetadata // Now decrypted for current user
 			}
 		});
 

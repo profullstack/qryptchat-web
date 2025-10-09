@@ -1,6 +1,7 @@
 // API endpoint for completing direct file upload after successful upload to Supabase Storage
 import { json, error } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
+import { metadataEncryption } from '$lib/crypto/metadata-encryption.js';
 
 export async function POST(event) {
 	try {
@@ -92,6 +93,19 @@ export async function POST(event) {
 
 		console.log(`📁 [UPLOAD-COMPLETE] Processing completion for: ${originalFilename} (${fileSize} bytes)`);
 
+		// Prepare metadata object
+		const metadataObj = {
+			id: fileId,
+			mimeType: mimeType,
+			size: parseInt(fileSize),
+			encryptedAt: new Date().toISOString(),
+			version: 3 // Version 3 = multi-recipient encryption with embedded filename
+		};
+
+		// Encrypt metadata for all conversation participants
+		console.log(`📁 [UPLOAD-COMPLETE] Encrypting metadata for conversation participants`);
+		const encryptedMetadata = await metadataEncryption.encryptMetadata(conversationId, metadataObj);
+
 		// Save file metadata to database
 		const { data: dbData, error: dbError } = await supabase
 			.from('encrypted_files')
@@ -100,13 +114,7 @@ export async function POST(event) {
 				storage_path: storagePath,
 				mime_type: mimeType,
 				file_size: parseInt(fileSize),
-				encrypted_metadata: {
-					id: fileId,
-					mimeType: mimeType,
-					size: parseInt(fileSize),
-					encryptedAt: new Date().toISOString(),
-					version: 3 // Version 3 = multi-recipient encryption with embedded filename
-				},
+				encrypted_metadata: encryptedMetadata,
 				created_by: user.id // Use auth user ID for RLS policy compatibility
 			})
 			.select()
