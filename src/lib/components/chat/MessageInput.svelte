@@ -155,23 +155,13 @@
 	}
 
 	async function sendMessage() {
-		console.log('📁 [SEND] sendMessage called', { conversationId, hasUser: !!currentUser?.id, isSending, isUploadingFiles });
-		
-		if (!conversationId || !currentUser?.id || isSending || isUploadingFiles) {
-			console.log('📁 [SEND] Blocked - missing requirements');
-			return;
-		}
+		if (!conversationId || !currentUser?.id || isSending || isUploadingFiles) return;
 
 		const content = messageText.trim();
 		const hasText = content.length > 0;
 		const hasFiles = selectedFiles.length > 0;
 
-		console.log('📁 [SEND] Content check', { hasText, hasFiles, filesCount: selectedFiles.length });
-
-		if (!hasText && !hasFiles) {
-			console.log('📁 [SEND] Blocked - no content');
-			return;
-		}
+		if (!hasText && !hasFiles) return;
 
 		isSending = true;
 		isUploadingFiles = hasFiles;
@@ -179,14 +169,12 @@
 
 		try {
 			if (hasFiles) {
-				console.log('📁 [SEND] Starting file upload flow for', selectedFiles.length, 'files');
 				// First send a message to get the message ID
 				const messageResult = await chat.sendMessage(
 					conversationId,
 					content || '[File attachment]',
 					'file'
 				);
-				console.log('📁 [SEND] Message creation result:', messageResult);
 
 				if (!messageResult?.success || !messageResult?.data?.id) {
 					throw new Error('Failed to create message for file attachment');
