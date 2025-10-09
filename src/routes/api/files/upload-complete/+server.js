@@ -119,15 +119,33 @@ export async function POST(event) {
 			return error(500, 'Failed to save file metadata');
 		}
 
-		console.log(`📁 [UPLOAD-COMPLETE] ✅ File upload completed successfully`);
+		console.log(`📁 [UPLOAD-COMPLETE] ✅ File upload completed successfully for message: ${messageId}`);
+
+		// Verify the message exists and has the attachment flag set
+		const { data: verifyMessage, error: verifyError } = await supabase
+			.from('messages')
+			.select('id, has_attachments, conversation_id')
+			.eq('id', messageId)
+			.single();
+
+		if (verifyError) {
+			console.error(`📁 [UPLOAD-COMPLETE] ⚠️ Could not verify message:`, verifyError);
+		} else {
+			console.log(`📁 [UPLOAD-COMPLETE] Message verification:`, {
+				messageId: verifyMessage.id,
+				has_attachments: verifyMessage.has_attachments,
+				conversation_id: verifyMessage.conversation_id
+			});
+		}
 
 		// Broadcast a simple notification that files were added to the message
 		// Clients will reload messages to see the updated message with attachments
-		console.log(`📁 [UPLOAD-COMPLETE] Broadcasting file upload completion via SSE`);
+		console.log(`📁 [UPLOAD-COMPLETE] Broadcasting file upload completion via SSE to conversation: ${conversationId}`);
 		sseManager.broadcastToRoom(conversationId, MESSAGE_TYPES.NEW_MESSAGE, {
 			message: { id: messageId, conversation_id: conversationId, has_attachments: true },
 			shouldReloadMessages: true // Signal clients to reload messages to get file attachments
 		});
+		console.log(`📁 [UPLOAD-COMPLETE] ✅ SSE broadcast sent`);
 
 		// Return success response
 		return json({
