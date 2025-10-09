@@ -165,8 +165,7 @@ export async function HEAD(event) {
 			.from('encrypted_files')
 			.select(`
 				id,
-				mime_type,
-				file_size,
+				encrypted_metadata,
 				created_at,
 				messages!inner(
 					conversation_id,
@@ -183,12 +182,12 @@ export async function HEAD(event) {
 			return error(404, 'File not found or unauthorized');
 		}
 
-		// Return file headers without content (filename from database fallback)
+		// Return file headers without content
+		// Metadata is encrypted - client will decrypt
 		return new Response(null, {
 			status: 200,
 			headers: {
-				'Content-Type': fileData.mime_type,
-				'Content-Length': fileData.file_size.toString(),
+				'Content-Type': 'application/octet-stream',
 				'Content-Disposition': `attachment; filename="encrypted-file"`,
 				'Last-Modified': new Date(fileData.created_at).toUTCString()
 			}
@@ -223,9 +222,7 @@ export async function POST(event) {
 			.select(`
 				id,
 				message_id,
-				original_filename,
-				mime_type,
-				file_size,
+				encrypted_metadata,
 				created_at,
 				created_by,
 				messages!inner(
@@ -245,15 +242,12 @@ export async function POST(event) {
 			return error(404, 'File not found or unauthorized');
 		}
 
-		// Return file metadata (filename from database fallback, actual filename encrypted in content)
+		// Return file metadata - all sensitive data is E2E encrypted
 		return json({
 			id: fileData.id,
 			messageId: fileData.message_id,
 			conversationId: fileData.messages[0].conversation_id,
-			originalFilename: fileData.original_filename,
-			mimeType: fileData.mime_type,
-			fileSize: fileData.file_size,
-			formattedSize: formatFileSize(fileData.file_size),
+			encryptedMetadata: fileData.encrypted_metadata, // Client will decrypt
 			createdAt: fileData.created_at,
 			createdBy: fileData.created_by,
 			isOwner: fileData.created_by === userId

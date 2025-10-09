@@ -101,54 +101,9 @@ export async function POST(event) {
 
 		console.log(`📁 [FILE-UPLOAD] File uploaded successfully:`, uploadData);
 
-		// Save file metadata to database
-		// Note: Sensitive data (filename) is encrypted within the file content itself
-		// This metadata is just auxiliary information for the database
-		const { data: dbData, error: dbError } = await supabase
-			.from('encrypted_files')
-			.insert({
-				message_id: messageId,
-				storage_path: storagePath,
-				mime_type: mimeType,
-				file_size: parseInt(fileSize),
-				encrypted_metadata: {
-					id: fileId,
-					mimeType: mimeType,
-					size: parseInt(fileSize),
-					encryptedAt: new Date().toISOString(),
-					version: 3 // Version 3 = multi-recipient encryption with embedded filename
-				},
-				created_by: user.id // Use auth user ID for RLS policy compatibility
-			})
-			.select()
-			.single();
-
-		if (dbError) {
-			console.error('📁 [FILE-UPLOAD] Database insert failed:', dbError);
-			
-			// Clean up uploaded file on database error
-			await supabase.storage
-				.from('encrypted-files')
-				.remove([storagePath]);
-				
-			return error(500, 'Failed to save file metadata');
-		}
-
-		console.log(`📁 [FILE-UPLOAD] ✅ File upload completed successfully: ${originalFilename}`);
-
-		// Return success response
-		return json({
-			success: true,
-			file: {
-				id: dbData.id,
-				messageId: messageId,
-				originalFilename: originalFilename,
-				mimeType: mimeType,
-				fileSize: parseInt(fileSize),
-				formattedSize: formatFileSize(parseInt(fileSize)),
-				createdAt: dbData.created_at
-			}
-		});
+		// This endpoint is deprecated - use /api/files/upload-url + /api/files/upload-complete instead
+		// The new flow supports E2E encrypted metadata
+		return error(501, 'This upload method is deprecated. Use /api/files/upload-url for E2E encrypted uploads.');
 
 	} catch (err) {
 		console.error('📁 [FILE-UPLOAD] ❌ Unexpected error:', err);
