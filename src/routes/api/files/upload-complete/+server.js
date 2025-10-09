@@ -121,26 +121,13 @@ export async function POST(event) {
 
 		console.log(`📁 [UPLOAD-COMPLETE] ✅ File upload completed successfully`);
 
-		// Fetch the updated message with has_attachments flag set by the database trigger
-		const { data: updatedMessage, error: fetchError } = await supabase
-			.from('messages')
-			.select(`
-				*,
-				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url)
-			`)
-			.eq('id', messageId)
-			.single();
-
-		if (fetchError) {
-			console.error('📁 [UPLOAD-COMPLETE] Failed to fetch updated message:', fetchError);
-		} else {
-			// Broadcast the updated message via SSE to notify all clients
-			console.log(`📁 [UPLOAD-COMPLETE] Broadcasting message update via SSE`);
-			sseManager.broadcastToRoom(conversationId, MESSAGE_TYPES.NEW_MESSAGE, {
-				message: updatedMessage,
-				shouldReloadMessages: true // Signal clients to reload messages to get file attachments
-			});
-		}
+		// Broadcast a simple notification that files were added to the message
+		// Clients will reload messages to see the updated message with attachments
+		console.log(`📁 [UPLOAD-COMPLETE] Broadcasting file upload completion via SSE`);
+		sseManager.broadcastToRoom(conversationId, MESSAGE_TYPES.NEW_MESSAGE, {
+			message: { id: messageId, conversation_id: conversationId, has_attachments: true },
+			shouldReloadMessages: true // Signal clients to reload messages to get file attachments
+		});
 
 		// Return success response
 		return json({
