@@ -121,21 +121,25 @@
 			const ext = getFileExtension(file.name);
 			if (blockedExtensions.includes(ext)) {
 				uploadError = `File type not allowed: ${ext}`;
+				selectedFiles = [];
 				return;
 			}
 			if (file.size > maxFileSize) {
 				uploadError = `File too large. Maximum size is ${Math.floor(maxFileSize / (1024 * 1024 * 1024))}GB`;
+				selectedFiles = [];
 				return;
 			}
 			if (file.size === 0) {
 				uploadError = 'File cannot be empty';
+				selectedFiles = [];
 				return;
 			}
 			validFiles.push(file);
 		}
 		
-		selectedFiles = validFiles;
-		console.log(`📁 Selected ${selectedFiles.length} files for upload`);
+		// Force reactivity by creating a new array reference
+		selectedFiles = [...validFiles];
+		console.log(`📁 Selected ${selectedFiles.length} files for upload`, selectedFiles);
 	}
 
 	function removeSelectedFile(/** @type {number} */ index) {
