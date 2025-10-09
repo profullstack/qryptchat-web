@@ -446,12 +446,14 @@ function createChatStore() {
 			let errorMessage = 'Failed to send message';
 
 			if (error && error.message) {
-				if (error.message.includes('KYBER') && error.message.includes('Nuclear Key Reset')) {
-					errorMessage = 'Encryption failed due to key format issues. Both you and the recipient need to use the Nuclear Key Reset option in Settings.';
+				if (error.message.includes('KYBER') || error.message.includes('Nuclear Key Reset')) {
+					errorMessage = 'Encryption failed due to incompatible key format. All participants must use the Nuclear Key Reset option in Settings to generate new encryption keys.';
 				} else if (error.message.includes('invalid encapsulation key')) {
 					errorMessage = 'Encryption failed due to key compatibility issues. Both participants need to reset their encryption keys.';
 				} else if (error.message.includes('Failed to encrypt message for any participants')) {
 					errorMessage = 'Failed to encrypt message for any participants. Try using the Nuclear Key Reset option in Settings.';
+				} else if (error.message.includes('Users with incompatible keys detected')) {
+					errorMessage = error.message; // Use the detailed error message from multi-recipient encryption
 				}
 			}
 

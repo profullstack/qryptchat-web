@@ -101,6 +101,8 @@ export class MultiRecipientEncryptionService {
 							errorType: 'KYBER_HEADER',
 							message: 'Key has KYBER header format that cannot be used with ML-KEM'
 						});
+						// Skip encryption for this user - they need to reset their keys
+						continue;
 					}
 					
 					// Only use ML-KEM encryption - no AES fallbacks
@@ -141,7 +143,11 @@ export class MultiRecipientEncryptionService {
 			if (Object.keys(encryptedContents).length === 0) {
 				// Check if we detected KYBER header issues
 				if (kyberHeaderErrorDetected || this.encryptionErrors.some(e => e.errorType === 'KYBER_HEADER')) {
-					throw new Error('Failed to encrypt message: KYBER key format detected. Both participants must use Nuclear Key Reset in Settings.');
+					const kyberUsers = this.encryptionErrors
+						.filter(e => e.errorType === 'KYBER_HEADER')
+						.map(e => e.userId)
+						.join(', ');
+					throw new Error(`Encryption failed: Users with incompatible keys detected (${kyberUsers}). All participants must use the Nuclear Key Reset option in Settings to generate new encryption keys.`);
 				}
 				
 				// Check if we had invalid keys
@@ -150,6 +156,15 @@ export class MultiRecipientEncryptionService {
 				}
 				
 				throw new Error('Failed to encrypt message for any participants');
+			}
+
+			// Check if we have some successful encryptions but also some KYBER header issues
+			if (Object.keys(encryptedContents).length > 0 && kyberHeaderErrorDetected) {
+				const kyberUsers = this.encryptionErrors
+					.filter(e => e.errorType === 'KYBER_HEADER')
+					.map(e => e.userId)
+					.join(', ');
+				console.warn(`🔐 [MULTI] ⚠️ Partial encryption success: ${Object.keys(encryptedContents).length} users encrypted, but ${kyberUsers} have incompatible keys and need Nuclear Key Reset`);
 			}
 
 			console.log(`🔐 [MULTI] ✅ Successfully encrypted message for ${Object.keys(encryptedContents).length} participants`);

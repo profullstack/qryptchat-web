@@ -318,7 +318,9 @@
 				errorMessage.includes('encryption') ||
 				errorMessage.includes('encrypt') ||
 				errorMessage.includes('encapsulation key') ||
-				errorMessage.includes('Nuclear Key Reset');
+				errorMessage.includes('Nuclear Key Reset') ||
+				errorMessage.includes('incompatible keys') ||
+				errorMessage.includes('key format');
 				
 			uploadError = errorMessage;
 			
@@ -377,7 +379,13 @@
 					<strong>Encryption key issue detected:</strong> {uploadError}
 					<div class="error-action">
 						<a href="/settings#key-reset" class="key-reset-link">Go to Settings → Nuclear Key Reset</a>
-						<span class="guidance-note">Both you and the recipient need to reset keys</span>
+						<span class="guidance-note">
+							{#if uploadError.includes('incompatible keys')}
+								All participants must reset their encryption keys to continue messaging
+							{:else}
+								Both you and the recipient need to reset keys
+							{/if}
+						</span>
 					</div>
 				{:else}
 					{uploadError}
