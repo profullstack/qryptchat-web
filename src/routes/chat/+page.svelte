@@ -335,8 +335,7 @@
 			// Reset PWA session manager state
 			pwaSessionManager.resetConnectionState();
 			
-			// Reset WebSocket connection state
-			// SSE doesn't need resetConnectionState
+			// SSE connection state is managed by the chat store
 			
 			// Force session validation
 			const sessionValid = await pwaSessionManager.forceSessionValidation();
