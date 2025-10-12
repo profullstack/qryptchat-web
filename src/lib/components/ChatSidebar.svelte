@@ -25,8 +25,11 @@
 	let pollingTimeoutId = null;
 	let isPolling = false;
 	
-	// Use SSE chat store which has automatic real-time updates
-	const filteredConversations = $derived($chat.conversations.filter(conv => {
+	// Local conversations state for sidebar display
+	let localConversations = $state([]);
+	
+	// Use local conversations for filtering
+	const filteredConversations = $derived(localConversations.filter(conv => {
 		// Filter by archive status
 		let matchesArchiveFilter = true;
 		if (showArchived) {
@@ -47,7 +50,7 @@
 	const groupConversations = $derived(filteredConversations.filter(conv => conv.type === 'group'));
 	const roomConversations = $derived(filteredConversations.filter(conv => conv.type === 'room'));
 	
-	const archivedCount = $derived($chat.conversations.filter(conv => conv.is_archived || false).length);
+	const archivedCount = $derived(localConversations.filter(conv => conv.is_archived || false).length);
 
 	// Group rooms by group_id
 	const groupedRooms = $derived(roomConversations.reduce((acc, room) => {
@@ -86,9 +89,8 @@
 			const { conversations: apiConversations } = await response.json();
 			console.log('✅ Loaded', apiConversations?.length || 0, 'conversations from HTTP API');
 
-			// Use the chat store's loadConversations but override with our data
-			// by calling the internal update directly through the store
-			await chat.loadConversations();
+			// Update local state for sidebar display
+			localConversations = apiConversations || [];
 			
 			// Start long polling after initial load
 			if ($chat.authenticated && $user?.id) {
@@ -110,10 +112,19 @@
 		try {
 			console.log('🔄 Polling conversations...');
 			
-			// Use the chat store's loadConversations method
-			await chat.loadConversations();
-			
-			console.log('✅ Conversations updated via polling');
+			const response = await fetch('/api/chat/conversations', {
+				method: 'GET',
+				credentials: 'include'
+			});
+
+			if (response.ok) {
+				const { conversations: apiConversations } = await response.json();
+				
+				// Update local state for sidebar display
+				localConversations = apiConversations || [];
+				
+				console.log('✅ Conversations updated via polling');
+			}
 		} catch (error) {
 			console.error('Polling error:', error);
 		} finally {
