@@ -35,11 +35,22 @@
 		try {
 			activeConversationId = conversationId;
 			
-			// Use the chat store to properly set active conversation
-			// This will load messages AND mark them as read, fixing the red dot issue
+			// Mark all messages in this conversation as read
 			if ($user?.id) {
-				// SSE doesn't need setActiveConversation - handled by joinConversation
-				console.log(`✅ Set active conversation ${conversationId} and marked messages as read`);
+				try {
+					const response = await fetch(`/api/chat/conversations/${conversationId}/mark-read`, {
+						method: 'POST',
+						credentials: 'include'
+					});
+					
+					if (response.ok) {
+						console.log(`✅ Marked messages as read for conversation ${conversationId}`);
+					} else {
+						console.error('Failed to mark messages as read:', await response.text());
+					}
+				} catch (error) {
+					console.error('Error marking messages as read:', error);
+				}
 			}
 			
 			// Get conversation details from the store
