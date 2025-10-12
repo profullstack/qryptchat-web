@@ -644,6 +644,13 @@ function createChatStore() {
 	const unarchiveConversation = (conversationId) =>
 		conversationUtils.unarchiveConversation(apiPost, loadConversations, conversationId);
 
+	/**
+	 * Delete a conversation permanently
+	 * @param {string} conversationId - Conversation ID
+	 */
+	const deleteConversation = (conversationId) =>
+		conversationUtils.deleteConversation(apiPost, loadConversations, conversationId);
+
 	return {
 		subscribe,
 
@@ -658,6 +665,7 @@ function createChatStore() {
 		createConversation,
 		archiveConversation,
 		unarchiveConversation,
+		deleteConversation,
 
 		// Message management
 		loadMessages,

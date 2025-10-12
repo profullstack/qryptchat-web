@@ -166,6 +166,49 @@
 		}
 	}
 
+	// Handle delete conversation action
+	async function handleDeleteConversation(conversation) {
+		contextMenu.show = false;
+		
+		// Prevent deleting note-to-self conversations
+		if (conversation.type === 'note_to_self') {
+			console.log('Cannot delete note-to-self conversations');
+			return;
+		}
+		
+		// Confirm deletion
+		const conversationName = conversation.name || conversation.conversation_name || 'this conversation';
+		const confirmed = confirm(
+			`Are you sure you want to permanently delete ${conversationName}?\n\n` +
+			`This will delete all messages and files for all participants and cannot be undone.`
+		);
+		
+		if (!confirmed) {
+			return;
+		}
+		
+		try {
+			const result = await chat.deleteConversation(conversation.id);
+			
+			if (result.success) {
+				// If the deleted conversation was active, clear it
+				if (activeConversationId === conversation.id) {
+					onConversationSelect(null);
+				}
+				
+				// Reload conversations to reflect changes
+				hasLoadedConversations = false;
+				await loadConversationsData();
+			} else {
+				console.error('Failed to delete conversation:', result.error);
+				alert(`Failed to delete conversation: ${result.error}`);
+			}
+		} catch (error) {
+			console.error('Delete conversation error:', error);
+			alert('Failed to delete conversation. Please try again.');
+		}
+	}
+
 	// Handle conversation selection
 	function handleConversationSelect(/** @type {string} */ conversationId) {
 		onConversationSelect(conversationId);
@@ -495,6 +538,15 @@
 				<path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.42l.82-1zM5 19V8h14v11H5zm3-5.5l4 4 4-4-1.41-1.41L13 14.67V10h-2v4.67l-1.59-1.58L8 14.5z"/>
 			</svg>
 			{contextMenu.conversation?.is_archived ? 'Unarchive' : 'Archive'}
+		</button>
+		<button
+			class="context-item delete-item"
+			onclick={() => handleDeleteConversation(contextMenu.conversation)}
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+			</svg>
+			Delete
 		</button>
 	</div>
 {/if}
@@ -973,5 +1025,14 @@
 
 	.context-item:hover {
 		background: var(--color-bg-secondary);
+	}
+
+	.context-item.delete-item {
+		color: var(--color-error);
+	}
+
+	.context-item.delete-item:hover {
+		background: var(--color-error);
+		color: white;
 	}
 </style>
