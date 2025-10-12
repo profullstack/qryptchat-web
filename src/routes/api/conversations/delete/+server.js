@@ -61,7 +61,90 @@ export const POST = withAuth(async ({ request, locals }) => {
 			// For direct messages, delete everything for all participants
 			console.log(`Deleting direct message conversation ${conversationId} for all participants`);
 
-			// Delete all messages
+			// Step 1: Get all message IDs for this conversation
+			const { data: messages, error: messagesQueryError } = await supabase
+				.from('messages')
+				.select('id')
+				.eq('conversation_id', conversationId);
+
+			if (messagesQueryError) {
+				console.error('Error querying messages:', messagesQueryError);
+				return json({ error: 'Failed to query messages' }, { status: 500 });
+			}
+
+			const messageIds = messages?.map(m => m.id) || [];
+
+			// Step 2: Delete SMS notifications (references conversation_id and message_id)
+			if (messageIds.length > 0) {
+				const { error: smsError } = await supabase
+					.from('sms_notifications')
+					.delete()
+					.in('message_id', messageIds);
+
+				if (smsError) {
+					console.error('Error deleting SMS notifications:', smsError);
+				}
+			}
+
+			// Also delete SMS notifications by conversation_id
+			const { error: smsConvError } = await supabase
+				.from('sms_notifications')
+				.delete()
+				.eq('conversation_id', conversationId);
+
+			if (smsConvError) {
+				console.error('Error deleting SMS notifications by conversation:', smsConvError);
+			}
+
+			// Step 3: Delete deliveries (references message_id)
+			if (messageIds.length > 0) {
+				const { error: deliveriesError } = await supabase
+					.from('deliveries')
+					.delete()
+					.in('message_id', messageIds);
+
+				if (deliveriesError) {
+					console.error('Error deleting deliveries:', deliveriesError);
+				}
+			}
+
+			// Step 4: Delete message_recipients (references message_id)
+			if (messageIds.length > 0) {
+				const { error: recipientsError } = await supabase
+					.from('message_recipients')
+					.delete()
+					.in('message_id', messageIds);
+
+				if (recipientsError) {
+					console.error('Error deleting message recipients:', recipientsError);
+				}
+			}
+
+			// Step 5: Delete message_status (references message_id)
+			if (messageIds.length > 0) {
+				const { error: statusError } = await supabase
+					.from('message_status')
+					.delete()
+					.in('message_id', messageIds);
+
+				if (statusError) {
+					console.error('Error deleting message status:', statusError);
+				}
+			}
+
+			// Step 6: Delete encrypted_files (references message_id)
+			if (messageIds.length > 0) {
+				const { error: encryptedFilesError } = await supabase
+					.from('encrypted_files')
+					.delete()
+					.in('message_id', messageIds);
+
+				if (encryptedFilesError) {
+					console.error('Error deleting encrypted files:', encryptedFilesError);
+				}
+			}
+
+			// Step 7: Delete all messages
 			const { error: messagesError } = await supabase
 				.from('messages')
 				.delete()
@@ -72,17 +155,17 @@ export const POST = withAuth(async ({ request, locals }) => {
 				return json({ error: 'Failed to delete messages' }, { status: 500 });
 			}
 
-			// Delete all file attachments
-			const { error: filesError } = await supabase
-				.from('file_attachments')
+			// Step 8: Delete typing_indicators
+			const { error: typingError } = await supabase
+				.from('typing_indicators')
 				.delete()
 				.eq('conversation_id', conversationId);
 
-			if (filesError) {
-				console.error('Error deleting file attachments:', filesError);
+			if (typingError) {
+				console.error('Error deleting typing indicators:', typingError);
 			}
 
-			// Delete all participants
+			// Step 9: Delete all participants
 			const { error: participantsError } = await supabase
 				.from('conversation_participants')
 				.delete()
@@ -93,7 +176,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 				return json({ error: 'Failed to delete participants' }, { status: 500 });
 			}
 
-			// Delete the conversation
+			// Step 10: Delete the conversation
 			const { error: conversationError } = await supabase
 				.from('conversations')
 				.delete()
