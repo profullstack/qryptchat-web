@@ -1,6 +1,6 @@
+
 <script>
 	import { onMount, onDestroy } from 'svelte';
-	import { wsChat, conversations, groups, isConnected, isAuthenticated } from '$lib/stores/websocket-chat.js';
 	import { chat } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import ConversationItem from './ConversationItem.svelte';
@@ -21,15 +21,12 @@
 	let showArchived = $state(false);
 	let contextMenu = $state({ show: false, x: 0, y: 0, conversation: null });
 	
-	// Local conversations state to bypass broken WebSocket
-	let localConversations = $state([]);
-	
 	// Long polling state
-	let pollingTimeoutId = $state(null);
-	let isPolling = $state(false);
-
-	// Use local conversations instead of broken WebSocket store
-	const filteredConversations = $derived(localConversations.filter(conv => {
+	let pollingTimeoutId = null;
+	let isPolling = false;
+	
+	// Use SSE chat store which has automatic real-time updates
+	const filteredConversations = $derived($chat.conversations.filter(conv => {
 		// Filter by archive status
 		let matchesArchiveFilter = true;
 		if (showArchived) {
@@ -50,7 +47,7 @@
 	const groupConversations = $derived(filteredConversations.filter(conv => conv.type === 'group'));
 	const roomConversations = $derived(filteredConversations.filter(conv => conv.type === 'room'));
 	
-	const archivedCount = $derived(localConversations.filter(conv => conv.is_archived || false).length);
+	const archivedCount = $derived($chat.conversations.filter(conv => conv.is_archived || false).length);
 
 	// Group rooms by group_id
 	const groupedRooms = $derived(roomConversations.reduce((acc, room) => {
@@ -61,9 +58,9 @@
 		return acc;
 	}, /** @type {Record<string, any[]>} */ ({})));
 
-	// Load data when WebSocket is authenticated (only once)
+	// Load data when SSE is authenticated (only once)
 	$effect(() => {
-		if ($isAuthenticated && $user?.id && !hasLoadedConversations) {
+		if ($chat.authenticated && $user?.id && !hasLoadedConversations) {
 			loadConversationsData();
 		}
 	});
@@ -78,29 +75,17 @@
 		
 		loading = true;
 		try {
-			// Bypass broken WebSocket and call working HTTP API directly
-			console.log('🔄 Loading conversations via HTTP API...');
+			console.log('🔄 Loading conversations via SSE chat store...');
+			await chat.loadConversations();
+			hasLoadedConversations = true;
+			console.log('✅ Loaded conversations via SSE');
 			
-			const response = await fetch('/api/chat/conversations', {
-				method: 'GET',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			// Start long polling after initial load
+			if ($chat.authenticated && $user?.id) {
+				startPolling();
 			}
-
-			const { conversations: apiConversations } = await response.json();
-			console.log('✅ Loaded', apiConversations?.length || 0, 'conversations from HTTP API');
-
-			// Update local state with HTTP API data
-			localConversations = apiConversations || [];
-			wsChat.setError(null);
-
-			hasLoadedConversations = true; // Mark as loaded
 		} catch (error) {
 			console.error('Failed to load conversations:', error);
-			wsChat.setError('Failed to load conversations');
 		} finally {
 			loading = false;
 		}
@@ -113,66 +98,49 @@
 		isPolling = true;
 		try {
 			console.log('🔄 Polling conversations...');
-			
-			const response = await fetch('/api/chat/conversations', {
-				method: 'GET',
-				credentials: 'include'
-			});
-
-			if (response.ok) {
-				const { conversations: apiConversations } = await response.json();
-				
-				// Only update if there are changes to prevent unnecessary re-renders
-				const hasChanges = JSON.stringify(localConversations) !== JSON.stringify(apiConversations);
-				if (hasChanges) {
-					console.log('✅ Conversations updated via polling');
-					localConversations = apiConversations || [];
-				}
-			}
+			await chat.loadConversations();
+			console.log('✅ Conversations updated via polling');
 		} catch (error) {
 			console.error('Polling error:', error);
 		} finally {
 			isPolling = false;
 			
 			// Schedule next poll only after current one completes
-			if ($isAuthenticated && $user?.id) {
+			if ($chat.authenticated && $user?.id) {
 				pollingTimeoutId = setTimeout(pollConversations, 15000);
 			}
 		}
 	}
 	
-	// Start polling when authenticated
-	$effect(() => {
-		if ($isAuthenticated && $user?.id && hasLoadedConversations) {
-			// Clear any existing timeout
-			if (pollingTimeoutId) {
-				clearTimeout(pollingTimeoutId);
-			}
-			
-			// Start polling after initial load
-			pollingTimeoutId = setTimeout(pollConversations, 15000);
-			
-			// Cleanup on unmount or when conditions change
-			return () => {
-				if (pollingTimeoutId) {
-					clearTimeout(pollingTimeoutId);
-					pollingTimeoutId = null;
-				}
-			};
+	// Start polling
+	function startPolling() {
+		// Clear any existing timeout
+		if (pollingTimeoutId) {
+			clearTimeout(pollingTimeoutId);
 		}
+		
+		console.log('🔄 Starting conversation polling...');
+		pollingTimeoutId = setTimeout(pollConversations, 15000);
+	}
+	
+	// Stop polling
+	function stopPolling() {
+		if (pollingTimeoutId) {
+			clearTimeout(pollingTimeoutId);
+			pollingTimeoutId = null;
+			console.log('⏹️ Stopped conversation polling');
+		}
+	}
+	
+	// Cleanup on unmount
+	onDestroy(() => {
+		stopPolling();
 	});
 
 	// Toggle archive view
 	function toggleArchiveView() {
 		showArchived = !showArchived;
 		hasLoadedConversations = false; // Reset to reload with new filter
-		
-		// Clear polling timeout when toggling archive view
-		if (pollingTimeoutId) {
-			clearTimeout(pollingTimeoutId);
-			pollingTimeoutId = null;
-		}
-		
 		loadConversationsData();
 	}
 
@@ -278,9 +246,7 @@
 					onConversationSelect(null);
 				}
 				
-				// Remove the conversation from local state immediately for instant UI update
-				localConversations = localConversations.filter(c => c.id !== conversation.id);
-				console.log('🗑️ [CLIENT] Removed from local state, remaining:', localConversations.length);
+				console.log('🗑️ [CLIENT] Conversation deleted, reloading list...');
 				
 				// Then reload from server to ensure consistency
 				hasLoadedConversations = false;
@@ -301,7 +267,7 @@
 	function handleConversationSelect(/** @type {string} */ conversationId) {
 		onConversationSelect(conversationId);
 		if ($user?.id) {
-			wsChat.joinConversation(conversationId);
+			chat.joinConversation(conversationId);
 		}
 	}
 
@@ -328,11 +294,8 @@
 	// Handle successful group join
 	async function handleGroupJoined() {
 		if ($user?.id) {
-			hasLoadedConversations = false; // Reset flag to allow reload
-			await Promise.all([
-				wsChat.loadConversations()
-			]);
-			hasLoadedConversations = true; // Mark as loaded again
+			hasLoadedConversations = false;
+			await loadConversationsData();
 		}
 	}
 
@@ -342,11 +305,8 @@
 		
 		// Reload conversations to get the new one
 		if ($user?.id) {
-			hasLoadedConversations = false; // Reset flag to allow reload
-			await Promise.all([
-				wsChat.loadConversations()
-			]);
-			hasLoadedConversations = true; // Mark as loaded again
+			hasLoadedConversations = false;
+			await loadConversationsData();
 		}
 		
 		// Auto-select the new conversation
@@ -358,7 +318,7 @@
 	// Handle reconnect
 	async function handleReconnect() {
 		try {
-			console.log('🔄 Manual reconnect triggered');
+			console.log('🔄 Manual reconnect triggered for SSE');
 			
 			// Get token from localStorage
 			const storedSession = localStorage.getItem('qrypt_session');
@@ -366,11 +326,11 @@
 				const session = JSON.parse(storedSession);
 				if (session.access_token) {
 					// Disconnect first, then reconnect
-					wsChat.disconnect();
+					chat.disconnect();
 					
 					// Wait a moment before reconnecting
 					setTimeout(() => {
-						wsChat.connect(session.access_token);
+						chat.connect(session.access_token);
 					}, 1000);
 				} else {
 					console.error('No access token found for reconnection');
@@ -422,17 +382,17 @@
 			<div class="user-details">
 				<div class="user-name">{$user?.displayName || $user?.username}</div>
 				<div class="connection-status">
-					<div class="status-indicator" class:online={$isConnected && $isAuthenticated} class:offline={!$isConnected} class:connecting={$isConnected && !$isAuthenticated}></div>
+					<div class="status-indicator" class:online={$chat.connected && $chat.authenticated} class:offline={!$chat.connected} class:connecting={$chat.connected && !$chat.authenticated}></div>
 					<span class="status-text">
-						{#if $isConnected && $isAuthenticated}
+						{#if $chat.connected && $chat.authenticated}
 							Online
-						{:else if $isConnected && !$isAuthenticated}
+						{:else if $chat.connected && !$chat.authenticated}
 							Connecting...
 						{:else}
 							Offline
 						{/if}
 					</span>
-					{#if !$isConnected}
+					{#if !$chat.connected}
 						<button
 							class="reconnect-button"
 							onclick={handleReconnect}
@@ -518,14 +478,14 @@
 			{/if}
 
 			<!-- Groups Section -->
-			{#if $groups.length > 0}
+			{#if $chat.groups.length > 0}
 				<div class="section">
 					<div class="section-header">
 						<h3>Groups</h3>
-						<span class="section-count">{$groups.length}</span>
+						<span class="section-count">{$chat.groups.length}</span>
 					</div>
 					
-					{#each $groups as group (group.group_id)}
+					{#each $chat.groups as group (group.group_id)}
 						<div class="group-container">
 							<GroupItem
 								{group}
@@ -589,7 +549,7 @@
 			{/if}
 
 			<!-- Empty State -->
-			{#if !loading && localConversations.length === 0}
+			{#if !loading && $chat.conversations.length === 0}
 				<div class="empty-state">
 					<div class="empty-icon">💬</div>
 					<h3>No conversations yet</h3>
@@ -863,8 +823,8 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		padding: 0.5rem 0;
-		min-height: 0; /* Important for flex scrolling */
-		-webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+		min-height: 0;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.section {
@@ -997,7 +957,6 @@
 		background: var(--color-border-primary);
 	}
 
-	/* Responsive */
 	@media (max-width: 768px) {
 		.chat-sidebar {
 			width: 100%;
@@ -1005,7 +964,6 @@
 		}
 	}
 
-	/* Scrollbar styling - Enhanced visibility for PWA */
 	.sidebar-content::-webkit-scrollbar {
 		width: 8px;
 	}
@@ -1026,13 +984,11 @@
 		background: var(--color-text-secondary);
 	}
 
-	/* Firefox scrollbar */
 	.sidebar-content {
 		scrollbar-width: thin;
 		scrollbar-color: var(--color-border-primary) var(--color-bg-secondary);
 	}
 
-	/* Note to Self section styles */
 	.note-to-self-section {
 		margin-bottom: 1rem;
 		border-bottom: 1px solid var(--color-border-primary);
@@ -1051,7 +1007,6 @@
 		color: white;
 	}
 
-	/* Archive toggle styles */
 	.archive-toggle {
 		margin-top: 0.5rem;
 	}
@@ -1083,7 +1038,6 @@
 		color: var(--color-primary-700);
 	}
 
-	/* Context menu styles */
 	.context-menu {
 		position: fixed;
 		background: var(--color-bg-primary);

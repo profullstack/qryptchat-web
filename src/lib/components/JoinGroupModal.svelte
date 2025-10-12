@@ -1,6 +1,6 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import { wsChat } from '$lib/stores/websocket-chat.js';
+	import { chat } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import { messages } from '$lib/stores/messages.js';
 

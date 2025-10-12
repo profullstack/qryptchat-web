@@ -5,7 +5,7 @@
 
 import { browser } from '$app/environment';
 import { auth } from '$lib/stores/auth.js';
-import { wsChat } from '$lib/stores/websocket-chat.js';
+import { chat } from '$lib/stores/chat.js';
 
 /**
  * PWA Session Manager class
