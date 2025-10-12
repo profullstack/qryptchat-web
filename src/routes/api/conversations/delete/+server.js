@@ -21,11 +21,13 @@ export const POST = withAuth(async ({ request, locals }) => {
 		console.log(`🗑️ Delete request for conversation ${conversationId} by user ${authUser.id}`);
 
 		// First, verify the user is a participant and get conversation details
+		// Note: We need to check for left_at IS NULL to exclude participants who have left
 		const { data: participant, error: participantError } = await supabase
 			.from('conversation_participants')
-			.select('id')
+			.select('id, left_at, archived_at')
 			.eq('conversation_id', conversationId)
 			.eq('user_id', authUser.id)
+			.is('left_at', null)
 			.maybeSingle();
 
 		// Log detailed error information
