@@ -18,20 +18,41 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		const { supabase, user: authUser } = locals;
 
+		console.log(`🗑️ Delete request for conversation ${conversationId} by user ${authUser.id}`);
+
 		// First, verify the user is a participant and get conversation details
 		const { data: participant, error: participantError } = await supabase
 			.from('conversation_participants')
 			.select('id')
 			.eq('conversation_id', conversationId)
 			.eq('user_id', authUser.id)
-			.single();
+			.maybeSingle();
 
-		if (participantError || !participant) {
-			console.error('User not a participant:', participantError);
+		// Log detailed error information
+		if (participantError) {
+			console.error('❌ Participant query error:', {
+				error: participantError,
+				code: participantError.code,
+				message: participantError.message,
+				details: participantError.details,
+				hint: participantError.hint
+			});
+			return json({
+				error: 'Database error checking participation'
+			}, { status: 500 });
+		}
+
+		if (!participant) {
+			console.error('❌ User not a participant:', {
+				conversationId,
+				userId: authUser.id
+			});
 			return json({
 				error: 'Conversation not found or you are not a participant'
 			}, { status: 404 });
 		}
+
+		console.log(`✅ User is a participant, proceeding with deletion`);
 
 		// Get conversation type and participant count
 		const { data: conversation, error: convError } = await supabase
