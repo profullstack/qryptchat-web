@@ -7,6 +7,7 @@
 
 import { json } from '@sveltejs/kit';
 import { withAuth } from '$lib/api/middleware/auth.js';
+import { getServiceRoleClient } from '$lib/supabase/service-role.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
@@ -99,8 +100,12 @@ export const POST = withAuth(async ({ request, locals }) => {
 			// For direct messages, delete everything for all participants
 			console.log(`Deleting direct message conversation ${conversationId} for all participants`);
 
+			// Use service role client to bypass RLS policies for deletion
+			const serviceClient = getServiceRoleClient();
+			console.log('🔑 Using service role client to bypass RLS for deletion');
+
 			// Step 1: Get all message IDs for this conversation
-			const { data: messages, error: messagesQueryError } = await supabase
+			const { data: messages, error: messagesQueryError } = await serviceClient
 				.from('messages')
 				.select('id')
 				.eq('conversation_id', conversationId);
@@ -114,7 +119,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 			// Step 2: Delete SMS notifications (references conversation_id and message_id)
 			if (messageIds.length > 0) {
-				const { error: smsError } = await supabase
+				const { error: smsError } = await serviceClient
 					.from('sms_notifications')
 					.delete()
 					.in('message_id', messageIds);
@@ -125,7 +130,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			}
 
 			// Also delete SMS notifications by conversation_id
-			const { error: smsConvError } = await supabase
+			const { error: smsConvError } = await serviceClient
 				.from('sms_notifications')
 				.delete()
 				.eq('conversation_id', conversationId);
@@ -136,7 +141,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 			// Step 3: Delete deliveries (references message_id)
 			if (messageIds.length > 0) {
-				const { error: deliveriesError } = await supabase
+				const { error: deliveriesError } = await serviceClient
 					.from('deliveries')
 					.delete()
 					.in('message_id', messageIds);
@@ -148,7 +153,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 			// Step 4: Delete message_recipients (references message_id)
 			if (messageIds.length > 0) {
-				const { error: recipientsError } = await supabase
+				const { error: recipientsError } = await serviceClient
 					.from('message_recipients')
 					.delete()
 					.in('message_id', messageIds);
@@ -160,7 +165,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 			// Step 5: Delete message_status (references message_id)
 			if (messageIds.length > 0) {
-				const { error: statusError } = await supabase
+				const { error: statusError } = await serviceClient
 					.from('message_status')
 					.delete()
 					.in('message_id', messageIds);
@@ -172,7 +177,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 			// Step 6: Delete encrypted_files (references message_id)
 			if (messageIds.length > 0) {
-				const { error: encryptedFilesError } = await supabase
+				const { error: encryptedFilesError } = await serviceClient
 					.from('encrypted_files')
 					.delete()
 					.in('message_id', messageIds);
@@ -183,7 +188,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			}
 
 			// Step 7: Delete all messages
-			const { error: messagesError } = await supabase
+			const { error: messagesError } = await serviceClient
 				.from('messages')
 				.delete()
 				.eq('conversation_id', conversationId);
@@ -194,7 +199,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			}
 
 			// Step 8: Delete typing_indicators
-			const { error: typingError } = await supabase
+			const { error: typingError } = await serviceClient
 				.from('typing_indicators')
 				.delete()
 				.eq('conversation_id', conversationId);
@@ -204,7 +209,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			}
 
 			// Step 9: Delete all participants
-			const { error: participantsError } = await supabase
+			const { error: participantsError } = await serviceClient
 				.from('conversation_participants')
 				.delete()
 				.eq('conversation_id', conversationId);
@@ -215,7 +220,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			}
 
 			// Step 10: Delete the conversation
-			const { error: conversationError } = await supabase
+			const { error: conversationError } = await serviceClient
 				.from('conversations')
 				.delete()
 				.eq('id', conversationId);

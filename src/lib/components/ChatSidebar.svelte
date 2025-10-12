@@ -199,17 +199,27 @@
 		}
 		
 		try {
+			console.log('🗑️ [CLIENT] Deleting conversation:', conversation.id);
 			const result = await chat.deleteConversation(conversation.id);
 			
 			if (result.success) {
+				console.log('🗑️ [CLIENT] ✅ Conversation deleted successfully');
+				
 				// If the deleted conversation was active, clear it
 				if (activeConversationId === conversation.id) {
+					console.log('🗑️ [CLIENT] Clearing active conversation');
 					onConversationSelect(null);
 				}
 				
-				// Reload conversations to reflect changes
+				// Remove the conversation from local state immediately for instant UI update
+				localConversations = localConversations.filter(c => c.id !== conversation.id);
+				console.log('🗑️ [CLIENT] Removed from local state, remaining:', localConversations.length);
+				
+				// Then reload from server to ensure consistency
 				hasLoadedConversations = false;
+				console.log('🗑️ [CLIENT] Reloading conversations from server...');
 				await loadConversationsData();
+				console.log('🗑️ [CLIENT] ✅ Conversations reloaded');
 			} else {
 				console.error('Failed to delete conversation:', result.error);
 				alert(`Failed to delete conversation: ${result.error}`);
