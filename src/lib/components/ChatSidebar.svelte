@@ -176,12 +176,23 @@
 			return;
 		}
 		
-		// Confirm deletion
+		// Confirm deletion with appropriate message based on conversation type
 		const conversationName = conversation.name || conversation.conversation_name || 'this conversation';
-		const confirmed = confirm(
-			`Are you sure you want to permanently delete ${conversationName}?\n\n` +
-			`This will delete all messages and files for all participants and cannot be undone.`
-		);
+		const isGroup = conversation.type === 'group' || conversation.type === 'room';
+		
+		let confirmMessage;
+		if (isGroup) {
+			confirmMessage =
+				`Are you sure you want to leave ${conversationName}?\n\n` +
+				`This will remove you from the conversation and delete all your messages and files. ` +
+				`Other participants will still have access to the conversation. This cannot be undone.`;
+		} else {
+			confirmMessage =
+				`Are you sure you want to permanently delete ${conversationName}?\n\n` +
+				`This will delete all messages and files for both participants and cannot be undone.`;
+		}
+		
+		const confirmed = confirm(confirmMessage);
 		
 		if (!confirmed) {
 			return;
