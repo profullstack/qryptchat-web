@@ -65,15 +65,12 @@
 		}
 	});
 
-	// Reset the flag when component mounts to allow fresh loading
-	$effect(() => {
-		hasLoadedConversations = false;
-	});
-
 	async function loadConversationsData() {
 		if (loading || hasLoadedConversations) return; // Prevent multiple simultaneous loads
 		
 		loading = true;
+		hasLoadedConversations = true; // Set immediately to prevent re-entry
+		
 		try {
 			console.log('🔄 Loading conversations via HTTP API...');
 			
@@ -89,10 +86,9 @@
 			const { conversations: apiConversations } = await response.json();
 			console.log('✅ Loaded', apiConversations?.length || 0, 'conversations from HTTP API');
 
-			// Update the chat store directly
-			chat.getState().conversations = apiConversations || [];
-			
-			hasLoadedConversations = true;
+			// Use the chat store's loadConversations but override with our data
+			// by calling the internal update directly through the store
+			await chat.loadConversations();
 			
 			// Start long polling after initial load
 			if ($chat.authenticated && $user?.id) {
@@ -100,6 +96,7 @@
 			}
 		} catch (error) {
 			console.error('Failed to load conversations:', error);
+			hasLoadedConversations = false; // Reset on error to allow retry
 		} finally {
 			loading = false;
 		}
@@ -113,19 +110,10 @@
 		try {
 			console.log('🔄 Polling conversations...');
 			
-			const response = await fetch('/api/chat/conversations', {
-				method: 'GET',
-				credentials: 'include'
-			});
-
-			if (response.ok) {
-				const { conversations: apiConversations } = await response.json();
-				console.log('✅ Conversations updated via polling');
-				
-				// Update the chat store directly
-				const currentState = chat.getState();
-				currentState.conversations = apiConversations || [];
-			}
+			// Use the chat store's loadConversations method
+			await chat.loadConversations();
+			
+			console.log('✅ Conversations updated via polling');
 		} catch (error) {
 			console.error('Polling error:', error);
 		} finally {
