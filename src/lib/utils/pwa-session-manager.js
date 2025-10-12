@@ -239,8 +239,8 @@ export class PWASessionManager {
 				return false;
 			}
 
-			// Check WebSocket connection
-			await this.ensureWebSocketConnection();
+			// Check SSE connection
+			await this.ensureSSEConnection();
 
 			console.log('✅ Session restored successfully');
 			this.reconnectAttempts = 0; // Reset reconnect attempts on success
@@ -253,45 +253,45 @@ export class PWASessionManager {
 	}
 
 	/**
-	 * Ensure WebSocket connection is active
+	 * Ensure SSE connection is active
 	 */
-	async ensureWebSocketConnection() {
+	async ensureSSEConnection() {
 		return new Promise((resolve, reject) => {
 			// Clear any existing timeout
 			if (this.sessionValidationTimeout) {
 				clearTimeout(this.sessionValidationTimeout);
 			}
 
-			// Check if WebSocket is already connected
-			const currentState = wsChat.getState();
+			// Check if SSE is already connected
+			const currentState = chat.getState();
 			if (currentState.connected && currentState.authenticated) {
-				console.log('✅ WebSocket already connected and authenticated');
+				console.log('✅ SSE already connected and authenticated');
 				resolve(true);
 				return;
 			}
 
-			console.log('🔄 WebSocket not connected - attempting reconnection...');
+			console.log('🔄 SSE not connected - attempting reconnection...');
 
 			// Get current session for reconnection
 			auth.getCurrentSession().then(sessionResult => {
 				if (sessionResult.error || !sessionResult.session) {
-					reject(new Error('No valid session for WebSocket reconnection'));
+					reject(new Error('No valid session for SSE reconnection'));
 					return;
 				}
 
-				// Attempt to reconnect WebSocket
-				wsChat.connect(sessionResult.session.access_token);
+				// Attempt to reconnect SSE
+				chat.connect(sessionResult.session.access_token);
 
 				// Set up timeout for connection attempt
 				this.sessionValidationTimeout = setTimeout(() => {
-					const state = wsChat.getState();
+					const state = chat.getState();
 					if (state.connected && state.authenticated) {
-						console.log('✅ WebSocket reconnected successfully');
+						console.log('✅ SSE reconnected successfully');
 						resolve(true);
 					} else {
-						console.log('⚠️ WebSocket reconnection timeout');
+						console.log('⚠️ SSE reconnection timeout');
 						this.handleReconnectionFailure();
-						reject(new Error('WebSocket reconnection timeout'));
+						reject(new Error('SSE reconnection timeout'));
 					}
 				}, 10000); // 10 second timeout
 
@@ -312,8 +312,8 @@ export class PWASessionManager {
 		localStorage.removeItem('qrypt_user');
 		localStorage.removeItem('qrypt_app_state');
 		
-		// Disconnect WebSocket
-		wsChat.disconnect();
+		// Disconnect SSE
+		chat.disconnect();
 		
 		// Reset auth state
 		auth.logout();
@@ -338,7 +338,7 @@ export class PWASessionManager {
 
 		setTimeout(async () => {
 			try {
-				await this.ensureWebSocketConnection();
+				await this.ensureSSEConnection();
 			} catch (error) {
 				console.error('❌ Reconnection attempt failed:', error);
 				await this.handleReconnectionFailure();
