@@ -75,10 +75,24 @@
 		
 		loading = true;
 		try {
-			console.log('🔄 Loading conversations via SSE chat store...');
-			await chat.loadConversations();
+			console.log('🔄 Loading conversations via HTTP API...');
+			
+			const response = await fetch('/api/chat/conversations', {
+				method: 'GET',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+
+			const { conversations: apiConversations } = await response.json();
+			console.log('✅ Loaded', apiConversations?.length || 0, 'conversations from HTTP API');
+
+			// Update the chat store directly
+			chat.getState().conversations = apiConversations || [];
+			
 			hasLoadedConversations = true;
-			console.log('✅ Loaded conversations via SSE');
 			
 			// Start long polling after initial load
 			if ($chat.authenticated && $user?.id) {
@@ -98,8 +112,20 @@
 		isPolling = true;
 		try {
 			console.log('🔄 Polling conversations...');
-			await chat.loadConversations();
-			console.log('✅ Conversations updated via polling');
+			
+			const response = await fetch('/api/chat/conversations', {
+				method: 'GET',
+				credentials: 'include'
+			});
+
+			if (response.ok) {
+				const { conversations: apiConversations } = await response.json();
+				console.log('✅ Conversations updated via polling');
+				
+				// Update the chat store directly
+				const currentState = chat.getState();
+				currentState.conversations = apiConversations || [];
+			}
 		} catch (error) {
 			console.error('Polling error:', error);
 		} finally {
