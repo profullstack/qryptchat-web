@@ -23,6 +23,10 @@
 	
 	// Local conversations state to bypass broken WebSocket
 	let localConversations = $state([]);
+	
+	// Long polling state
+	let pollingTimeoutId = $state(null);
+	let isPolling = $state(false);
 
 	// Use local conversations instead of broken WebSocket store
 	const filteredConversations = $derived(localConversations.filter(conv => {
@@ -101,11 +105,74 @@
 			loading = false;
 		}
 	}
+	
+	// Long polling function to refresh conversations
+	async function pollConversations() {
+		if (isPolling) return; // Prevent overlapping polls
+		
+		isPolling = true;
+		try {
+			console.log('🔄 Polling conversations...');
+			
+			const response = await fetch('/api/chat/conversations', {
+				method: 'GET',
+				credentials: 'include'
+			});
+
+			if (response.ok) {
+				const { conversations: apiConversations } = await response.json();
+				
+				// Only update if there are changes to prevent unnecessary re-renders
+				const hasChanges = JSON.stringify(localConversations) !== JSON.stringify(apiConversations);
+				if (hasChanges) {
+					console.log('✅ Conversations updated via polling');
+					localConversations = apiConversations || [];
+				}
+			}
+		} catch (error) {
+			console.error('Polling error:', error);
+		} finally {
+			isPolling = false;
+			
+			// Schedule next poll only after current one completes
+			if ($isAuthenticated && $user?.id) {
+				pollingTimeoutId = setTimeout(pollConversations, 15000);
+			}
+		}
+	}
+	
+	// Start polling when authenticated
+	$effect(() => {
+		if ($isAuthenticated && $user?.id && hasLoadedConversations) {
+			// Clear any existing timeout
+			if (pollingTimeoutId) {
+				clearTimeout(pollingTimeoutId);
+			}
+			
+			// Start polling after initial load
+			pollingTimeoutId = setTimeout(pollConversations, 15000);
+			
+			// Cleanup on unmount or when conditions change
+			return () => {
+				if (pollingTimeoutId) {
+					clearTimeout(pollingTimeoutId);
+					pollingTimeoutId = null;
+				}
+			};
+		}
+	});
 
 	// Toggle archive view
 	function toggleArchiveView() {
 		showArchived = !showArchived;
 		hasLoadedConversations = false; // Reset to reload with new filter
+		
+		// Clear polling timeout when toggling archive view
+		if (pollingTimeoutId) {
+			clearTimeout(pollingTimeoutId);
+			pollingTimeoutId = null;
+		}
+		
 		loadConversationsData();
 	}
 
