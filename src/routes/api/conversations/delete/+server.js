@@ -18,7 +18,22 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		const { supabase, user: authUser } = locals;
 
-		console.log(`🗑️ Delete request for conversation ${conversationId} by user ${authUser.id}`);
+		console.log(`🗑️ Delete request for conversation ${conversationId} by auth user ${authUser.id}`);
+
+		// Get the internal user ID from the users table
+		const { data: internalUser, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', authUser.id)
+			.single();
+
+		if (userError || !internalUser) {
+			console.error('❌ Failed to find internal user:', userError);
+			return json({ error: 'User not found' }, { status: 404 });
+		}
+
+		const internalUserId = internalUser.id;
+		console.log(`🗑️ Using internal user ID: ${internalUserId}`);
 
 		// First, verify the user is a participant and get conversation details
 		// Note: We need to check for left_at IS NULL to exclude participants who have left
@@ -26,7 +41,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			.from('conversation_participants')
 			.select('id, left_at, archived_at')
 			.eq('conversation_id', conversationId)
-			.eq('user_id', authUser.id)
+			.eq('user_id', internalUserId)
 			.is('left_at', null)
 			.maybeSingle();
 
@@ -213,14 +228,14 @@ export const POST = withAuth(async ({ request, locals }) => {
 			console.log(`✅ Successfully deleted direct message conversation ${conversationId}`);
 		} else {
 			// For group conversations, only delete user's own data
-			console.log(`Removing user ${authUser.id} from group conversation ${conversationId}`);
+			console.log(`Removing user ${internalUserId} from group conversation ${conversationId}`);
 
 			// Delete only the user's messages
 			const { error: messagesError } = await supabase
 				.from('messages')
 				.delete()
 				.eq('conversation_id', conversationId)
-				.eq('sender_id', authUser.id);
+				.eq('sender_id', internalUserId);
 
 			if (messagesError) {
 				console.error('Error deleting user messages:', messagesError);
@@ -232,7 +247,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 				.from('file_attachments')
 				.delete()
 				.eq('conversation_id', conversationId)
-				.eq('uploaded_by', authUser.id);
+				.eq('uploaded_by', internalUserId);
 
 			if (filesError) {
 				console.error('Error deleting user file attachments:', filesError);
@@ -243,14 +258,14 @@ export const POST = withAuth(async ({ request, locals }) => {
 				.from('conversation_participants')
 				.delete()
 				.eq('conversation_id', conversationId)
-				.eq('user_id', authUser.id);
+				.eq('user_id', internalUserId);
 
 			if (participantError) {
 				console.error('Error removing user participation:', participantError);
 				return json({ error: 'Failed to leave conversation' }, { status: 500 });
 			}
 
-			console.log(`✅ Successfully removed user ${authUser.id} from group conversation ${conversationId}`);
+			console.log(`✅ Successfully removed user ${internalUserId} from group conversation ${conversationId}`);
 		}
 
 		return json({ success: true });
