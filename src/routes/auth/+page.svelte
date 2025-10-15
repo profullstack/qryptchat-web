@@ -11,7 +11,6 @@
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 	import { keyManager } from '$lib/crypto/key-manager.js';
 	import { privateKeyManager } from '$lib/crypto/private-key-manager.js';
-
 	/** @type {'phone' | 'verify' | 'profile' | 'backup'} */
 	let step = $state('phone');
 	let phoneNumber = $state('');
@@ -26,9 +25,10 @@
 	let verifiedSession = $state(null); // Store the verified session for account creation
 	/** @type {string | null | undefined} */
 	let avatarUrl = $state(null); // Store uploaded avatar URL
+	let avatarFile = null; //stores selected file
 	/** @type {string | null | undefined} */
 	let createdUserId = $state(null); // Store user ID after account creation for avatar upload
-	
+
 	// Key backup prompts
 	let showKeyBackupPrompt = $state(false);
 	let keyBackupPassword = $state('');
@@ -40,7 +40,7 @@
 		if ($isAuthenticated) {
 			goto('/chat');
 		}
-		
+
 		// Ensure theme is applied
 		if (browser) {
 			themeUtils.applyTheme($currentTheme);
@@ -54,12 +54,12 @@
 	function formatPhoneNumber(value) {
 		// Remove all non-digits except the leading +
 		const cleanValue = value.replace(/[^\d+]/g, '');
-		
+
 		// If it starts with digits (no +), add the + prefix
 		if (cleanValue.length > 0 && !cleanValue.startsWith('+')) {
 			return '+' + cleanValue;
 		}
-		
+
 		return cleanValue;
 	}
 
@@ -79,7 +79,7 @@
 	function startCountdown(seconds) {
 		countdown = seconds;
 		canResend = false;
-		
+
 		const timer = setInterval(() => {
 			countdown--;
 			if (countdown <= 0) {
@@ -98,7 +98,7 @@
 		}
 
 		const result = await auth.sendSMS(phoneNumber);
-		
+
 		if (result.success) {
 			step = 'verify';
 			// Supabase OTP expires in 300 seconds (5 minutes) as configured
@@ -117,11 +117,8 @@
 
 		// For initial verification, don't send username/displayName
 		// These are only needed for new user profile completion
-		const result = await auth.verifySMS(
-			phoneNumber,
-			verificationCode
-		);
-		
+		const result = await auth.verifySMS(phoneNumber, verificationCode);
+
 		if (result.success) {
 			if (result.isNewUser) {
 				// New user - show success and redirect
@@ -141,6 +138,103 @@
 	/**
 	 * Complete profile setup for new users
 	 */
+
+	/**
+	 * Go back to previous step
+	 */
+	function goBack() {
+		if (step === 'verify') {
+			step = 'phone';
+		} else if (step === 'profile') {
+			step = 'verify';
+		}
+	}
+
+	/**
+	 * Handle verification code input (auto-advance)
+	 * @param {Event} event
+	 */
+	function handleCodeInput(event) {
+		const input = /** @type {HTMLInputElement} */ (event.target);
+		verificationCode = input.value.replace(/\D/g, '').slice(0, 6);
+
+		// Auto-verify when 6 digits entered
+		if (verificationCode.length === 6) {
+			setTimeout(verifySMS, 100);
+		}
+	}
+
+	/**
+	 * Handle avatar upload success
+	 * @param {CustomEvent} event
+	 * changed to store file obj directly instead of blob url
+	 */
+	function handleAvatarUploaded(event) {
+		avatarFile = event.detail.file;
+		avatarUrl = event.detail.avatarUrl;
+
+		//if user already created, upload immediately
+		if (createdUserId && verifiedSession?.access_token) {
+			uploadAvatarFile(avatarFile);
+		} else {
+			console.log('📸 Avatar preview ready for upload after user creation');
+		}
+	}
+
+	/*
+	 * upload avatar file to backend
+	 * new fxn added
+	 */
+
+	async function uploadAvatarFile(file) {
+		try {
+			const formData = new FormData();
+			formData.append('avatar', file);
+			// Upload avatar using the dedicated endpoint
+			const uploadResponse = await fetch('/api/auth/upload-avatar', {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${verifiedSession.access_token}`
+				},
+				body: formData
+			});
+
+			const uploadResult = await uploadResponse.json();
+
+			console.log(uploadResult);
+
+			if (uploadResponse.ok && uploadResult.avatarUrl) {
+				// Clean up blob URL
+				URL.revokeObjectURL(avatarUrl);
+				avatarUrl = uploadResult.avatarUrl;
+				console.log('📸 ✅ Avatar uploaded successfully after user creation');
+			} else {
+				console.warn('Avatar upload failed:', uploadResult.error);
+				messages.warning('Account created but avatar upload failed. You can add one later.');
+			}
+		} catch (avatarError) {
+			console.error('Avatar upload error:', avatarError);
+			messages.warning('Account created but avatar upload failed. You can add one later.');
+		}
+	}
+
+	/**
+	 * Handle avatar upload error
+	 * @param {CustomEvent} event
+	 */
+	function handleAvatarError(event) {
+		messages.error(event.detail.message || 'Failed to upload profile picture');
+	}
+
+	/**
+	 * Handle avatar removal
+	 */
+	function handleAvatarRemoved() {
+		avatarUrl = null;
+		avatarFile = null;
+		messages.info('Profile picture removed');
+	}
+
 	async function completeProfile() {
 		if (!username.trim()) {
 			return;
@@ -164,7 +258,7 @@
 			});
 
 			const headers = {
-				'Authorization': `Bearer ${verifiedSession.access_token}`,
+				Authorization: `Bearer ${verifiedSession.access_token}`,
 				'Content-Type': 'application/json'
 			};
 
@@ -182,61 +276,30 @@
 					localStorage.setItem('qrypt_user', JSON.stringify(data.user));
 					localStorage.setItem('supabase.auth.token', JSON.stringify(verifiedSession));
 				}
-				
+
 				// Set the session in the Supabase client
 				const supabase = createSupabaseClient();
 				await supabase.auth.setSession(verifiedSession);
-				
+
 				// Upload avatar after user creation if one was selected
-				if (avatarUrl && avatarUrl.startsWith('blob:')) {
-					console.log('📸 Uploading avatar after user creation...');
-					try {
-						// Convert blob to file and upload using existing avatar upload component logic
-						const response = await fetch(avatarUrl);
-						const blob = await response.blob();
-						const file = new File([blob], 'avatar.jpg', { type: blob.type });
-
-						// Create FormData for avatar upload
-						const formData = new FormData();
-						formData.append('avatar', file);
-
-						// Upload avatar using the dedicated endpoint
-						const uploadResponse = await fetch('/api/auth/upload-avatar', {
-							method: 'POST',
-							headers: {
-								'Authorization': `Bearer ${verifiedSession.access_token}`
-							},
-							body: formData
-						});
-
-						const uploadResult = await uploadResponse.json();
-
-						if (uploadResponse.ok && uploadResult.avatarUrl) {
-							// Clean up blob URL
-							URL.revokeObjectURL(avatarUrl);
-							avatarUrl = uploadResult.avatarUrl;
-							console.log('📸 ✅ Avatar uploaded successfully after user creation');
-						} else {
-							console.warn('Avatar upload failed:', uploadResult.error);
-							messages.warning('Account created but avatar upload failed. You can add one later.');
-						}
-					} catch (avatarError) {
-						console.error('Avatar upload error:', avatarError);
-						messages.warning('Account created but avatar upload failed. You can add one later.');
-					}
+				if (avatarFile) {
+					//using file directly
+					await uploadAvatarFile(avatarFile);
 				}
-				
+
 				// Generate encryption keys for new user
 				try {
 					await keyManager.generateUserKeys();
 					console.log('🔑 Generated encryption keys for new user');
-					
+
 					// Go to backup step
 					step = 'backup';
 					messages.success('Account created successfully! Please backup your encryption keys.');
 				} catch (keyError) {
 					console.error('Failed to generate encryption keys:', keyError);
-					messages.warning('Account created but failed to generate encryption keys. You can generate them later in Settings.');
+					messages.warning(
+						'Account created but failed to generate encryption keys. You can generate them later in Settings.'
+					);
 					goto('/chat?welcome=true');
 				}
 			} else {
@@ -249,60 +312,6 @@
 	}
 
 	/**
-	 * Go back to previous step
-	 */
-	function goBack() {
-		if (step === 'verify') {
-			step = 'phone';
-		} else if (step === 'profile') {
-			step = 'verify';
-		}
-	}
-
-	/**
-	 * Handle verification code input (auto-advance)
-	 * @param {Event} event
-	 */
-	function handleCodeInput(event) {
-		const input = /** @type {HTMLInputElement} */ (event.target);
-		verificationCode = input.value.replace(/\D/g, '').slice(0, 6);
-		
-		// Auto-verify when 6 digits entered
-		if (verificationCode.length === 6) {
-			setTimeout(verifySMS, 100);
-		}
-	}
-
-	/**
-	 * Handle avatar upload success
-	 * @param {CustomEvent} event
-	 */
-	function handleAvatarUploaded(event) {
-		avatarUrl = event.detail.avatarUrl;
-		if (createdUserId) {
-			messages.success('Profile picture uploaded successfully!');
-		} else {
-			console.log('📸 Avatar preview ready for upload after user creation');
-		}
-	}
-
-	/**
-	 * Handle avatar upload error
-	 * @param {CustomEvent} event
-	 */
-	function handleAvatarError(event) {
-		messages.error(event.detail.message || 'Failed to upload profile picture');
-	}
-
-	/**
-	 * Handle avatar removal
-	 */
-	function handleAvatarRemoved() {
-		avatarUrl = null;
-		messages.info('Profile picture removed');
-	}
-
-	/**
 	 * Download key backup during registration
 	 */
 	async function downloadKeyBackup() {
@@ -310,29 +319,28 @@
 			messages.error('Please enter a password to protect your key backup');
 			return;
 		}
-		
+
 		if (keyBackupPassword !== confirmKeyBackupPassword) {
 			messages.error('Passwords do not match');
 			return;
 		}
-		
+
 		if (keyBackupPassword.length < 8) {
 			messages.error('Password must be at least 8 characters long');
 			return;
 		}
 
-		
 		try {
 			// Standard export
 			const exportedData = await privateKeyManager.exportPrivateKeys(keyBackupPassword);
 			privateKeyManager.downloadExportedKeys(exportedData);
 			messages.success('Key backup downloaded! Welcome to QryptChat!');
-			
+
 			// Clear passwords and proceed to chat
 			keyBackupPassword = '';
 			confirmKeyBackupPassword = '';
 			showKeyBackupPrompt = false;
-			
+
 			goto('/chat?welcome=true');
 		} catch (error) {
 			console.error('Failed to download key backup:', error);
@@ -340,7 +348,7 @@
 			messages.error('Failed to download key backup: ' + errorMessage);
 		}
 	}
-	
+
 	/**
 	 * Skip key backup (not recommended but allowed)
 	 */
@@ -393,7 +401,7 @@
 			<div class="auth-step">
 				<h2>{$t('auth.enterPhone')}</h2>
 				<p class="step-description">{$t('auth.phoneDescription')}</p>
-				
+
 				<form onsubmit={sendSMS}>
 					<div class="input-group">
 						<label for="phone">{$t('auth.phoneNumber')}</label>
@@ -408,13 +416,8 @@
 							class="phone-input"
 						/>
 					</div>
-					
-					
-					<button 
-						type="submit" 
-						disabled={$isLoading || !phoneNumber.trim()}
-						class="primary-button"
-					>
+
+					<button type="submit" disabled={$isLoading || !phoneNumber.trim()} class="primary-button">
 						{#if $isLoading}
 							<span class="loading-spinner"></span>
 							{$t('auth.sending')}
@@ -432,12 +435,12 @@
 				<button class="back-button" onclick={goBack}>
 					← {$t('common.back')}
 				</button>
-				
+
 				<h2>{$t('auth.enterCode')}</h2>
 				<p class="step-description">
 					{$t('auth.codeDescription')} <strong>{phoneNumber}</strong>
 				</p>
-				
+
 				<form onsubmit={verifySMS}>
 					<div class="input-group">
 						<label for="code">{$t('auth.verificationCode')}</label>
@@ -453,10 +456,9 @@
 							class="code-input"
 						/>
 					</div>
-					
-					
-					<button 
-						type="submit" 
+
+					<button
+						type="submit"
 						disabled={$isLoading || verificationCode.length !== 6}
 						class="primary-button"
 					>
@@ -468,7 +470,7 @@
 						{/if}
 					</button>
 				</form>
-				
+
 				<div class="resend-section">
 					{#if canResend}
 						<button class="link-button" onclick={sendSMS}>
@@ -476,7 +478,8 @@
 						</button>
 					{:else}
 						<span class="countdown">
-							{$t('auth.resendIn')} {countdown}s
+							{$t('auth.resendIn')}
+							{countdown}s
 						</span>
 					{/if}
 				</div>
@@ -489,10 +492,10 @@
 				<button class="back-button" onclick={goBack}>
 					← {$t('common.back')}
 				</button>
-				
+
 				<h2>{$t('auth.createProfile')}</h2>
 				<p class="step-description">{$t('auth.profileDescription')}</p>
-				
+
 				<form onsubmit={completeProfile}>
 					<!-- Avatar Upload Section -->
 					<div class="avatar-section">
@@ -510,7 +513,8 @@
 							/>
 						</div>
 						<p class="avatar-description">
-							Add a profile picture to help others recognize you. You can skip this step and add one later.
+							Add a profile picture to help others recognize you. You can skip this step and add one
+							later.
 						</p>
 					</div>
 
@@ -527,7 +531,7 @@
 							title="Username can only contain letters, numbers, and underscores"
 						/>
 					</div>
-					
+
 					<div class="input-group">
 						<label for="displayName">{$t('auth.displayName')}</label>
 						<input
@@ -538,13 +542,8 @@
 							disabled={$isLoading}
 						/>
 					</div>
-					
-					
-					<button 
-						type="submit" 
-						disabled={$isLoading || !username.trim()}
-						class="primary-button"
-					>
+
+					<button type="submit" disabled={$isLoading || !username.trim()} class="primary-button">
 						{#if $isLoading}
 							<span class="loading-spinner"></span>
 							{$t('auth.creating')}
@@ -561,13 +560,17 @@
 			<div class="auth-step">
 				<h2>🔐 Backup Your Encryption Keys</h2>
 				<p class="step-description">
-					Your encryption keys have been generated! Please create a secure backup to ensure you never lose access to your messages.
+					Your encryption keys have been generated! Please create a secure backup to ensure you
+					never lose access to your messages.
 				</p>
-				
+
 				<div class="backup-warning">
-					<p><strong>⚠️ Critical:</strong> Without this backup, you will lose access to all your encrypted messages if you lose this device or clear your browser data.</p>
+					<p>
+						<strong>⚠️ Critical:</strong> Without this backup, you will lose access to all your encrypted
+						messages if you lose this device or clear your browser data.
+					</p>
 				</div>
-				
+
 				<form onsubmit={downloadKeyBackup}>
 					<div class="input-group">
 						<label for="backup-password">Backup Password *</label>
@@ -583,14 +586,14 @@
 							<button
 								type="button"
 								class="toggle-password"
-								onclick={() => showBackupPassword = !showBackupPassword}
+								onclick={() => (showBackupPassword = !showBackupPassword)}
 								disabled={$isLoading}
 							>
 								{showBackupPassword ? '👁️' : '👁️‍🗨️'}
 							</button>
 						</div>
 					</div>
-					
+
 					<div class="input-group">
 						<label for="confirm-backup-password">Confirm Password *</label>
 						<div class="password-input">
@@ -605,7 +608,7 @@
 							<button
 								type="button"
 								class="toggle-password"
-								onclick={() => showBackupPassword = !showBackupPassword}
+								onclick={() => (showBackupPassword = !showBackupPassword)}
 								disabled={$isLoading}
 							>
 								{showBackupPassword ? '👁️' : '👁️‍🗨️'}
@@ -613,7 +616,6 @@
 						</div>
 					</div>
 
-					
 					<div class="button-group">
 						<button
 							type="submit"
@@ -627,7 +629,7 @@
 								📁 Download Backup
 							{/if}
 						</button>
-						
+
 						<button
 							type="button"
 							class="secondary-button"
@@ -638,7 +640,7 @@
 						</button>
 					</div>
 				</form>
-				
+
 				<div class="backup-info">
 					<p><strong>💡 Tips:</strong></p>
 					<ul>
@@ -667,7 +669,11 @@
 		align-items: center;
 		justify-content: center;
 		padding: 1rem;
-		background: linear-gradient(135deg, var(--color-bg-secondary) 0%, var(--color-bg-tertiary) 100%);
+		background: linear-gradient(
+			135deg,
+			var(--color-bg-secondary) 0%,
+			var(--color-bg-tertiary) 100%
+		);
 	}
 
 	.auth-card {
@@ -895,7 +901,7 @@
 		.auth-card {
 			padding: 1.5rem;
 		}
-		
+
 		.logo h1 {
 			font-size: 1.25rem;
 		}
@@ -946,7 +952,6 @@
 		font-weight: 500;
 		font-size: 0.875rem;
 	}
-
 
 	.button-group {
 		display: flex;

@@ -32,7 +32,8 @@
 			if (previewOnly) {
 				// Just create a preview URL without uploading
 				previewUrl = URL.createObjectURL(file);
-				dispatch('uploaded', { avatarUrl: previewUrl });
+				//add file
+				dispatch('uploaded', { avatarUrl: previewUrl, file });
 			} else {
 				await uploadAvatar(file);
 			}
@@ -59,7 +60,7 @@
 			if (previewOnly) {
 				// Just create a preview URL without uploading
 				previewUrl = URL.createObjectURL(files[0]);
-				dispatch('uploaded', { avatarUrl: previewUrl });
+				dispatch('uploaded', { avatarUrl: previewUrl ,file});
 			} else {
 				await uploadAvatar(files[0]);
 			}
@@ -122,7 +123,7 @@
 			}
 			
 			previewUrl = result.avatarUrl;
-			dispatch('uploaded', { avatarUrl: result.avatarUrl });
+			dispatch('uploaded', { avatarUrl: result.avatarUrl,file });
 			
 		} catch (error) {
 			console.error('Avatar upload error:', error);
