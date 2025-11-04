@@ -574,7 +574,7 @@
 			{/if}
 
 			<!-- Empty State -->
-			{#if !loading && $chat.conversations.length === 0}
+			{#if !loading && localConversations.length === 0}
 				<div class="empty-state">
 					<div class="empty-icon">💬</div>
 					<h3>No conversations yet</h3>
