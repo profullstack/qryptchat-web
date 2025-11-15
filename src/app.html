@@ -71,11 +71,11 @@
 		<!-- Security Headers -->
 		<meta http-equiv="Content-Security-Policy" content="
 			default-src 'self';
-			script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co;
+			script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://datafa.st;
 			style-src 'self' 'unsafe-inline';
 			img-src 'self' data: https: blob:;
 			font-src 'self' data:;
-			connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+			connect-src 'self' https://*.supabase.co wss://*.supabase.co https://datafa.st;
 			media-src 'self' blob:;
 			worker-src 'self';
 			frame-src 'none';
@@ -86,6 +86,14 @@
 		
 		<!-- Preload critical resources -->
 		<link rel="preload" href="%sveltekit.assets%/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
+		
+		<!-- Analytics -->
+		<script
+			defer
+			data-website-id="dfid_1KqRWbLm5aBkjwMPxOagf"
+			data-domain="qrypt.chat"
+			src="https://datafa.st/js/script.js">
+		</script>
 		
 		%sveltekit.head%
 	</head>
