@@ -5,6 +5,7 @@
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
 	import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
 	import { detectTextFormat } from '@profullstack/text-type-detection';
+	import { trackMessageSent } from '$lib/utils/analytics.js';
 
 	let { conversationId = null, disabled = false } = $props();
 
@@ -306,9 +307,8 @@
 					throw new Error(result.error || 'Failed to send message');
 				}
 				
-				// Track message sent
+				// Track message sent (no private data sent to analytics)
 				trackMessageSent({
-					conversationId,
 					messageType: 'text',
 					hasAttachments: false
 				});

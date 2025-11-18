@@ -20,14 +20,13 @@ export function trackGoal(goalName, properties = {}) {
 
 /**
  * Track message sending
+ * NOTE: Does not send conversationId or any private message data to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
  * @param {string} params.messageType - Type of message (text, file, etc.)
  * @param {boolean} params.hasAttachments - Whether message has attachments
  */
-export function trackMessageSent({ conversationId, messageType = 'text', hasAttachments = false }) {
+export function trackMessageSent({ messageType = 'text', hasAttachments = false }) {
 	trackGoal('message_sent', {
-		conversation_id: conversationId,
 		message_type: messageType,
 		has_attachments: hasAttachments
 	});
@@ -48,40 +47,36 @@ export function trackConversationCreated({ conversationType, participantCount = 
 
 /**
  * Track conversation deletion
+ * NOTE: Does not send conversationId to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
  * @param {string} params.conversationType - Type of conversation
  */
-export function trackConversationDeleted({ conversationId, conversationType }) {
+export function trackConversationDeleted({ conversationType }) {
 	trackGoal('conversation_deleted', {
-		conversation_id: conversationId,
 		conversation_type: conversationType
 	});
 }
 
 /**
  * Track conversation archiving
+ * NOTE: Does not send conversationId to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
  * @param {boolean} params.isArchiving - Whether archiving (true) or unarchiving (false)
  */
-export function trackConversationArchived({ conversationId, isArchiving }) {
-	trackGoal(isArchiving ? 'conversation_archived' : 'conversation_unarchived', {
-		conversation_id: conversationId
-	});
+export function trackConversationArchived({ isArchiving }) {
+	trackGoal(isArchiving ? 'conversation_archived' : 'conversation_unarchived', {});
 }
 
 /**
  * Track file upload
+ * NOTE: Does not send conversationId to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
  * @param {string} params.fileType - MIME type of the file
  * @param {number} params.fileSize - Size of the file in bytes
  * @param {number} params.fileCount - Number of files uploaded
  */
-export function trackFileUploaded({ conversationId, fileType, fileSize, fileCount = 1 }) {
+export function trackFileUploaded({ fileType, fileSize, fileCount = 1 }) {
 	trackGoal('file_uploaded', {
-		conversation_id: conversationId,
 		file_type: fileType,
 		file_size: fileSize,
 		file_count: fileCount
@@ -90,42 +85,37 @@ export function trackFileUploaded({ conversationId, fileType, fileSize, fileCoun
 
 /**
  * Track voice call initiation
+ * NOTE: Does not send conversationId or targetUserId to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
- * @param {string} params.targetUserId - The user being called
  * @param {string} params.callType - Type of call (voice, video)
  */
-export function trackCallStarted({ conversationId, targetUserId, callType = 'voice' }) {
+export function trackCallStarted({ callType = 'voice' }) {
 	trackGoal('call_started', {
-		conversation_id: conversationId,
-		target_user_id: targetUserId,
 		call_type: callType
 	});
 }
 
 /**
  * Track call acceptance
+ * NOTE: Does not send conversationId to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
  * @param {string} params.callType - Type of call (voice, video)
  */
-export function trackCallAccepted({ conversationId, callType = 'voice' }) {
+export function trackCallAccepted({ callType = 'voice' }) {
 	trackGoal('call_accepted', {
-		conversation_id: conversationId,
 		call_type: callType
 	});
 }
 
 /**
  * Track call ending
+ * NOTE: Does not send conversationId to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
  * @param {string} params.callType - Type of call (voice, video)
  * @param {number} params.duration - Call duration in seconds
  */
-export function trackCallEnded({ conversationId, callType = 'voice', duration = 0 }) {
+export function trackCallEnded({ callType = 'voice', duration = 0 }) {
 	trackGoal('call_ended', {
-		conversation_id: conversationId,
 		call_type: callType,
 		duration
 	});
@@ -183,13 +173,12 @@ export function trackSettingChanged({ settingName, settingValue }) {
 
 /**
  * Track disappearing messages configuration
+ * NOTE: Does not send conversationId to protect user privacy
  * @param {Object} params
- * @param {string} params.conversationId - The conversation ID
  * @param {number} params.duration - Duration in seconds (0 for disabled)
  */
-export function trackDisappearingMessagesConfigured({ conversationId, duration }) {
+export function trackDisappearingMessagesConfigured({ duration }) {
 	trackGoal('disappearing_messages_configured', {
-		conversation_id: conversationId,
 		duration,
 		enabled: duration > 0
 	});
@@ -219,13 +208,12 @@ export function trackLanguageChanged({ language }) {
 
 /**
  * Track group join
+ * NOTE: Does not send groupId to protect user privacy
  * @param {Object} params
- * @param {string} params.groupId - The group ID
  * @param {string} params.method - How they joined (invite_code, link, etc.)
  */
-export function trackGroupJoined({ groupId, method = 'invite_code' }) {
+export function trackGroupJoined({ method = 'invite_code' }) {
 	trackGoal('group_joined', {
-		group_id: groupId,
 		join_method: method
 	});
 }

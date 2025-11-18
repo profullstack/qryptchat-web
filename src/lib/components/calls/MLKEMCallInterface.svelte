@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { MLKEMCallManager, CALL_STATES } from '../../webrtc/ml-kem-call-manager.js';
 	import { createEventDispatcher } from 'svelte';
+	import { trackCallEnded } from '$lib/utils/analytics.js';
 
 	export let websocket = null;
 	export let targetUser = null;
@@ -169,9 +170,8 @@
 
 	async function endCall() {
 		if (callManager) {
-			// Track call ending with duration
+			// Track call ending with duration (no private data sent)
 			trackCallEnded({
-				conversationId: targetUser?.id || 'unknown',
 				callType: isVideoCall ? 'video' : 'voice',
 				duration: callDuration
 			});

@@ -7,6 +7,7 @@
 	import GroupItem from './GroupItem.svelte';
 	import NewChatModal from './NewChatModal.svelte';
 	import JoinGroupModal from './JoinGroupModal.svelte';
+	import { trackConversationDeleted } from '$lib/utils/analytics.js';
 
 	// Props
 	let { activeConversationId = null, onConversationSelect = () => {} } = $props();
@@ -265,9 +266,8 @@
 			if (result.success) {
 				console.log('🗑️ [CLIENT] ✅ Conversation deleted successfully');
 				
-				// Track conversation deletion
+				// Track conversation deletion (no private data sent)
 				trackConversationDeleted({
-					conversationId: conversation.id,
 					conversationType: conversation.type
 				});
 				
