@@ -169,6 +169,13 @@
 
 	async function endCall() {
 		if (callManager) {
+			// Track call ending with duration
+			trackCallEnded({
+				conversationId: targetUser?.id || 'unknown',
+				callType: isVideoCall ? 'video' : 'voice',
+				duration: callDuration
+			});
+			
 			await callManager.endCall();
 			cleanup();
 			dispatch('callEnded');

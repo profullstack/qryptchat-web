@@ -186,6 +186,14 @@ if (typeof window !== 'undefined') {
 			const data = await response.json();
 			
 			if (response.ok) {
+				const conversationType = activeTab === 'channel' ? 'room' : 'group';
+				
+				// Track conversation creation
+				trackConversationCreated({
+					conversationType,
+					participantCount: selectedUsers.length + 1 // +1 for current user
+				});
+				
 				dispatch('conversationCreated', {
 					conversationId: data.conversation_id,
 					type: activeTab,

@@ -305,6 +305,14 @@
 				if (result && !result.success) {
 					throw new Error(result.error || 'Failed to send message');
 				}
+				
+				// Track message sent
+				trackMessageSent({
+					conversationId,
+					messageType: 'text',
+					hasAttachments: false
+				});
+				
 				messageText = '';
 				isAsciiArt = false; // Reset checkbox after sending
 			}

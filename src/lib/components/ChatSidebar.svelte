@@ -265,6 +265,12 @@
 			if (result.success) {
 				console.log('🗑️ [CLIENT] ✅ Conversation deleted successfully');
 				
+				// Track conversation deletion
+				trackConversationDeleted({
+					conversationId: conversation.id,
+					conversationType: conversation.type
+				});
+				
 				// If the deleted conversation was active, clear it
 				if (activeConversationId === conversation.id) {
 					console.log('🗑️ [CLIENT] Clearing active conversation');
