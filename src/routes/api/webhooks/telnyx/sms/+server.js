@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/supabase/service-role.js';
 import { createSMSWebhookEmailService } from '$lib/services/mailgun-email-service.js';
+import crypto from 'crypto';
 
 // Lazy service role client creation
 let supabase = null;
@@ -12,13 +13,64 @@ function getServiceRoleClient() {
 }
 
 /**
+ * Verify Telnyx webhook signature
+ * @see https://developers.telnyx.com/docs/v2/messaging/webhooks
+ */
+function verifyTelnyxSignature(payload, signature, timestamp, publicKey) {
+	if (!publicKey) {
+		console.warn('[TELNYX-WEBHOOK] TELNYX_PUBLIC_KEY not configured - skipping signature verification');
+		return true; // Allow if not configured (backward compatibility)
+	}
+
+	if (!signature || !timestamp) {
+		console.error('[TELNYX-WEBHOOK] Missing signature or timestamp headers');
+		return false;
+	}
+
+	try {
+		// Telnyx signs: timestamp + '|' + payload
+		const signedPayload = `${timestamp}|${payload}`;
+		
+		// Verify using ed25519 (Telnyx uses this algorithm)
+		const isValid = crypto.verify(
+			null, // algorithm is determined by key type
+			Buffer.from(signedPayload),
+			{
+				key: publicKey,
+				format: 'pem',
+				type: 'spki'
+			},
+			Buffer.from(signature, 'base64')
+		);
+
+		return isValid;
+	} catch (error) {
+		console.error('[TELNYX-WEBHOOK] Signature verification error:', error.message);
+		return false;
+	}
+}
+
+/**
  * POST /api/webhooks/telnyx/sms
  * Webhook endpoint for receiving inbound SMS messages from Telnyx
  * This handles SMS replies for OTP verification during registration
  */
 export async function POST({ request }) {
 	try {
-		const body = await request.json();
+		// Get raw body for signature verification
+		const rawBody = await request.text();
+		
+		// Verify webhook signature (if configured)
+		const telnyxPublicKey = process.env.TELNYX_PUBLIC_KEY;
+		const signature = request.headers.get('telnyx-signature-ed25519');
+		const timestamp = request.headers.get('telnyx-timestamp');
+
+		if (telnyxPublicKey && !verifyTelnyxSignature(rawBody, signature, timestamp, telnyxPublicKey)) {
+			console.error('[TELNYX-WEBHOOK] Invalid signature - rejecting webhook');
+			return json({ error: 'Invalid signature' }, { status: 401 });
+		}
+
+		const body = JSON.parse(rawBody);
 		
 		// Log the incoming webhook for debugging
 		console.log('[TELNYX-WEBHOOK] Received webhook:', {

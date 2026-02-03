@@ -1,10 +1,17 @@
 /**
  * @fileoverview API endpoint for SMS configuration diagnostics
  * Helps debug Twilio SMS configuration issues
+ * 
+ * SECURITY: This endpoint is restricted to development mode only
  */
 
 import { json } from '@sveltejs/kit';
 import { diagnoseSMSConfig, generateDiagnosticReport } from '$lib/utils/sms-config-diagnostic.js';
+
+// Security check - only allow in development
+function isDevelopment() {
+	return process.env.NODE_ENV === 'development';
+}
 
 /**
  * GET /api/auth/debug-sms-config
@@ -12,6 +19,11 @@ import { diagnoseSMSConfig, generateDiagnosticReport } from '$lib/utils/sms-conf
  * @param {import('@sveltejs/kit').RequestEvent} event
  */
 export async function GET(event) {
+	// SECURITY: Block in production
+	if (!isDevelopment()) {
+		return json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+
 	try {
 		// Gather configuration from environment variables
 		const config = {
@@ -60,6 +72,11 @@ export async function GET(event) {
  * @param {import('@sveltejs/kit').RequestEvent} event
  */
 export async function POST(event) {
+	// SECURITY: Block in production
+	if (!isDevelopment()) {
+		return json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+
 	const { request } = event;
 	
 	try {
