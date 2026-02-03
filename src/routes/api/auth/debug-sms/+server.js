@@ -1,10 +1,17 @@
 /**
  * @fileoverview SMS Authentication Debug Endpoint
  * Provides comprehensive debugging for SMS authentication issues
+ * 
+ * SECURITY: This endpoint is restricted to development mode only
  */
 
 import { json } from '@sveltejs/kit';
 import { SMSAuthDiagnostics } from '$lib/utils/sms-debug.js';
+
+// Security check - only allow in development
+function isDevelopment() {
+	return process.env.NODE_ENV === 'development';
+}
 
 /**
  * POST /api/auth/debug-sms
@@ -12,6 +19,11 @@ import { SMSAuthDiagnostics } from '$lib/utils/sms-debug.js';
  * @param {import('@sveltejs/kit').RequestEvent} event
  */
 export async function POST(event) {
+	// SECURITY: Block in production
+	if (!isDevelopment()) {
+		return json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+
 	const { request } = event;
 	
 	try {
@@ -81,6 +93,11 @@ export async function POST(event) {
  * Get SMS authentication system status
  */
 export async function GET(event) {
+	// SECURITY: Block in production
+	if (!isDevelopment()) {
+		return json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+
 	try {
 		const diagnostics = new SMSAuthDiagnostics(event);
 		
