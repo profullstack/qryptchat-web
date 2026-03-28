@@ -7,6 +7,7 @@ import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.js';
 import { SMSDebugLogger, formatSMSError } from '$lib/utils/sms-debug.js';
 import { getSMSErrorDetails } from '$lib/utils/twilio-validator.js';
+import { applyRateLimit, authRateLimiter } from '$lib/server/rate-limiter.js';
 
 /**
  * Validate phone number format
@@ -19,12 +20,14 @@ function isValidPhoneNumber(phoneNumber) {
 	return phoneRegex.test(phoneNumber);
 }
 
+import crypto from 'crypto';
+
 /**
- * Generate a 6-digit verification code
+ * Generate a 6-digit verification code using cryptographically secure randomness
  * @returns {string}
  */
 function generateVerificationCode() {
-	return Math.floor(100000 + Math.random() * 900000).toString();
+	return crypto.randomInt(100000, 999999).toString();
 }
 
 /**
@@ -33,6 +36,10 @@ function generateVerificationCode() {
  * @param {import('@sveltejs/kit').RequestEvent} event
  */
 export async function POST(event) {
+	// Rate limit: 5 requests per minute per IP
+	const rateLimited = applyRateLimit(event, authRateLimiter);
+	if (rateLimited) return rateLimited;
+
 	const { request } = event;
 	const logger = new SMSDebugLogger();
 	
@@ -114,7 +121,7 @@ export async function POST(event) {
 
 			return json(
 				{
-					error: errorDetails.userMessage,
+					error: 'Failed to send verification code. Please try again later.',
 					code: smsError.status || 'SMS_SEND_FAILED',
 					...(errorDetails.suggestion && { suggestion: errorDetails.suggestion }),
 					...(errorDetails.actionRequired && { actionRequired: errorDetails.actionRequired }),

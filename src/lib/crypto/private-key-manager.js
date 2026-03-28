@@ -221,7 +221,10 @@ export class PrivateKeyManager {
 	}
 
 	/**
-	 * Derive encryption key from password using HKDF
+	 * Derive encryption key from password using PBKDF2.
+	 * PBKDF2 is the correct algorithm for password-based key derivation (slow, iterative).
+	 * HKDF was previously used here but is designed for already-strong key material,
+	 * not for low-entropy passwords.
 	 * @param {string} password - User password
 	 * @param {Uint8Array} salt - Random salt
 	 * @returns {Promise<Uint8Array>} Derived key
@@ -231,13 +234,31 @@ export class PrivateKeyManager {
 		// Convert password to bytes
 		const passwordBytes = new TextEncoder().encode(password);
 		
-		// Use HKDF to derive a strong key from the password
-		const derivedKey = await HKDF.derive(
+		// Import password as key material for PBKDF2
+		const keyMaterial = await crypto.subtle.importKey(
+			'raw',
 			passwordBytes,
-			salt,
-			'PostQuantumKeyExport',
-			32 // 256-bit key for additional security
+			{ name: 'PBKDF2' },
+			false,
+			['deriveKey']
 		);
+
+		// Derive key using PBKDF2 with 100,000+ iterations (OWASP recommendation)
+		const derivedCryptoKey = await crypto.subtle.deriveKey(
+			{
+				name: 'PBKDF2',
+				salt: salt,
+				iterations: 100000,
+				hash: 'SHA-256'
+			},
+			keyMaterial,
+			{ name: 'AES-GCM', length: 256 },
+			true, // extractable
+			['encrypt', 'decrypt']
+		);
+
+		const keyBuffer = await crypto.subtle.exportKey('raw', derivedCryptoKey);
+		const derivedKey = new Uint8Array(keyBuffer);
 
 		// Clear password bytes from memory
 		CryptoUtils.secureClear(passwordBytes);

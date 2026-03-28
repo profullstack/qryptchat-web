@@ -18,8 +18,14 @@ function getServiceRoleClient() {
  */
 function verifyTelnyxSignature(payload, signature, timestamp, publicKey) {
 	if (!publicKey) {
-		console.warn('[TELNYX-WEBHOOK] TELNYX_PUBLIC_KEY not configured - skipping signature verification');
-		return true; // Allow if not configured (backward compatibility)
+		// Fail closed in production — reject requests if TELNYX_PUBLIC_KEY is not configured
+		const isProduction = process.env.NODE_ENV === 'production';
+		if (isProduction) {
+			console.error('[TELNYX-WEBHOOK] TELNYX_PUBLIC_KEY not configured — rejecting webhook in production (fail closed)');
+			return false;
+		}
+		console.warn('[TELNYX-WEBHOOK] TELNYX_PUBLIC_KEY not configured - skipping signature verification (dev only)');
+		return true;
 	}
 
 	if (!signature || !timestamp) {
@@ -65,8 +71,9 @@ export async function POST({ request }) {
 		const signature = request.headers.get('telnyx-signature-ed25519');
 		const timestamp = request.headers.get('telnyx-timestamp');
 
-		if (telnyxPublicKey && !verifyTelnyxSignature(rawBody, signature, timestamp, telnyxPublicKey)) {
-			console.error('[TELNYX-WEBHOOK] Invalid signature - rejecting webhook');
+		// Always verify signature — fail closed if key is missing in production
+		if (!verifyTelnyxSignature(rawBody, signature, timestamp, telnyxPublicKey)) {
+			console.error('[TELNYX-WEBHOOK] Signature verification failed — rejecting webhook');
 			return json({ error: 'Invalid signature' }, { status: 401 });
 		}
 

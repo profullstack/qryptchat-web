@@ -1,13 +1,21 @@
 import { json } from '@sveltejs/kit';
 import { pluginManager } from '$lib/plugins/PluginManager.js';
+import { createSupabaseServerClient } from '$lib/supabase.js';
 
 /**
  * POST /api/plugins/execute
- * Execute a plugin command
+ * Execute a plugin command (requires authentication)
  */
-export async function POST({ request }) {
+export async function POST(event) {
   try {
-    const { message, context = {} } = await request.json();
+    // Authentication check
+    const supabase = createSupabaseServerClient(event);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { message, context = {} } = await event.request.json();
 
     if (!message) {
       return json({ error: 'Message is required' }, { status: 400 });
@@ -36,18 +44,24 @@ export async function POST({ request }) {
   } catch (error) {
     console.error('Error executing plugin command:', error);
     return json({ 
-      error: 'Internal server error',
-      details: error.message 
+      error: 'Internal server error'
     }, { status: 500 });
   }
 }
 
 /**
  * GET /api/plugins/execute
- * Get available commands and help
+ * Get available commands and help (requires authentication)
  */
-export async function GET() {
+export async function GET(event) {
   try {
+    // Authentication check
+    const supabase = createSupabaseServerClient(event);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Initialize plugin manager if not already done
     if (!pluginManager.initialized) {
       await pluginManager.initialize();
@@ -65,8 +79,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error getting plugin commands:', error);
     return json({ 
-      error: 'Internal server error',
-      details: error.message 
+      error: 'Internal server error'
     }, { status: 500 });
   }
 }

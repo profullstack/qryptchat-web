@@ -2,23 +2,21 @@
 // GET /api/users/by-id/[identifier]
 
 import { json } from '@sveltejs/kit';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerClient } from '$lib/supabase.js';
 import { validateUniqueIdentifier } from '$lib/utils/unique-identifier.js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 
-export async function GET({ params }) {
-	// Initialize Supabase client inside the handler
-	if (!PUBLIC_SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-		return json(
-			{ error: 'Server configuration error' },
-			{ status: 500 }
-		);
-	}
-
-	const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+export async function GET(event) {
 	try {
-		const { identifier } = params;
+		// Use session-based client instead of service role
+		const supabase = createSupabaseServerClient(event);
+
+		// Authentication check
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
+		if (authError || !user) {
+			return json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		const { identifier } = event.params;
 
 		// Validate the identifier format
 		if (!validateUniqueIdentifier(identifier)) {
@@ -54,18 +52,18 @@ export async function GET({ params }) {
 			);
 		}
 
-		const user = data[0];
+		const foundUser = data[0];
 
 		// Return user profile information (public data only)
 		return json({
 			success: true,
 			user: {
-				id: user.id,
-				username: user.username,
-				displayName: user.display_name,
-				avatarUrl: user.avatar_url,
-				bio: user.bio,
-				website: user.website
+				id: foundUser.id,
+				username: foundUser.username,
+				displayName: foundUser.display_name,
+				avatarUrl: foundUser.avatar_url,
+				bio: foundUser.bio,
+				website: foundUser.website
 			}
 		});
 

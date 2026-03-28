@@ -21,8 +21,12 @@ const BODY_LENGTH = 8;
 export function generateUniqueIdentifier() {
     let result = PREFIX;
     
+    // Use cryptographically secure random values instead of Math.random()
+    const randomValues = new Uint32Array(BODY_LENGTH);
+    crypto.getRandomValues(randomValues);
+    
     for (let i = 0; i < BODY_LENGTH; i++) {
-        const randomIndex = Math.floor(Math.random() * CHARS.length);
+        const randomIndex = randomValues[i] % CHARS.length;
         result += CHARS[randomIndex];
     }
     

@@ -20,12 +20,22 @@ export async function GET(event) {
 	
 		const searchQuery = query.trim().toLowerCase();
 		
+		// Sanitize search query — escape PostgREST special characters to prevent injection
+		const sanitizedQuery = searchQuery
+			.replace(/\\/g, '\\\\')  // escape backslash first
+			.replace(/%/g, '\\%')    // escape percent
+			.replace(/_/g, '\\_')    // escape underscore
+			.replace(/,/g, '')       // remove commas (PostgREST filter separator)
+			.replace(/\(/g, '')      // remove open parens (PostgREST operators)
+			.replace(/\)/g, '')      // remove close parens
+			.replace(/\./g, '');     // remove dots (PostgREST column separator)
+		
 		// Enhanced fuzzy search across multiple fields with relevance scoring
 		// Search by username, display_name (full name), phone_number, and unique_identifier
 		const { data, error } = await supabase
 			.from('users')
 			.select('id, username, display_name, avatar_url, phone_number, unique_identifier')
-			.or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%,phone_number.ilike.%${searchQuery}%,unique_identifier.ilike.%${searchQuery}%`)
+			.or(`username.ilike.%${sanitizedQuery}%,display_name.ilike.%${sanitizedQuery}%,phone_number.ilike.%${sanitizedQuery}%,unique_identifier.ilike.%${sanitizedQuery}%`)
 			.neq('id', user.id) // Exclude current user
 			.limit(50); // Get more results for better sorting
 	

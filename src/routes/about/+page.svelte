@@ -136,6 +136,7 @@
 									<!-- Social links -->
 									{#each (memberInfo?.socialLinks || []) as socialLink}
 										<a href={socialLink.url} target="_blank" rel="noopener noreferrer" class="social-link {socialLink.type}">
+											<!-- SECURITY NOTE: getSocialIcon() returns hardcoded static SVG strings only — no user input is interpolated -->
 											{@html getSocialIcon(socialLink.type)}
 											{getSocialLabel(socialLink.type)}
 										</a>

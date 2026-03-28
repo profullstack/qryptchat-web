@@ -24,12 +24,53 @@ const chatServer = new ChatWebSocketServer({
 	noListen: true // Don't create its own server
 });
 
-// Handle WebSocket upgrade requests
+// Per-IP WebSocket connection rate limiting
+const wsConnectionCounts = new Map(); // ip -> { count, firstSeen }
+const WS_MAX_CONNECTIONS_PER_IP = 10;
+const WS_RATE_WINDOW_MS = 60 * 1000; // 1 minute
+
+function getClientIp(request) {
+	return request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+		request.socket?.remoteAddress || 'unknown';
+}
+
+// Clean up stale entries every 5 minutes
+setInterval(() => {
+	const now = Date.now();
+	for (const [ip, data] of wsConnectionCounts) {
+		if (now - data.firstSeen > WS_RATE_WINDOW_MS) {
+			wsConnectionCounts.delete(ip);
+		}
+	}
+}, 5 * 60 * 1000);
+
+// Handle WebSocket upgrade requests with per-IP rate limiting
 server.on('upgrade', (request, socket, head) => {
 	// Only upgrade requests to /ws path
 	if (request.url !== '/ws') {
 		socket.destroy();
 		return;
+	}
+
+	// Rate limit by IP
+	const ip = getClientIp(request);
+	const now = Date.now();
+	const record = wsConnectionCounts.get(ip);
+
+	if (record) {
+		if (now - record.firstSeen > WS_RATE_WINDOW_MS) {
+			// Window expired, reset
+			wsConnectionCounts.set(ip, { count: 1, firstSeen: now });
+		} else if (record.count >= WS_MAX_CONNECTIONS_PER_IP) {
+			console.warn(`⚠️ WebSocket rate limit exceeded for IP: ${ip}`);
+			socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+			socket.destroy();
+			return;
+		} else {
+			record.count++;
+		}
+	} else {
+		wsConnectionCounts.set(ip, { count: 1, firstSeen: now });
 	}
 
 	// Handle the upgrade using our WebSocket server

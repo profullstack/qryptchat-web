@@ -5,6 +5,7 @@
 
 import { browser } from '$app/environment';
 import { Base64, CryptoUtils } from './index.js';
+import { MasterKeyDerivation } from './master-key-derivation.js';
 
 /**
  * Client-side key management service
@@ -12,7 +13,73 @@ import { Base64, CryptoUtils } from './index.js';
 export class KeyManager {
 	constructor() {
 		this.storageKey = 'qryptchat_keys';
+		this.storageEncryptionKeyName = 'qryptchat_storage_enc_key';
 		this.sessionKeys = new Map(); // In-memory keys for current session
+		this._storageEncKey = null; // Cached encryption key for localStorage
+	}
+
+	/**
+	 * Get or generate the storage encryption key for protecting keys in localStorage.
+	 * The encryption key itself is stored in sessionStorage (cleared on tab close)
+	 * and derived fresh when needed.
+	 * @returns {Promise<CryptoKey>}
+	 * @private
+	 */
+	async _getStorageEncryptionKey() {
+		if (this._storageEncKey) return this._storageEncKey;
+
+		if (!browser) throw new Error('Storage encryption only available in browser');
+
+		// Try to load from sessionStorage (survives page reloads within same tab)
+		const storedRaw = sessionStorage.getItem(this.storageEncryptionKeyName);
+		if (storedRaw) {
+			const rawBytes = Base64.decode(storedRaw);
+			this._storageEncKey = await crypto.subtle.importKey(
+				'raw', rawBytes, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+			);
+			return this._storageEncKey;
+		}
+
+		// Generate a new random encryption key
+		this._storageEncKey = await crypto.subtle.generateKey(
+			{ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+		);
+		const exported = await crypto.subtle.exportKey('raw', this._storageEncKey);
+		sessionStorage.setItem(this.storageEncryptionKeyName, Base64.encode(new Uint8Array(exported)));
+		return this._storageEncKey;
+	}
+
+	/**
+	 * Encrypt data before storing in localStorage
+	 * @param {string} plaintext - JSON string to encrypt
+	 * @returns {Promise<string>} Base64-encoded encrypted blob
+	 * @private
+	 */
+	async _encryptForStorage(plaintext) {
+		const key = await this._getStorageEncryptionKey();
+		const iv = crypto.getRandomValues(new Uint8Array(12));
+		const encoded = new TextEncoder().encode(plaintext);
+		const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+		// Prepend IV to ciphertext
+		const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+		combined.set(iv, 0);
+		combined.set(new Uint8Array(ciphertext), iv.length);
+		return Base64.encode(combined);
+	}
+
+	/**
+	 * Decrypt data read from localStorage
+	 * @param {string} encryptedBase64 - Base64-encoded encrypted blob
+	 * @returns {Promise<string>} Decrypted JSON string
+	 * @private
+	 */
+	async _decryptFromStorage(encryptedBase64) {
+		const key = await this._getStorageEncryptionKey();
+		const combined = Base64.decode(encryptedBase64);
+		const iv = combined.slice(0, 12);
+		const ciphertext = combined.slice(12);
+		const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+		return new TextDecoder().decode(decrypted);
 	}
 
 	/**
@@ -38,17 +105,18 @@ export class KeyManager {
 			this.sessionKeys.set(conversationId, key);
 
 			if (persist && browser) {
-				// Store in localStorage (encrypted with a master key)
+				// Store in localStorage encrypted with session-scoped AES key
 				const keyData = {
 					conversationId,
 					key: Base64.encode(key),
 					timestamp: Date.now()
 				};
 
-				const existingKeys = this.getStoredKeys();
+				const existingKeys = await this.getStoredKeys();
 				existingKeys[conversationId] = keyData;
 
-				localStorage.setItem(this.storageKey, JSON.stringify(existingKeys));
+				const encrypted = await this._encryptForStorage(JSON.stringify(existingKeys));
+				localStorage.setItem(this.storageKey, encrypted);
 				console.log(`🔑 Stored key for conversation: ${conversationId}`);
 			}
 		} catch (error) {
@@ -68,9 +136,9 @@ export class KeyManager {
 				return this.sessionKeys.get(conversationId);
 			}
 
-			// Then check localStorage
+			// Then check localStorage (encrypted)
 			if (browser) {
-				const storedKeys = this.getStoredKeys();
+				const storedKeys = await this.getStoredKeys();
 				const keyData = storedKeys[conversationId];
 
 				if (keyData) {
@@ -123,11 +191,12 @@ export class KeyManager {
 				this.sessionKeys.delete(conversationId);
 			}
 
-			// Remove from localStorage
+			// Remove from localStorage (encrypted)
 			if (browser) {
-				const storedKeys = this.getStoredKeys();
+				const storedKeys = await this.getStoredKeys();
 				delete storedKeys[conversationId];
-				localStorage.setItem(this.storageKey, JSON.stringify(storedKeys));
+				const encrypted = await this._encryptForStorage(JSON.stringify(storedKeys));
+				localStorage.setItem(this.storageKey, encrypted);
 			}
 
 			console.log(`🔑 Removed key for conversation: ${conversationId}`);
@@ -140,12 +209,12 @@ export class KeyManager {
 	 * List all stored conversation IDs
 	 * @returns {string[]} Array of conversation IDs
 	 */
-	getStoredConversationIds() {
+	async getStoredConversationIds() {
 		try {
 			const sessionIds = Array.from(this.sessionKeys.keys());
 			
 			if (browser) {
-				const storedKeys = this.getStoredKeys();
+				const storedKeys = await this.getStoredKeys();
 				const persistedIds = Object.keys(storedKeys);
 				
 				// Combine and deduplicate
@@ -217,18 +286,37 @@ export class KeyManager {
 	}
 
 	/**
-	 * Get stored keys from localStorage
-	 * @returns {Object} Stored keys object
+	 * Get stored keys from localStorage (encrypted)
+	 * @returns {Promise<Object>} Stored keys object
 	 * @private
 	 */
-	getStoredKeys() {
+	async getStoredKeys() {
 		try {
 			if (!browser) return {};
 			
 			const stored = localStorage.getItem(this.storageKey);
-			return stored ? JSON.parse(stored) : {};
+			if (!stored) return {};
+
+			// Try to decrypt (new encrypted format)
+			try {
+				const decrypted = await this._decryptFromStorage(stored);
+				return JSON.parse(decrypted);
+			} catch {
+				// Fall back to reading unencrypted legacy data, then re-encrypt it
+				try {
+					const legacy = JSON.parse(stored);
+					// Re-encrypt and store
+					const encrypted = await this._encryptForStorage(JSON.stringify(legacy));
+					localStorage.setItem(this.storageKey, encrypted);
+					console.log('🔑 Migrated unencrypted keys to encrypted storage');
+					return legacy;
+				} catch {
+					console.error('🔑 Failed to parse stored keys');
+					return {};
+				}
+			}
 		} catch (error) {
-			console.error('🔑 Failed to parse stored keys:', error);
+			console.error('🔑 Failed to get stored keys:', error);
 			return {};
 		}
 	}
@@ -241,7 +329,7 @@ export class KeyManager {
 		try {
 			if (!browser) return;
 
-			const storedKeys = this.getStoredKeys();
+			const storedKeys = await this.getStoredKeys();
 			
 			for (const [conversationId, keyData] of Object.entries(storedKeys)) {
 				if (keyData && keyData.key) {
@@ -261,13 +349,13 @@ export class KeyManager {
 	 * @param {string} conversationId - Conversation ID
 	 * @returns {boolean} Whether key exists
 	 */
-	hasConversationKey(conversationId) {
+	async hasConversationKey(conversationId) {
 		if (this.sessionKeys.has(conversationId)) {
 			return true;
 		}
 
 		if (browser) {
-			const storedKeys = this.getStoredKeys();
+			const storedKeys = await this.getStoredKeys();
 			return !!storedKeys[conversationId];
 		}
 

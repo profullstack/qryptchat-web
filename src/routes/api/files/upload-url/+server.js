@@ -81,7 +81,7 @@ export async function POST(event) {
 		console.log(`📁 [UPLOAD-URL] Generating signed URL for encrypted file`);
 
 		// Generate file ID and storage path (use auth user ID for storage path to match RLS policy)
-		const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+		const fileId = `file_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').substring(0, 13)}`;
 		const storagePath = `${user.id}/${conversationId}/${fileId}`;
 
 		console.log(`📁 [UPLOAD-URL] Storage path: ${storagePath}`);

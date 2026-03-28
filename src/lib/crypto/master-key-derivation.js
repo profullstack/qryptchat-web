@@ -23,8 +23,26 @@ export class MasterKeyDerivation {
 		}
 
 		try {
-			// Create salt from phone number (deterministic but unique per user)
-			const salt = await this.createPhoneSalt(phoneNumber);
+			// TODO: MIGRATION STRATEGY — The current deterministic salt (derived from phone number)
+			// is weak because it allows offline brute-force attacks if the derived key is compromised.
+			// For NEW users, we should generate and store a random salt alongside the derived key.
+			// For EXISTING users, we need a migration path: re-derive with random salt on next login,
+			// then re-encrypt all stored data with the new key. This is a breaking change that
+			// requires careful rollout. See issue #39/#54.
+			
+			// Check if user has a stored random salt (new users)
+			const storedSalt = localStorage.getItem(`qryptchat_salt_${phoneNumber}`);
+			let salt;
+			if (storedSalt) {
+				// Use stored random salt (new user path)
+				salt = new Uint8Array(JSON.parse(storedSalt));
+			} else {
+				// Legacy path: deterministic salt from phone number
+				// Store a random salt for future re-derivation during migration
+				const randomSalt = this.generateSalt();
+				localStorage.setItem(`qryptchat_random_salt_${phoneNumber}`, JSON.stringify(Array.from(randomSalt)));
+				salt = await this.createPhoneSalt(phoneNumber);
+			}
 			
 			return await this.deriveWithSalt(phoneNumber, pin, salt, iterations);
 		} catch (error) {
@@ -93,6 +111,15 @@ export class MasterKeyDerivation {
 
 	/**
 	 * Create deterministic salt from phone number
+	 * @param {string} phoneNumber - User's phone number
+	 * @returns {Promise<Uint8Array>} 256-bit salt
+	 */
+	/**
+	 * Create deterministic salt from phone number.
+	 * WARNING: Deterministic salts derived from phone numbers are weak — they enable
+	 * offline brute-force attacks. This is kept for backward compatibility with
+	 * existing users' keys. New users should use generateSalt() instead.
+	 * See TODO in deriveFromCredentials() for migration strategy.
 	 * @param {string} phoneNumber - User's phone number
 	 * @returns {Promise<Uint8Array>} 256-bit salt
 	 */

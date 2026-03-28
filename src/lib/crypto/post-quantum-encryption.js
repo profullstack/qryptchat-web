@@ -233,31 +233,22 @@ export class PostQuantumEncryptionService {
 	 	// Check if the key has a text header (e.g., "KYBER102") and strip it if needed
 	 	recipientPubKeyBytes = this.stripKeyHeaderIfPresent(recipientPubKeyBytes);
 	 	
-	 	// Always ensure key is exact size after header stripping
-	 	const diff1024 = Math.abs(recipientPubKeyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE);
-	 	const diff768 = Math.abs(recipientPubKeyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE);
-	 	
+	 	// Strict key size validation — no padding/trimming allowed (corrupts ML-KEM keys)
 	 	if (recipientPubKeyBytes.length !== this.ML_KEM_1024_PUBLIC_KEY_SIZE &&
 	 	    recipientPubKeyBytes.length !== this.ML_KEM_768_PUBLIC_KEY_SIZE) {
-	 		
-	 		// Choose the closest target size and pad to exact size
-	 		if (diff1024 <= 32 && diff1024 <= diff768) {
-	 			console.log(`🔐 [DEBUG] Key length ${recipientPubKeyBytes.length} close to ML-KEM-1024, padding to exact size`);
-	 			recipientPubKeyBytes = this.padKeyToExactSize(recipientPubKeyBytes, this.ML_KEM_1024_PUBLIC_KEY_SIZE);
-	 		}
-	 		else if (diff768 <= 32) {
-	 			console.log(`🔐 [DEBUG] Key length ${recipientPubKeyBytes.length} close to ML-KEM-768, padding to exact size`);
-	 			recipientPubKeyBytes = this.padKeyToExactSize(recipientPubKeyBytes, this.ML_KEM_768_PUBLIC_KEY_SIZE);
-	 		}
+	 		throw new Error(
+	 			`Invalid recipient public key size: ${recipientPubKeyBytes.length} bytes. ` +
+	 			`Expected ${this.ML_KEM_1024_PUBLIC_KEY_SIZE} (ML-KEM-1024) or ${this.ML_KEM_768_PUBLIC_KEY_SIZE} (ML-KEM-768). ` +
+	 			`Recipient may need to use Nuclear Key Reset in Settings.`
+	 		);
 	 	}
 
 	 	// Detect key size to identify ML-KEM-768 vs ML-KEM-1024 public keys
 	 	let kemAlgorithm = this.kemAlgorithm; // Default to ML-KEM-1024
 	 	let kemName = this.kemName; // Default to ML-KEM-1024
 	 	
-	 	// Debug public key size
+	 	// Debug public key size (do not log key bytes in production)
 	 	console.log(`🔐 [DEBUG] Recipient public key length: ${recipientPubKeyBytes.length} bytes`);
-	 	console.log(`🔐 [DEBUG] Public key first 8 bytes:`, Array.from(recipientPubKeyBytes.slice(0, 8)));
 	 	
 	 	// Validate the public key before using it
 	 	if (!this.isValidPublicKey(recipientPubKeyBytes)) {
@@ -367,65 +358,9 @@ export class PostQuantumEncryptionService {
 	 }
 	}
 	
-	/**
-	 * Fallback encryption method using Web Crypto API
-	 * @param {string} message - Plain text message
-	 * @param {string} recipientKey - Recipient's key (only used as a seed)
-	 * @returns {Promise<string>} Encrypted message in compatible format
-	 */
-	async encryptWithFallbackMethod(message, recipientKey) {
-	 try {
-	 	console.log('🔐 [FALLBACK] Using Web Crypto API for fallback encryption');
-	 	
-	 	// Generate a random key for AES-GCM
-	 	const key = await window.crypto.subtle.generateKey(
-	 		{ name: 'AES-GCM', length: 256 },
-	 		true,
-	 		['encrypt', 'decrypt']
-	 	);
-	 	
-	 	// Export the key to raw bytes
-	 	const rawKey = await window.crypto.subtle.exportKey('raw', key);
-	 	const keyBytes = new Uint8Array(rawKey);
-	 	
-	 	// Generate a random IV (nonce)
-	 	const iv = SecureRandom.getRandomBytes(12);
-	 	
-	 	// Encode the message
-	 	const plaintext = new TextEncoder().encode(message);
-	 	
-	 	// Encrypt with AES-GCM
-	 	const ciphertext = await window.crypto.subtle.encrypt(
-	 		{ name: 'AES-GCM', iv },
-	 		key,
-	 		plaintext
-	 	);
-	 	
-	 	// Create key identifier that includes a hash of the recipient key
-	 	// This ensures we can identify which fallback key to use when decrypting
-	 	const keyIdInput = new TextEncoder().encode(recipientKey);
-	 	const keyIdHash = await window.crypto.subtle.digest('SHA-256', keyIdInput);
-	 	const keyId = Base64.encode(new Uint8Array(keyIdHash));
-	 	
-	 	// Create a message structure compatible with our existing format
-	 	const encryptedMessage = {
-	 		v: 3, // Version 3
-	 		alg: 'FALLBACK-AES-GCM', // Indicate this is fallback encryption
-	 		kid: keyId.substring(0, 16), // Key ID (truncated hash of recipient key)
-	 		key: Base64.encode(keyBytes), // Include the encryption key
-	 		iv: Base64.encode(iv), // The IV (nonce)
-	 		c: Base64.encode(new Uint8Array(ciphertext)), // Ciphertext
-	 		t: Date.now() // Timestamp
-	 	};
-	 	
-	 	const result = JSON.stringify(encryptedMessage);
-	 	console.log(`🔐 ✅ Encrypted message using fallback encryption`);
-	 	return result;
-	 } catch (fallbackError) {
-	 	console.error(`🔐 ❌ Fallback encryption failed:`, fallbackError);
-	 	throw fallbackError;
-	 }
-	}
+	// REMOVED: encryptWithFallbackMethod was a security vulnerability — it included the AES key
+	// in the message payload, providing zero actual encryption. If ML-KEM encryption fails,
+	// we now throw an error instead of silently degrading to insecure "encryption".
 	
 	/**
 		* Analyze a public key for debugging purposes
@@ -670,8 +605,10 @@ export class PostQuantumEncryptionService {
 				3168;  // ML-KEM-1024 private key size
 				
 			if (privateKeyBytes.length !== targetPrivateKeySize) {
-				console.log(`🔐 [DEBUG] Private key length ${privateKeyBytes.length} doesn't match target ${targetPrivateKeySize}, padding/trimming`);
-				privateKeyBytes = this.padKeyToExactSize(privateKeyBytes, targetPrivateKeySize);
+				throw new Error(
+					`Invalid private key size: expected ${targetPrivateKeySize} bytes, got ${privateKeyBytes.length}. ` +
+					`Please use Nuclear Key Reset in Settings to generate new encryption keys.`
+				);
 			}
 			
 			console.log(`🔐 [DEBUG] Decoded private key length:`, privateKeyBytes.length);
@@ -681,12 +618,12 @@ export class PostQuantumEncryptionService {
 			console.log(`🔐 [DEBUG] Starting ML-KEM decapsulation with algorithm:`, algorithm === this.kemName768 ? this.kemName768 : this.kemName);
 			const sharedSecret = await decryptionAlgorithm.decap(kemCiphertext, privateKeyBytes);
 			console.log(`🔐 [DEBUG] ML-KEM decapsulation successful, shared secret length:`, sharedSecret.length);
-			console.log(`🔐 [DEBUG] Shared secret (first 16 bytes):`, Array.from(sharedSecret.slice(0, 16)));
+			// SECURITY: Do not log shared secret bytes — removed to prevent secret leakage
 
 			// Use HKDF to derive a key from the shared secret
 			const salt = Base64.decode(saltBase64);
 			const chachaKey = await HKDF.derive(sharedSecret, salt, 'ChaCha20-Poly1305', 32);
-			console.log(`🔐 [DEBUG] ChaCha key (first 16 bytes):`, Array.from(chachaKey.slice(0, 16)));
+			// SECURITY: Do not log ChaCha key bytes — removed to prevent secret leakage
 
 			// Decrypt message with ChaCha20-Poly1305
 			const nonce = Base64.decode(nonceBase64);
@@ -701,18 +638,15 @@ export class PostQuantumEncryptionService {
 				messageCiphertext
 			);
 			console.log(`🔐 [DEBUG] ChaCha20-Poly1305 decryption successful, plaintext length:`, plaintext.length);
-			console.log(`🔐 [DEBUG] Plaintext bytes (first 20):`, Array.from(plaintext.slice(0, 20)));
+			// SECURITY: Do not log plaintext bytes or decrypted message content
 
 			const messageText = new TextDecoder('utf-8').decode(plaintext);
-			console.log(`🔐 [DEBUG] TextDecoder result:`, messageText);
-			console.log(`🔐 [DEBUG] TextDecoder result length:`, messageText.length);
-			console.log(`🔐 [DEBUG] TextDecoder result char codes (first 10):`, Array.from(messageText.slice(0, 10)).map(c => c.charCodeAt(0)));
 			
 			// Clear sensitive data
 			CryptoUtils.secureClear(chachaKey);
 			CryptoUtils.secureClear(sharedSecret);
 
-			console.log(`🔐 ✅ Successfully decrypted message using ${algorithm === this.kemName768 ? this.kemName768 : this.kemName}: "${messageText}"`);
+			console.log(`🔐 ✅ Successfully decrypted message using ${algorithm === this.kemName768 ? this.kemName768 : this.kemName}`);
 			return messageText;
 
 		} catch (error) {
@@ -731,55 +665,8 @@ export class PostQuantumEncryptionService {
 		}
 	}
 	
-	/**
-		* Decrypt a message that was encrypted with the fallback method
-		* @param {Object} messageData - The parsed message data
-		* @returns {Promise<string>} Decrypted message
-		*/
-	async decryptWithFallbackMethod(messageData) {
-		try {
-			console.log('🔐 [FALLBACK] Decrypting message with fallback method');
-			
-			// Extract the necessary fields
-			const keyBase64 = messageData.key || '';
-			const ivBase64 = messageData.iv || '';
-			const ciphertextBase64 = messageData.c || '';
-			
-			if (!keyBase64 || !ivBase64 || !ciphertextBase64) {
-				throw new Error('Missing required fields for fallback decryption');
-			}
-			
-			// Convert from Base64
-			const keyBytes = Base64.decode(keyBase64);
-			const iv = Base64.decode(ivBase64);
-			const ciphertext = Base64.decode(ciphertextBase64);
-			
-			// Import the key
-			const key = await window.crypto.subtle.importKey(
-				'raw',
-				keyBytes,
-				{ name: 'AES-GCM', length: 256 },
-				false,
-				['decrypt']
-			);
-			
-			// Decrypt
-			const decrypted = await window.crypto.subtle.decrypt(
-				{ name: 'AES-GCM', iv },
-				key,
-				ciphertext
-			);
-			
-			// Convert to text
-			const messageText = new TextDecoder().decode(new Uint8Array(decrypted));
-			console.log(`🔐 [FALLBACK] ✅ Successfully decrypted message using fallback method: "${messageText}"`);
-			
-			return messageText;
-		} catch (error) {
-			console.error('🔐 [FALLBACK] ❌ Failed to decrypt with fallback method:', error);
-			return '[Fallback-encrypted message - decryption failed]';
-		}
-	}
+	// REMOVED: decryptWithFallbackMethod — fallback encryption was a security vulnerability.
+	// Legacy FALLBACK-AES-GCM messages are handled by returning '[Legacy encrypted message - please delete]'.
 
 	/**
 	 * Clear all user keys (both ML-KEM-1024 and ML-KEM-768)
@@ -932,19 +819,7 @@ export class PostQuantumEncryptionService {
 			return new Uint8Array(this.ML_KEM_1024_PUBLIC_KEY_SIZE);
 		}
 		
-		// Check if key is close to expected size but slightly off (might need padding/trimming)
-		const diff1024 = Math.abs(keyBytes.length - this.ML_KEM_1024_PUBLIC_KEY_SIZE);
-		const diff768 = Math.abs(keyBytes.length - this.ML_KEM_768_PUBLIC_KEY_SIZE);
-		
-		if (diff1024 <= 32 && diff1024 <= diff768) {
-			console.log(`🔐 [DEBUG] Key length ${keyBytes.length} is close to ML-KEM-1024 (${this.ML_KEM_1024_PUBLIC_KEY_SIZE}), adjusting`);
-			return this.padKeyToExactSize(keyBytes, this.ML_KEM_1024_PUBLIC_KEY_SIZE);
-		} else if (diff768 <= 32) {
-			console.log(`🔐 [DEBUG] Key length ${keyBytes.length} is close to ML-KEM-768 (${this.ML_KEM_768_PUBLIC_KEY_SIZE}), adjusting`);
-			return this.padKeyToExactSize(keyBytes, this.ML_KEM_768_PUBLIC_KEY_SIZE);
-		}
-		
-		// No header detected, return the original bytes
+		// No header detected, return the original bytes — strict size validation happens elsewhere
 		return keyBytes;
 	}
 	
@@ -1006,31 +881,21 @@ export class PostQuantumEncryptionService {
 	}
 	
 	/**
-		* Pad or trim a key to the exact required size
-		* @param {Uint8Array} keyBytes - The key bytes to adjust
-		* @param {number} targetSize - The target size in bytes
-		* @returns {Uint8Array} - Adjusted key bytes
+		* Validate that a key matches the exact required size
+		* @param {Uint8Array} keyBytes - The key bytes to validate
+		* @param {number} targetSize - The expected size in bytes
+		* @param {string} keyType - Description for error messages (e.g., 'public key', 'private key')
+		* @returns {Uint8Array} - The validated key bytes (unchanged)
+		* @throws {Error} If key size does not match
 		*/
-	padKeyToExactSize(keyBytes, targetSize) {
+	validateKeySize(keyBytes, targetSize, keyType = 'key') {
 		if (keyBytes.length === targetSize) {
-			return keyBytes; // Already the right size
+			return keyBytes;
 		}
-		
-		if (keyBytes.length < targetSize) {
-			// Need to pad the key
-			const paddedKey = new Uint8Array(targetSize);
-			paddedKey.set(keyBytes);
-			// Fill remaining bytes with zeros
-			for (let i = keyBytes.length; i < targetSize; i++) {
-				paddedKey[i] = 0;
-			}
-			console.log(`🔐 [DEBUG] Padded key from ${keyBytes.length} to ${targetSize} bytes`);
-			return paddedKey;
-		} else {
-			// Need to trim the key
-			console.log(`🔐 [DEBUG] Trimmed key from ${keyBytes.length} to ${targetSize} bytes`);
-			return keyBytes.slice(0, targetSize);
-		}
+		throw new Error(
+			`Invalid ML-KEM ${keyType} size: expected ${targetSize} bytes, got ${keyBytes.length} bytes. ` +
+			`Please use the Nuclear Key Reset in Settings to generate new encryption keys.`
+		);
 	}
 }
 

@@ -7,10 +7,20 @@
 
 import { json } from '@sveltejs/kit';
 import { SMSAuthDiagnostics } from '$lib/utils/sms-debug.js';
+import { createSupabaseServerClient } from '$lib/supabase.js';
 
 // Security check - only allow in development
 function isDevelopment() {
 	return process.env.NODE_ENV === 'development';
+}
+
+/**
+ * Verify the request is authenticated (defense in depth alongside NODE_ENV check)
+ */
+async function verifyAuth(event) {
+	const supabase = createSupabaseServerClient(event);
+	const { data: { user }, error } = await supabase.auth.getUser();
+	return !error && !!user;
 }
 
 /**
@@ -19,9 +29,12 @@ function isDevelopment() {
  * @param {import('@sveltejs/kit').RequestEvent} event
  */
 export async function POST(event) {
-	// SECURITY: Block in production
+	// SECURITY: Block in production AND require authentication
 	if (!isDevelopment()) {
 		return json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+	if (!(await verifyAuth(event))) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	const { request } = event;
@@ -93,9 +106,12 @@ export async function POST(event) {
  * Get SMS authentication system status
  */
 export async function GET(event) {
-	// SECURITY: Block in production
+	// SECURITY: Block in production AND require authentication
 	if (!isDevelopment()) {
 		return json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+	if (!(await verifyAuth(event))) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	try {

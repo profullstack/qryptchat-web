@@ -8,16 +8,39 @@ import { browser } from '$app/environment';
 import { currentCall, voiceCallManager } from '$lib/stores/voice-call.js';
 
 /**
- * WebRTC configuration with STUN servers
+ * WebRTC configuration with STUN and optional TURN servers.
+ * TURN servers prevent WebRTC from leaking local/public IPs.
+ * Configure via env vars: TURN_SERVER_URL, TURN_USERNAME, TURN_CREDENTIAL
  */
-const RTC_CONFIGURATION = {
-	iceServers: [
+function buildRtcConfiguration() {
+	const iceServers = [
 		{ urls: 'stun:stun.l.google.com:19302' },
 		{ urls: 'stun:stun1.l.google.com:19302' },
 		{ urls: 'stun:stun2.l.google.com:19302' }
-	],
-	iceCandidatePoolSize: 10
-};
+	];
+
+	// Add TURN server if configured (prevents IP leakage)
+	const turnUrl = typeof import.meta !== 'undefined' && import.meta.env?.VITE_TURN_SERVER_URL;
+	const turnUsername = typeof import.meta !== 'undefined' && import.meta.env?.VITE_TURN_USERNAME;
+	const turnCredential = typeof import.meta !== 'undefined' && import.meta.env?.VITE_TURN_CREDENTIAL;
+
+	if (turnUrl) {
+		iceServers.push({
+			urls: turnUrl,
+			username: turnUsername || '',
+			credential: turnCredential || ''
+		});
+	}
+
+	return {
+		iceServers,
+		iceCandidatePoolSize: 10,
+		// When TURN is available, force relay to prevent IP leakage
+		...(turnUrl ? { iceTransportPolicy: 'relay' } : {})
+	};
+}
+
+const RTC_CONFIGURATION = buildRtcConfiguration();
 
 /**
  * WebRTC service for managing voice/video calls
