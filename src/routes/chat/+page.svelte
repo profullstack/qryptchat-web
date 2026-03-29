@@ -620,7 +620,8 @@
 
 <style>
 	.chat-container {
-		height: calc(100vh - 4rem); /* Account for main app header */
+		height: calc(100vh - 4rem);
+		height: calc(100dvh - 4rem);
 		display: flex;
 		flex-direction: column;
 		background: var(--color-surface);

@@ -629,11 +629,20 @@
 	
 	/* Mobile Menu */
 	.mobile-menu {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
 		background-color: var(--color-bg-primary);
 		border-bottom: 1px solid var(--color-border-primary);
 		box-shadow: var(--shadow-lg);
 		padding: var(--space-4);
 		padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+		max-height: calc(100vh - 4rem);
+		max-height: calc(100dvh - 4rem);
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		z-index: 50;
 	}
 	
 	.mobile-nav {
