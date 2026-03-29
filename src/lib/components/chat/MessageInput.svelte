@@ -1,6 +1,11 @@
 <script>
 	import { onMount } from 'svelte';
-	import 'emoji-picker-element';
+	import { browser } from '$app/environment';
+
+	// Dynamic import to avoid SSR crash (emoji-picker-element uses requestAnimationFrame)
+	if (browser) {
+		import('emoji-picker-element');
+	}
 	import { chat, activeConversation } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
