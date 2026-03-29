@@ -3,10 +3,14 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "bin": {
+    "qryptchat": "./bin/qryptchat-cli.js"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
+    "cli": "node bin/qryptchat-cli.js",
     "dev": "vite dev",
     "build": "vite build",
     "start": "node server.js",
@@ -55,6 +59,7 @@
     "@profullstack/text-type-detection": "^1.0.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.56.0",
+    "blessed": "^0.1.81",
     "dilithium-crystals": "^1.0.6",
     "dotenv": "^17.2.2",
     "emoji-picker-element": "^1.29.1",
