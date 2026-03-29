@@ -366,14 +366,14 @@ function createChatStore() {
 							console.error(`🔐 [LOAD] ❌ Failed to decrypt message ${message.id}:`, error);
 
 							const errorMsg = error instanceof Error ? error.message : String(error);
-							if (errorMsg.includes('Algorithm mismatch') || errorMsg.includes('invalid encapsulation key')) {
-								message.content = '[Message encrypted with incompatible keys - please ask sender to resend]';
+							if (errorMsg.includes('Algorithm mismatch') || errorMsg.includes('invalid encapsulation key') || errorMsg.includes('invalid ciphertext')) {
+								message.content = '🔒 Cannot decrypt — this message was encrypted for a different device. Import your keys in Settings > Private Key Manager, or ask the sender to resend.';
 							} else if (errorMsg.includes('tag')) {
-								message.content = '[Message integrity check failed - please ask sender to resend]';
+								message.content = '🔒 Message integrity check failed — please ask sender to resend.';
 							} else if (errorMsg.includes('ML-KEM')) {
-								message.content = '[Message encrypted with different ML-KEM algorithm - please ask sender to resend]';
+								message.content = '🔒 Cannot decrypt — encrypted with a different key version. Please ask sender to resend.';
 							} else {
-								message.content = '[Message content unavailable - please ask sender to resend]';
+								message.content = '🔒 Cannot decrypt — you may need to import your keys from your other device (Settings > Private Key Manager).';
 							}
 						}
 					} else {
