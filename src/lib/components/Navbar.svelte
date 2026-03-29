@@ -631,17 +631,17 @@
 	
 	/* Mobile Menu */
 	.mobile-menu {
-		position: absolute;
-		top: 100%;
+		position: fixed;
+		top: 4rem;
 		left: 0;
 		right: 0;
+		bottom: 0;
 		background-color: var(--color-bg-primary);
-		border-bottom: 1px solid var(--color-border-primary);
 		box-shadow: var(--shadow-lg);
 		padding: var(--space-4);
-		max-height: calc(100vh - 60px);
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
+		z-index: 39;
 	}
 	
 	.mobile-nav {
