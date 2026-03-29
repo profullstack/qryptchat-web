@@ -111,6 +111,12 @@ export class PostQuantumEncryptionService {
 			}
 
 			console.log(`🔐 Generated new ${this.kemName} key pair`);
+
+			// Dispatch event so UI can prompt for backup
+			if (typeof window !== 'undefined') {
+				window.dispatchEvent(new CustomEvent('qryptchat:keys-generated'));
+			}
+
 			return this.userKeys;
 
 		} catch (error) {

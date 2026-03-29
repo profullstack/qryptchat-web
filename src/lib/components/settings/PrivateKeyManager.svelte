@@ -11,7 +11,7 @@
 	let error = $state('');
 	let success = $state('');
 	let hasEncryptionKeys = $state(false);
-	
+
 	// Export state
 	let exportPassword = $state('');
 	let confirmExportPassword = $state('');
@@ -20,12 +20,20 @@
 	let gpgPassword = $state('');
 	let confirmGPGPassword = $state('');
 	let showGPGPassword = $state(false);
-	
+
 	// Import state
 	let importPassword = $state('');
 	let showImportPassword = $state(false);
 	let importFile = $state(null);
 	let dragOver = $state(false);
+
+	// Server backup state
+	let showBackupPrompt = $state(false);
+	let backupPassword = $state('');
+	let confirmBackupPassword = $state('');
+	let showBackupPassword = $state(false);
+	let restorePassword = $state('');
+	let showRestorePassword = $state(false);
 	
 	// Check if user has encryption keys on component mount
 	$effect(() => {
@@ -174,21 +182,90 @@
 			loading = true;
 			error = '';
 			success = '';
-			
+
 			// Generate user encryption keys
 			await keyManager.generateUserKeys();
-			
+
 			// Update status
 			hasEncryptionKeys = true;
-			
-			success = 'Encryption keys generated successfully! You can now export them for backup.';
-			
+
+			// Show backup prompt after generation
+			showBackupPrompt = true;
+			success = 'Encryption keys generated successfully! Back them up to the server with a password.';
+
 			// Dispatch event for parent component
 			dispatch('exported', { timestamp: Date.now(), generated: true });
-			
+
 		} catch (err) {
 			console.error('Failed to generate encryption keys:', err);
 			error = err.message || 'Failed to generate encryption keys';
+		} finally {
+			loading = false;
+		}
+	}
+
+	/**
+	 * Backup keys to server with password encryption
+	 */
+	async function backupToServer() {
+		if (!backupPassword || backupPassword.trim().length === 0) {
+			error = 'Please enter a password to protect your backup';
+			return;
+		}
+
+		if (backupPassword !== confirmBackupPassword) {
+			error = 'Passwords do not match';
+			return;
+		}
+
+		if (backupPassword.length < 8) {
+			error = 'Password must be at least 8 characters long';
+			return;
+		}
+
+		try {
+			loading = true;
+			error = '';
+
+			await privateKeyManager.backupKeysToServer(backupPassword);
+
+			success = 'Keys backed up to server successfully! You can restore them on any device with your password.';
+			showBackupPrompt = false;
+			backupPassword = '';
+			confirmBackupPassword = '';
+
+		} catch (err) {
+			console.error('Failed to backup keys to server:', err);
+			error = err.message || 'Failed to backup keys to server';
+		} finally {
+			loading = false;
+		}
+	}
+
+	/**
+	 * Restore keys from server backup
+	 */
+	async function restoreFromServer() {
+		if (!restorePassword || restorePassword.trim().length === 0) {
+			error = 'Please enter the password used to protect your backup';
+			return;
+		}
+
+		try {
+			loading = true;
+			error = '';
+
+			await privateKeyManager.restoreKeysFromServer(restorePassword);
+
+			hasEncryptionKeys = true;
+			success = 'Keys restored from server successfully! Your encryption keys have been recovered.';
+			restorePassword = '';
+
+			dispatch('imported', { timestamp: Date.now() });
+
+		} catch (err) {
+			console.error('Failed to restore keys from server:', err);
+			error = err.message || 'Failed to restore keys from server';
 		} finally {
 			loading = false;
 		}
@@ -406,8 +483,136 @@ main().catch(console.error);`;
 					🔐 Generate My Encryption Keys
 				{/if}
 			</button>
+
+			<!-- Restore from Server (shown when no keys) -->
+			<div class="key-section restore-server-section">
+				<div class="section-title">
+					<h4>☁️ Restore from Server Backup</h4>
+					<p>If you previously backed up your keys, restore them here</p>
+				</div>
+
+				<div class="form-group">
+					<label for="restore-password-nokeys">Backup Password</label>
+					<div class="password-input">
+						<input
+							id="restore-password-nokeys"
+							type={showRestorePassword ? 'text' : 'password'}
+							bind:value={restorePassword}
+							placeholder="Enter the password used for your backup"
+							disabled={loading}
+						/>
+						<button
+							type="button"
+							class="toggle-password"
+							onclick={() => showRestorePassword = !showRestorePassword}
+							disabled={loading}
+						>
+							{showRestorePassword ? '👁️' : '👁️‍🗨️'}
+						</button>
+					</div>
+				</div>
+
+				<button
+					type="button"
+					class="btn secondary"
+					onclick={restoreFromServer}
+					disabled={loading || !restorePassword}
+				>
+					{#if loading}
+						<div class="btn-spinner"></div>
+						Restoring...
+					{:else}
+						☁️ Restore from Server
+					{/if}
+				</button>
+			</div>
 		</div>
 	{:else}
+		<!-- Server Backup Prompt (shown after key generation) -->
+		{#if showBackupPrompt}
+			<div class="key-section backup-prompt-section">
+				<div class="section-title">
+					<h4>☁️ Back Up Keys to Server</h4>
+					<p>Protect your keys with a password and store an encrypted backup on the server</p>
+				</div>
+
+				<div class="form-group">
+					<label for="backup-password">Backup Password</label>
+					<div class="password-input">
+						<input
+							id="backup-password"
+							type={showBackupPassword ? 'text' : 'password'}
+							bind:value={backupPassword}
+							placeholder="Enter a strong password"
+							disabled={loading}
+						/>
+						<button
+							type="button"
+							class="toggle-password"
+							onclick={() => showBackupPassword = !showBackupPassword}
+							disabled={loading}
+						>
+							{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+						</button>
+					</div>
+				</div>
+
+				<div class="form-group">
+					<label for="confirm-backup-password">Confirm Password</label>
+					<div class="password-input">
+						<input
+							id="confirm-backup-password"
+							type={showBackupPassword ? 'text' : 'password'}
+							bind:value={confirmBackupPassword}
+							placeholder="Confirm your password"
+							disabled={loading}
+						/>
+						<button
+							type="button"
+							class="toggle-password"
+							onclick={() => showBackupPassword = !showBackupPassword}
+							disabled={loading}
+						>
+							{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+						</button>
+					</div>
+				</div>
+
+				<div class="backup-actions">
+					<button
+						type="button"
+						class="btn primary"
+						onclick={backupToServer}
+						disabled={loading || !backupPassword || !confirmBackupPassword}
+					>
+						{#if loading}
+							<div class="btn-spinner"></div>
+							Backing Up...
+						{:else}
+							☁️ Back Up to Server
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="btn secondary"
+						onclick={() => showBackupPrompt = false}
+						disabled={loading}
+					>
+						Skip
+					</button>
+				</div>
+
+				<div class="help-text">
+					<p><strong>Why back up?</strong></p>
+					<ul>
+						<li>Restore your keys on a new device without a file</li>
+						<li>Keys are encrypted with your password before upload</li>
+						<li>The server never sees your unencrypted keys</li>
+					</ul>
+				</div>
+			</div>
+		{/if}
+
 		<!-- Export Section -->
 		<div class="key-section">
 			<div class="section-title">
@@ -563,6 +768,121 @@ main().catch(console.error);`;
 		</div>
 	</div>
 	
+	<!-- Server Backup Section -->
+	<div class="key-section">
+		<div class="section-title">
+			<h4>☁️ Server Key Backup</h4>
+			<p>Back up or restore your encryption keys via the server</p>
+		</div>
+
+		<div class="server-backup-row">
+			<div class="server-backup-action">
+				<h5>Back Up</h5>
+				<div class="form-group">
+					<label for="backup-password-inline">Password</label>
+					<div class="password-input">
+						<input
+							id="backup-password-inline"
+							type={showBackupPassword ? 'text' : 'password'}
+							bind:value={backupPassword}
+							placeholder="Backup password"
+							disabled={loading}
+						/>
+						<button
+							type="button"
+							class="toggle-password"
+							onclick={() => showBackupPassword = !showBackupPassword}
+							disabled={loading}
+						>
+							{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+						</button>
+					</div>
+				</div>
+				<div class="form-group">
+					<label for="confirm-backup-password-inline">Confirm</label>
+					<div class="password-input">
+						<input
+							id="confirm-backup-password-inline"
+							type={showBackupPassword ? 'text' : 'password'}
+							bind:value={confirmBackupPassword}
+							placeholder="Confirm password"
+							disabled={loading}
+						/>
+						<button
+							type="button"
+							class="toggle-password"
+							onclick={() => showBackupPassword = !showBackupPassword}
+							disabled={loading}
+						>
+							{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+						</button>
+					</div>
+				</div>
+				<button
+					type="button"
+					class="btn primary"
+					onclick={backupToServer}
+					disabled={loading || !backupPassword || !confirmBackupPassword}
+				>
+					{#if loading}
+						<div class="btn-spinner"></div>
+						Backing Up...
+					{:else}
+						☁️ Back Up
+					{/if}
+				</button>
+			</div>
+
+			<div class="server-backup-divider"></div>
+
+			<div class="server-backup-action">
+				<h5>Restore</h5>
+				<div class="form-group">
+					<label for="restore-password-inline">Password</label>
+					<div class="password-input">
+						<input
+							id="restore-password-inline"
+							type={showRestorePassword ? 'text' : 'password'}
+							bind:value={restorePassword}
+							placeholder="Backup password"
+							disabled={loading}
+						/>
+						<button
+							type="button"
+							class="toggle-password"
+							onclick={() => showRestorePassword = !showRestorePassword}
+							disabled={loading}
+						>
+							{showRestorePassword ? '👁️' : '👁️‍🗨️'}
+						</button>
+					</div>
+				</div>
+				<button
+					type="button"
+					class="btn secondary"
+					onclick={restoreFromServer}
+					disabled={loading || !restorePassword}
+				>
+					{#if loading}
+						<div class="btn-spinner"></div>
+						Restoring...
+					{:else}
+						☁️ Restore
+					{/if}
+				</button>
+			</div>
+		</div>
+
+		<div class="help-text">
+			<p><strong>About server backups:</strong></p>
+			<ul>
+				<li>Keys are encrypted with your password before upload</li>
+				<li>The server never sees your unencrypted keys</li>
+				<li>Use the same password to restore on another device</li>
+			</ul>
+		</div>
+	</div>
+
 	<!-- Import Section -->
 	<div class="key-section">
 		<div class="section-title">
@@ -1091,5 +1411,63 @@ main().catch(console.error);`;
 
 	.generate-section .section-title h4 {
 		color: var(--color-brand-primary);
+	}
+
+	/* Server backup sections */
+	.backup-prompt-section {
+		border: 2px solid rgba(99, 102, 241, 0.3);
+		background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+	}
+
+	.backup-actions {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 0.5rem;
+	}
+
+	.restore-server-section {
+		border: 1px dashed var(--color-border);
+		background: var(--color-bg-secondary);
+		margin-top: 1rem;
+	}
+
+	.server-backup-row {
+		display: flex;
+		gap: 1.5rem;
+		align-items: flex-start;
+	}
+
+	.server-backup-action {
+		flex: 1;
+	}
+
+	.server-backup-action h5 {
+		margin: 0 0 0.75rem 0;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-text-primary);
+	}
+
+	.server-backup-divider {
+		width: 1px;
+		min-height: 100px;
+		background: var(--color-border);
+		align-self: stretch;
+	}
+
+	@media (max-width: 640px) {
+		.server-backup-row {
+			flex-direction: column;
+		}
+
+		.server-backup-divider {
+			width: 100%;
+			min-height: 0;
+			height: 1px;
+		}
+
+		.backup-actions {
+			flex-direction: column;
+		}
 	}
 </style>

@@ -567,6 +567,90 @@ export class PrivateKeyManager {
 	}
 
 	/**
+	 * Backup encrypted keys to the server
+	 * @param {string} password - Password to encrypt the keys
+	 * @returns {Promise<void>}
+	 */
+	async backupKeysToServer(password) {
+		if (!browser) {
+			throw new Error('Key backup is only available in browser environment');
+		}
+
+		try {
+			// Export and encrypt keys using existing method
+			const encryptedData = await this.exportPrivateKeys(password);
+
+			// Push to server
+			const response = await fetch('/api/auth/key-backup', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ encrypted_keys: encryptedData })
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.error || `Server returned ${response.status}`);
+			}
+
+			console.log('🔑 ✅ Keys backed up to server successfully');
+		} catch (error) {
+			throw new Error(`Failed to backup keys to server: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Restore encrypted keys from the server
+	 * @param {string} password - Password to decrypt the keys
+	 * @returns {Promise<void>}
+	 */
+	async restoreKeysFromServer(password) {
+		if (!browser) {
+			throw new Error('Key restore is only available in browser environment');
+		}
+
+		try {
+			// Fetch encrypted backup from server
+			const response = await fetch('/api/auth/key-backup');
+
+			if (response.status === 404) {
+				throw new Error('No key backup found on server');
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.error || `Server returned ${response.status}`);
+			}
+
+			const { backup } = await response.json();
+			if (!backup || !backup.encrypted_keys) {
+				throw new Error('No key backup found on server');
+			}
+
+			// Decrypt and import using existing method
+			await this.importPrivateKeys(backup.encrypted_keys, password);
+
+			console.log('🔑 ✅ Keys restored from server successfully');
+		} catch (error) {
+			throw new Error(`Failed to restore keys from server: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Check if a server backup exists for the current user
+	 * @returns {Promise<boolean>}
+	 */
+	async hasServerBackup() {
+		if (!browser) return false;
+
+		try {
+			const response = await fetch('/api/auth/key-backup');
+			return response.ok;
+		} catch {
+			return false;
+		}
+	}
+
+	/**
 		* Sync the current user's public key to the database
 		* This should be called after importing keys to ensure database sync
 		* @private
