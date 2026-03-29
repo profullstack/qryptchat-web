@@ -1,5 +1,6 @@
 <script>
 	import { isCallInProgress, currentCall, callStats, voiceCallManager } from '$lib/stores/voice-call.js';
+	import { webrtcCallManager } from '$lib/webrtc/webrtc-service.js';
 	import { createEventDispatcher } from 'svelte';
 
 	const dispatch = createEventDispatcher();
@@ -29,14 +30,14 @@
 	 * Toggle mute state
 	 */
 	function toggleMute() {
-		voiceCallManager.toggleMute();
+		webrtcCallManager.toggleMute();
 	}
 
 	/**
 	 * Toggle video state (for video calls)
 	 */
 	function toggleVideo() {
-		voiceCallManager.toggleVideo();
+		webrtcCallManager.toggleVideo();
 	}
 
 	/**
@@ -48,6 +49,10 @@
 </script>
 
 {#if $isCallInProgress && callData}
+	<!-- Hidden audio element for remote audio playback (voice calls) -->
+	<!-- svelte-ignore a11y-media-has-caption -->
+	<audio id="remote-audio" autoplay playsinline></audio>
+
 	<!-- Active call overlay -->
 	<div class="active-call-overlay" role="dialog" aria-modal="true" aria-labelledby="active-call-title">
 		<div class="call-interface">
@@ -106,7 +111,8 @@
 			{#if callData.type === 'video'}
 				<div class="video-area">
 					<div class="remote-video">
-						<!-- Remote participant video would go here -->
+						<!-- svelte-ignore a11y-media-has-caption -->
+						<video id="remote-video" autoplay playsinline class="remote-video-el"></video>
 						<div class="video-placeholder">
 							<div class="participant-avatar-large">
 								{#if callData.participantAvatar}
@@ -119,9 +125,10 @@
 							</div>
 						</div>
 					</div>
-					
+
 					<div class="local-video">
-						<!-- Local user video would go here -->
+						<!-- svelte-ignore a11y-media-has-caption -->
+						<video id="local-video" autoplay playsinline muted class="local-video-el"></video>
 						<div class="video-placeholder-small">
 							<span class="local-video-label">You</span>
 						</div>
@@ -334,6 +341,26 @@
 		width: 100%;
 		height: 100%;
 		position: relative;
+	}
+
+	.remote-video-el {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		z-index: 1;
+	}
+
+	.local-video-el {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		z-index: 1;
 	}
 
 	.video-placeholder {

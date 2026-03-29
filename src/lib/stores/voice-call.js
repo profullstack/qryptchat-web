@@ -247,24 +247,17 @@ class VoiceCallManager {
 				throw new Error('Media permissions required for calls');
 			}
 
-			// Update call state
+			// Update call state - WebRTCCallManager reacts to this
+			// and initiates the WebRTC answer with the stored SDP offer.
+			// State transitions to 'connected' when the peer connection succeeds.
 			currentCall.update(call => {
 				if (!call) return null;
 				return { ...call, state: 'connecting' };
 			});
 
+			this.startCallTimer();
+
 			console.log('📞 Accepting call:', callId);
-
-			// TODO: Implement WebRTC answer signaling
-
-			// Simulate connection for now
-			setTimeout(() => {
-				currentCall.update(call => {
-					if (!call) return null;
-					return { ...call, state: 'connected' };
-				});
-				this.startCallTimer();
-			}, 1000);
 
 		} catch (error) {
 			console.error('📞 Failed to accept call:', error);
