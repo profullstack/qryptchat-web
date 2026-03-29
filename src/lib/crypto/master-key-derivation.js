@@ -23,33 +23,49 @@ export class MasterKeyDerivation {
 		}
 
 		try {
-			// TODO: MIGRATION STRATEGY — The current deterministic salt (derived from phone number)
-			// is weak because it allows offline brute-force attacks if the derived key is compromised.
-			// For NEW users, we should generate and store a random salt alongside the derived key.
-			// For EXISTING users, we need a migration path: re-derive with random salt on next login,
-			// then re-encrypt all stored data with the new key. This is a breaking change that
-			// requires careful rollout. See issue #39/#54.
-			
-			// Check if user has a stored random salt (new users)
-			const storedSalt = localStorage.getItem(`qryptchat_salt_${phoneNumber}`);
-			let salt;
-			if (storedSalt) {
-				// Use stored random salt (new user path)
-				salt = new Uint8Array(JSON.parse(storedSalt));
-			} else {
-				// Legacy path: deterministic salt from phone number
-				// Store a random salt for future re-derivation during migration
-				const randomSalt = this.generateSalt();
-				localStorage.setItem(`qryptchat_salt_${phoneNumber}`, JSON.stringify(Array.from(randomSalt)));
-				salt = await this.createPhoneSalt(phoneNumber);
-			}
-			
+			const salt = await this.fetchOrCreateSalt(phoneNumber);
 			return await this.deriveWithSalt(phoneNumber, pin, salt, iterations);
 		} catch (error) {
 			console.error('🔑 Failed to derive master key from credentials:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 			throw new Error(`Master key derivation failed: ${errorMessage}`);
 		}
+	}
+
+	/**
+	 * Fetch salt from server, or generate and store a new random one
+	 * @param {string} phoneNumber - User's phone number
+	 * @returns {Promise<Uint8Array>} 256-bit salt
+	 */
+	static async fetchOrCreateSalt(phoneNumber) {
+		// Try to fetch existing salt from server
+		const getRes = await fetch(`/api/auth/salt?phone=${encodeURIComponent(phoneNumber)}`);
+		if (getRes.ok) {
+			const { salt } = await getRes.json();
+			if (salt) {
+				return new Uint8Array(JSON.parse(salt));
+			}
+		}
+
+		// No server salt — generate a random one and store it
+		const randomSalt = this.generateSalt();
+		const saltJson = JSON.stringify(Array.from(randomSalt));
+
+		const postRes = await fetch('/api/auth/salt', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ phone: phoneNumber, salt: saltJson })
+		});
+
+		if (postRes.ok) {
+			const { salt: storedSalt, existing } = await postRes.json();
+			if (existing && storedSalt) {
+				// Another request stored a salt first — use that one
+				return new Uint8Array(JSON.parse(storedSalt));
+			}
+		}
+
+		return randomSalt;
 	}
 
 	/**
@@ -110,16 +126,9 @@ export class MasterKeyDerivation {
 	}
 
 	/**
-	 * Create deterministic salt from phone number
-	 * @param {string} phoneNumber - User's phone number
-	 * @returns {Promise<Uint8Array>} 256-bit salt
-	 */
-	/**
-	 * Create deterministic salt from phone number.
-	 * WARNING: Deterministic salts derived from phone numbers are weak — they enable
-	 * offline brute-force attacks. This is kept for backward compatibility with
-	 * existing users' keys. New users should use generateSalt() instead.
-	 * See TODO in deriveFromCredentials() for migration strategy.
+	 * @deprecated Legacy only — deterministic salts enable pre-computation attacks.
+	 * Kept for backward compatibility to re-derive keys for migration.
+	 * New code should use fetchOrCreateSalt() which stores random salts server-side.
 	 * @param {string} phoneNumber - User's phone number
 	 * @returns {Promise<Uint8Array>} 256-bit salt
 	 */
