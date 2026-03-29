@@ -89,7 +89,5 @@
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		/* Account for fixed navbar */
-		margin-top: 4rem;
 	}
 </style>
