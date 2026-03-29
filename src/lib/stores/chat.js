@@ -6,6 +6,7 @@
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { MESSAGE_TYPES } from '$lib/api/protocol.js';
+import { updateAppBadge } from '$lib/utils/badge.js';
 import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption.js';
 import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '$lib/crypto/public-key-service.js';
@@ -728,6 +729,18 @@ export const typingUsers = derived(chat, $chat => $chat.typingUsers);
 export const isConnected = derived(chat, $chat => $chat.connected);
 export const isAuthenticated = derived(chat, $chat => $chat.authenticated);
 export const currentUser = derived(chat, $chat => $chat.user);
+
+// Derived store for total unread count across all conversations
+export const totalUnreadCount = derived(chat, $chat =>
+	$chat.conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)
+);
+
+// Update PWA app badge when unread count changes
+if (browser) {
+	totalUnreadCount.subscribe(count => {
+		updateAppBadge(count);
+	});
+}
 
 // Clean up on page unload
 if (browser) {
