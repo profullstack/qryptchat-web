@@ -40,7 +40,7 @@ export class MasterKeyDerivation {
 				// Legacy path: deterministic salt from phone number
 				// Store a random salt for future re-derivation during migration
 				const randomSalt = this.generateSalt();
-				localStorage.setItem(`qryptchat_random_salt_${phoneNumber}`, JSON.stringify(Array.from(randomSalt)));
+				localStorage.setItem(`qryptchat_salt_${phoneNumber}`, JSON.stringify(Array.from(randomSalt)));
 				salt = await this.createPhoneSalt(phoneNumber);
 			}
 			
