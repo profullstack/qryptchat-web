@@ -707,6 +707,3 @@ class WebRTCCallManager {
 
 // Export singleton instance
 export const webrtcCallManager = new WebRTCCallManager();
-
-// Export WebRTC service class for testing
-export { WebRTCService };
