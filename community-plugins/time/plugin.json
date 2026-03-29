@@ -1,0 +1,12 @@
+{
+  "name": "time",
+  "version": "1.0.0",
+  "description": "Look up the current time in any timezone or city",
+  "author": "QryptChat Community",
+  "commands": [
+    {
+      "command": "/time",
+      "description": "Get the current time for a timezone or city"
+    }
+  ]
+}
