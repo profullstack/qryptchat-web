@@ -639,6 +639,9 @@
 		border-bottom: 1px solid var(--color-border-primary);
 		box-shadow: var(--shadow-lg);
 		padding: var(--space-4);
+		max-height: calc(100vh - 60px);
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 	}
 	
 	.mobile-nav {
