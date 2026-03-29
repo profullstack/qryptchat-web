@@ -236,6 +236,15 @@ export class WebRTCService {
 	}
 
 	/**
+	 * Get remote audio element for playing peer's audio in voice calls
+	 * @returns {HTMLAudioElement|null}
+	 */
+	getRemoteAudioElement() {
+		if (!browser) return null;
+		return document.getElementById('remote-audio');
+	}
+
+	/**
 	 * Create RTCPeerConnection with event handlers
 	 * @private
 	 */
@@ -332,13 +341,19 @@ export class WebRTCService {
 	 */
 	handleRemoteStream(event) {
 		console.log('🎥 Received remote stream');
-		
+
 		this.remoteStream = event.streams[0];
 
-		// Display remote video
+		// Attach remote stream to video element (for video calls)
 		const remoteVideo = this.getRemoteVideoElement();
 		if (remoteVideo) {
 			remoteVideo.srcObject = this.remoteStream;
+		}
+
+		// Attach remote stream to audio element (for voice calls)
+		const remoteAudio = this.getRemoteAudioElement();
+		if (remoteAudio) {
+			remoteAudio.srcObject = this.remoteStream;
 		}
 	}
 
@@ -356,12 +371,20 @@ export class WebRTCService {
 		switch (state) {
 			case 'connected':
 				console.log('🎥 WebRTC connection established');
+				currentCall.update(call => {
+					if (!call) return null;
+					return { ...call, state: 'connected' };
+				});
 				break;
 			case 'disconnected':
 				console.log('🎥 WebRTC connection disconnected');
 				break;
 			case 'failed':
 				console.error('🎥 WebRTC connection failed');
+				currentCall.update(call => {
+					if (!call) return null;
+					return { ...call, state: 'ended', error: 'Connection failed' };
+				});
 				this.cleanup();
 				break;
 			case 'closed':
@@ -408,15 +431,19 @@ export class WebRTCService {
 			this.localStream = null;
 		}
 
-		// Clear video elements
+		// Clear media elements
 		const localVideo = this.getLocalVideoElement();
 		const remoteVideo = this.getRemoteVideoElement();
-		
+		const remoteAudio = this.getRemoteAudioElement();
+
 		if (localVideo) {
 			localVideo.srcObject = null;
 		}
 		if (remoteVideo) {
 			remoteVideo.srcObject = null;
+		}
+		if (remoteAudio) {
+			remoteAudio.srcObject = null;
 		}
 
 		// Close peer connection
@@ -489,7 +516,8 @@ class WebRTCCallManager {
 		this.webrtcService = new WebRTCService();
 		this.currentCall = null;
 		this.wsConnection = null;
-		
+		this.pendingSdpOffer = null;
+
 		// Subscribe to call state changes
 		if (browser) {
 			currentCall.subscribe(call => {
@@ -521,14 +549,17 @@ class WebRTCCallManager {
 			if (this.currentCall) {
 				await this.webrtcService.cleanup();
 				this.currentCall = null;
+				this.pendingSdpOffer = null;
 			}
 			return;
 		}
 
-		// Skip if same call
-		if (this.currentCall?.id === call.id) return;
-
+		const prevState = this.currentCall?.state;
+		const isNewCall = this.currentCall?.id !== call.id;
 		this.currentCall = call;
+
+		// Skip if same call and same state
+		if (!isNewCall && prevState === call.state) return;
 
 		// Handle different call states
 		switch (call.state) {
@@ -539,13 +570,20 @@ class WebRTCCallManager {
 				}
 				break;
 			case 'connecting':
-				if (call.isIncoming) {
-					// We're answering - WebRTC answer will be handled by WebSocket messages
-					console.log('🎥 Preparing to answer WebRTC call');
+				if (call.isIncoming && this.pendingSdpOffer) {
+					// User accepted - answer with the stored SDP offer
+					await this.webrtcService.answerCall(
+						call.id,
+						call.participantId,
+						call.type,
+						this.pendingSdpOffer
+					);
+					this.pendingSdpOffer = null;
 				}
 				break;
 			case 'ended':
 				await this.webrtcService.cleanup();
+				this.pendingSdpOffer = null;
 				break;
 		}
 	}
@@ -599,14 +637,20 @@ class WebRTCCallManager {
 	 */
 	async handleSdpOffer(payload) {
 		const { callId, sdp } = payload;
-		
+
 		if (callId === this.currentCall?.id && this.currentCall?.isIncoming) {
-			await this.webrtcService.answerCall(
-				callId,
-				this.currentCall.participantId,
-				this.currentCall.type,
-				sdp
-			);
+			if (this.currentCall.state === 'connecting') {
+				// User already accepted - answer immediately
+				await this.webrtcService.answerCall(
+					callId,
+					this.currentCall.participantId,
+					this.currentCall.type,
+					sdp
+				);
+			} else {
+				// Store offer until user accepts
+				this.pendingSdpOffer = sdp;
+			}
 		}
 	}
 
