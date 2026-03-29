@@ -66,11 +66,12 @@ registerRoute(
 self.addEventListener('push', (event) => {
 if (!event.data) return;
 
-// Check user preference via IndexedDB/localStorage
+// Check user preference and archived status via Cache API
 event.waitUntil(
 	(async () => {
-		const pref = await caches.open('settings-cache')
-			.then(cache => cache.match('notifications-pref'))
+		const settingsCache = await caches.open('settings-cache');
+
+		const pref = await settingsCache.match('notifications-pref')
 			.then(res => res?.text())
 			.catch(() => null);
 
@@ -82,6 +83,19 @@ event.waitUntil(
 		try {
 			const data = event.data.json();
 			const { title, body, icon, badge, tag, data: notificationData } = data;
+
+			// Suppress notifications for archived conversations
+			const conversationId = notificationData?.conversationId;
+			if (conversationId) {
+				const archivedRes = await settingsCache.match('archived-conversations').catch(() => null);
+				if (archivedRes) {
+					const archivedIds = await archivedRes.json().catch(() => []);
+					if (archivedIds.includes(conversationId)) {
+						console.log('Notification suppressed for archived conversation:', conversationId);
+						return;
+					}
+				}
+			}
 
 			const options = {
 				body,

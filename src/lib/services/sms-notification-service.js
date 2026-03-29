@@ -58,14 +58,14 @@ export class SMSNotificationService {
   			'get_inactive_participants',
   			{ conversation_uuid: conversationId }
   		);
- 
+
   		console.log('📨 [SMS-SERVICE] Database function result:', {
   			hasData: !!inactiveParticipants,
   			dataLength: inactiveParticipants?.length || 0,
   			hasError: !!dbError,
   			error: dbError
   		});
- 
+
   		if (dbError) {
   			console.error('📨 [SMS-SERVICE] Database error:', dbError);
   			throw new Error(`Database error: ${dbError.message}`);
@@ -80,11 +80,36 @@ export class SMSNotificationService {
         };
       }
 
+      // Filter out participants who have archived this conversation
+      const participantUserIds = inactiveParticipants.map(p => p.user_id);
+      const { data: archivedParticipants } = await this.supabase
+        .from('conversation_participants')
+        .select('user_id')
+        .eq('conversation_id', conversationId)
+        .in('user_id', participantUserIds)
+        .not('archived_at', 'is', null);
+
+      const archivedUserIds = new Set((archivedParticipants || []).map(p => p.user_id));
+      const activeParticipants = inactiveParticipants.filter(p => !archivedUserIds.has(p.user_id));
+
+      if (archivedUserIds.size > 0) {
+        console.log('📨 [SMS-SERVICE] Suppressed SMS for archived participants:', [...archivedUserIds]);
+      }
+
+      if (activeParticipants.length === 0) {
+        return {
+          success: true,
+          notificationsSent: 0,
+          details: [],
+          message: 'No active (non-archived) inactive participants found'
+        };
+      }
+
       // Send SMS notifications to each inactive participant
       const notificationResults = [];
       let successCount = 0;
 
-      for (const participant of inactiveParticipants) {
+      for (const participant of activeParticipants) {
         try {
           const smsMessage = this.formatNotificationMessage(senderName, conversation, conversationId);
           
@@ -139,7 +164,7 @@ export class SMSNotificationService {
       return {
         success: true,
         notificationsSent: successCount,
-        totalParticipants: inactiveParticipants.length,
+        totalParticipants: activeParticipants.length,
         details: notificationResults
       };
 
