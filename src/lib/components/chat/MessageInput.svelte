@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import 'emoji-picker-element';
 	import { chat, activeConversation } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
@@ -22,6 +23,9 @@
 	let isEncryptionError = $state(false); // Track if error is encryption-related
 	let isAsciiArt = $state(false); // Track if message should be displayed as ASCII art
 	let isAsciiArtAutoDetected = $state(false); // Track if ASCII art was auto-detected
+	let showEmojiPicker = $state(false);
+	let emojiPickerRef = $state(/** @type {HTMLDivElement | null} */ (null));
+	let emojiButtonRef = $state(/** @type {HTMLButtonElement | null} */ (null));
 
 	const currentUser = $derived($user);
 
@@ -347,14 +351,64 @@
 		}
 	}
 
+	// Attach emoji-click event listener when picker is shown
+	$effect(() => {
+		if (showEmojiPicker && emojiPickerRef) {
+			const picker = emojiPickerRef.querySelector('emoji-picker');
+			if (picker) {
+				picker.addEventListener('emoji-click', handleEmojiSelect);
+				return () => picker.removeEventListener('emoji-click', handleEmojiSelect);
+			}
+		}
+	});
+
+	function toggleEmojiPicker() {
+		showEmojiPicker = !showEmojiPicker;
+	}
+
+	function handleEmojiSelect(/** @type {CustomEvent} */ event) {
+		const emoji = event.detail.unicode;
+		if (!emoji || !textareaElement) return;
+
+		const start = textareaElement.selectionStart;
+		const end = textareaElement.selectionEnd;
+		messageText = messageText.slice(0, start) + emoji + messageText.slice(end);
+
+		// Restore cursor position after the inserted emoji
+		const newPos = start + emoji.length;
+		requestAnimationFrame(() => {
+			if (textareaElement) {
+				textareaElement.focus();
+				textareaElement.setSelectionRange(newPos, newPos);
+			}
+		});
+
+		showEmojiPicker = false;
+	}
+
+	function handleClickOutsideEmoji(/** @type {MouseEvent} */ event) {
+		if (
+			showEmojiPicker &&
+			emojiPickerRef &&
+			!emojiPickerRef.contains(/** @type {Node} */ (event.target)) &&
+			emojiButtonRef &&
+			!emojiButtonRef.contains(/** @type {Node} */ (event.target))
+		) {
+			showEmojiPicker = false;
+		}
+	}
+
 	onMount(() => {
 		// Focus textarea on mount
 		if (textareaElement) {
 			textareaElement.focus();
 		}
 
+		document.addEventListener('click', handleClickOutsideEmoji);
+
 		// Cleanup typing indicator on unmount
 		return () => {
+			document.removeEventListener('click', handleClickOutsideEmoji);
 			if (typingTimeout) {
 				clearTimeout(typingTimeout);
 			}
@@ -495,6 +549,29 @@
 					{/if}
 				</button>
 				
+				<div class="emoji-picker-wrapper">
+					<button
+						bind:this={emojiButtonRef}
+						type="button"
+						class="emoji-button"
+						class:active={showEmojiPicker}
+						disabled={disabled || isUploadingFiles}
+						title="Insert emoji"
+						aria-label="Insert emoji"
+						onclick={toggleEmojiPicker}
+					>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-6c.78 2.34 2.72 4 5 4s4.22-1.66 5-4H7zm1-2h2V9.5H8V12zm6-2.5V12h2V9.5h-2z"/>
+						</svg>
+					</button>
+
+					{#if showEmojiPicker}
+						<div class="emoji-picker-popup" bind:this={emojiPickerRef}>
+							<emoji-picker class="dark"></emoji-picker>
+						</div>
+					{/if}
+				</div>
+
 				<button
 					type="button"
 					class="send-button"
@@ -851,6 +928,65 @@
 		100% { transform: rotate(360deg); }
 	}
 
+	.emoji-picker-wrapper {
+		position: relative;
+	}
+
+	.emoji-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: 50%;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		background: transparent;
+		color: var(--color-text-secondary);
+	}
+
+	.emoji-button:hover:not(:disabled) {
+		background: var(--color-surface-hover);
+		color: var(--color-text-primary);
+	}
+
+	.emoji-button.active {
+		background: var(--color-surface-hover);
+		color: var(--color-primary-500);
+	}
+
+	.emoji-button:disabled {
+		cursor: not-allowed;
+		opacity: 0.5;
+	}
+
+	.emoji-picker-popup {
+		position: absolute;
+		bottom: 100%;
+		right: 0;
+		margin-bottom: 0.5rem;
+		z-index: 200;
+		border-radius: 0.75rem;
+		overflow: hidden;
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+	}
+
+	.emoji-picker-popup emoji-picker {
+		--background: var(--color-bg-primary, #1a1a2e);
+		--border-color: var(--color-border, #333);
+		--input-border-color: var(--color-border, #333);
+		--input-font-color: var(--color-text-primary, #e0e0e0);
+		--input-placeholder-color: var(--color-text-secondary, #888);
+		--category-font-color: var(--color-text-secondary, #888);
+		--indicator-color: var(--color-primary-500, #3b82f6);
+		--outline-color: var(--color-primary-500, #3b82f6);
+		--button-active-background: var(--color-surface-hover, #2a2a3e);
+		--button-hover-background: var(--color-surface-hover, #2a2a3e);
+		--num-columns: 8;
+		height: 300px;
+	}
+
 	/* Desktop: Position within chat interface, accounting for sidebar */
 	@media (min-width: 769px) {
 		.message-input-container {
@@ -874,9 +1010,20 @@
 		}
 
 		.attach-button,
-		.send-button {
+		.send-button,
+		.emoji-button {
 			width: 32px;
 			height: 32px;
+		}
+
+		.emoji-picker-popup {
+			right: -2rem;
+		}
+
+		.emoji-picker-popup emoji-picker {
+			--num-columns: 7;
+			width: 280px;
+			height: 260px;
 		}
 
 		textarea {
