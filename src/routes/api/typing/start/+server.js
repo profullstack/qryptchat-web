@@ -21,7 +21,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 		// Get internal user ID from auth user ID
 		const { data: userData, error: userError } = await supabase
 			.from('users')
-			.select('id')
+			.select('id, username, display_name')
 			.eq('auth_user_id', authUser.id)
 			.single();
 
@@ -35,6 +35,8 @@ export const POST = withAuth(async ({ request, locals }) => {
 		// Broadcast typing indicator to conversation
 		sseManager.broadcastToRoom(conversationId, MESSAGE_TYPES.USER_TYPING, {
 			userId,
+			username: userData.username,
+			displayName: userData.display_name,
 			conversationId,
 			isTyping: true
 		}, userId);
