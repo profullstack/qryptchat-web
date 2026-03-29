@@ -10,6 +10,7 @@ import { multiRecipientEncryption } from '$lib/crypto/multi-recipient-encryption
 import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '$lib/crypto/public-key-service.js';
 import * as conversationUtils from '$lib/utils/conversation-utils.js';
+import { updateArchivedConversationsCache } from '$lib/utils/conversation-utils.js';
 
 /**
  * @typedef {Object} ChatState
@@ -267,6 +268,20 @@ function createChatStore() {
 					loading: false,
 					error: null
 				}));
+
+				// Sync archived conversations cache for service worker notification suppression
+				if (browser) {
+					try {
+						const archivedIds = (response.conversations || [])
+							.filter(c => c.is_archived)
+							.map(c => c.id);
+						caches.open('settings-cache').then(cache => {
+							cache.put('archived-conversations', new Response(JSON.stringify(archivedIds)));
+						});
+					} catch (err) {
+						console.error('Failed to sync archived conversations cache:', err);
+					}
+				}
 			}
 		} catch (error) {
 			console.error('Failed to load conversations:', error);
