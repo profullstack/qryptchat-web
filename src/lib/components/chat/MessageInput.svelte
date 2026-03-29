@@ -1,11 +1,5 @@
 <script>
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
-
-	// Dynamic import to avoid SSR crash (emoji-picker-element uses requestAnimationFrame)
-	if (browser) {
-		import('emoji-picker-element');
-	}
 	import { chat, activeConversation } from '$lib/stores/chat.js';
 	import { user } from '$lib/stores/auth.js';
 	import { publicKeyService } from '$lib/crypto/public-key-service.js';
@@ -356,30 +350,28 @@
 		}
 	}
 
-	// Attach emoji-click event listener when picker is shown
-	$effect(() => {
-		if (showEmojiPicker && emojiPickerRef) {
-			const picker = emojiPickerRef.querySelector('emoji-picker');
-			if (picker) {
-				picker.addEventListener('emoji-click', handleEmojiSelect);
-				return () => picker.removeEventListener('emoji-click', handleEmojiSelect);
-			}
-		}
-	});
+	const emojiCategories = {
+		'😀': ['😀','😂','🤣','😊','😍','🥰','😘','😎','🤩','🥳','😇','🤗','🤔','🤫','🤭','😏','😌','😴','🤤','😋','🤪','😜','😝','🤓','😤','😠','😡','🤬','😈','👿','💀','☠️','😱','😨','😰','😥','😢','😭','😓','😩','😫','🥱','😤'],
+		'👋': ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','🦾','🖕'],
+		'❤️': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️','🔥','⭐','🌟','✨','💫','💥','💯','🎉','🎊'],
+		'🐶': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🦆','🦅','🐝','🐛','🦋','🐌','🐞','🐙','🦑','🐠','🐟','🐡','🦈','🐋','🐬','🐊','🦕','🦖'],
+		'🍕': ['🍕','🍔','🍟','🌭','🌮','🌯','🥗','🥘','🍝','🍜','🍲','🍛','🍣','🍱','🍩','🍪','🎂','🍰','🧁','🍫','🍬','🍭','🍮','🍯','🍺','🍻','🥂','🍷','🥃','☕','🍵','🧃'],
+		'⚽': ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🏒','🥊','🎯','🎮','🎲','🧩','🎭','🎨','🎵','🎶','🎤','🎧','🎹','🥁','🎸','🎺','🎻'],
+		'🚗': ['🚗','🚕','🚌','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️','🛵','🚲','🛴','✈️','🚀','🛸','🚁','⛵','🚢','🏠','🏢','🏥','🏫','🏛️','⛪','🕌','🕍'],
+	};
+	let activeEmojiCategory = $state('😀');
 
 	function toggleEmojiPicker() {
 		showEmojiPicker = !showEmojiPicker;
 	}
 
-	function handleEmojiSelect(/** @type {CustomEvent} */ event) {
-		const emoji = event.detail.unicode;
-		if (!emoji || !textareaElement) return;
+	function insertEmoji(/** @type {string} */ emoji) {
+		if (!textareaElement) return;
 
 		const start = textareaElement.selectionStart;
 		const end = textareaElement.selectionEnd;
 		messageText = messageText.slice(0, start) + emoji + messageText.slice(end);
 
-		// Restore cursor position after the inserted emoji
 		const newPos = start + emoji.length;
 		requestAnimationFrame(() => {
 			if (textareaElement) {
@@ -572,7 +564,20 @@
 
 					{#if showEmojiPicker}
 						<div class="emoji-picker-popup" bind:this={emojiPickerRef}>
-							<emoji-picker class="dark"></emoji-picker>
+							<div class="emoji-category-tabs">
+								{#each Object.keys(emojiCategories) as cat}
+									<button
+										class="emoji-tab"
+										class:active={activeEmojiCategory === cat}
+										onclick={() => activeEmojiCategory = cat}
+									>{cat}</button>
+								{/each}
+							</div>
+							<div class="emoji-grid">
+								{#each emojiCategories[activeEmojiCategory] as emoji}
+									<button class="emoji-item" onclick={() => insertEmoji(emoji)}>{emoji}</button>
+								{/each}
+							</div>
 						</div>
 					{/if}
 				</div>
@@ -977,19 +982,54 @@
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 	}
 
-	.emoji-picker-popup emoji-picker {
-		--background: var(--color-bg-primary, #1a1a2e);
-		--border-color: var(--color-border, #333);
-		--input-border-color: var(--color-border, #333);
-		--input-font-color: var(--color-text-primary, #e0e0e0);
-		--input-placeholder-color: var(--color-text-secondary, #888);
-		--category-font-color: var(--color-text-secondary, #888);
-		--indicator-color: var(--color-primary-500, #3b82f6);
-		--outline-color: var(--color-primary-500, #3b82f6);
-		--button-active-background: var(--color-surface-hover, #2a2a3e);
-		--button-hover-background: var(--color-surface-hover, #2a2a3e);
-		--num-columns: 8;
-		height: 300px;
+	.emoji-category-tabs {
+		display: flex;
+		gap: 2px;
+		padding: 0.5rem;
+		border-bottom: 1px solid var(--color-border, #333);
+		background: var(--color-bg-primary, #1a1a2e);
+	}
+
+	.emoji-tab {
+		flex: 1;
+		padding: 0.25rem;
+		font-size: 1.2rem;
+		background: none;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		opacity: 0.5;
+		transition: opacity 0.15s;
+	}
+
+	.emoji-tab:hover, .emoji-tab.active {
+		opacity: 1;
+		background: var(--color-surface-hover, #2a2a3e);
+	}
+
+	.emoji-grid {
+		display: grid;
+		grid-template-columns: repeat(8, 1fr);
+		gap: 2px;
+		padding: 0.5rem;
+		max-height: 240px;
+		overflow-y: auto;
+		background: var(--color-bg-primary, #1a1a2e);
+	}
+
+	.emoji-item {
+		padding: 0.25rem;
+		font-size: 1.4rem;
+		background: none;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		text-align: center;
+		line-height: 1;
+	}
+
+	.emoji-item:hover {
+		background: var(--color-surface-hover, #2a2a3e);
 	}
 
 	/* Desktop: Position within chat interface, accounting for sidebar */
@@ -1025,10 +1065,8 @@
 			right: -2rem;
 		}
 
-		.emoji-picker-popup emoji-picker {
-			--num-columns: 7;
-			width: 280px;
-			height: 260px;
+		.emoji-grid {
+			grid-template-columns: repeat(7, 1fr);
 		}
 
 		textarea {
