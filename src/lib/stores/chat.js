@@ -588,15 +588,19 @@ function createChatStore() {
 	 */
 	function handleTypingUpdate(typingData) {
 		update(state => {
-			const { userId, isTyping } = typingData;
+			const { userId, username, displayName, isTyping } = typingData;
 			let newTypingUsers = [...state.typingUsers];
 
 			if (isTyping) {
-				if (!newTypingUsers.includes(userId)) {
-					newTypingUsers.push(userId);
+				if (!newTypingUsers.some(u => u.id === userId)) {
+					newTypingUsers.push({
+						id: userId,
+						username: username || 'Someone',
+						display_name: displayName || username || null
+					});
 				}
 			} else {
-				newTypingUsers = newTypingUsers.filter(id => id !== userId);
+				newTypingUsers = newTypingUsers.filter(u => u.id !== userId);
 			}
 
 			return {

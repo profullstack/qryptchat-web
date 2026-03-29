@@ -1,10 +1,15 @@
 <script>
 	let { users = [] } = $props();
 
-	const typingText = $derived(() => {
+	function displayName(user) {
+		if (typeof user === 'string') return user;
+		return user.display_name || user.username || 'Someone';
+	}
+
+	const typingText = $derived.by(() => {
 		if (users.length === 0) return '';
-		if (users.length === 1) return `${users[0].display_name || users[0].username} is typing...`;
-		if (users.length === 2) return `${users[0].display_name || users[0].username} and ${users[1].display_name || users[1].username} are typing...`;
+		if (users.length === 1) return `${displayName(users[0])} is typing...`;
+		if (users.length === 2) return `${displayName(users[0])} and ${displayName(users[1])} are typing...`;
 		return `${users.length} people are typing...`;
 	});
 </script>
