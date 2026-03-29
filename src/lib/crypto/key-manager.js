@@ -20,8 +20,7 @@ export class KeyManager {
 
 	/**
 	 * Get or generate the storage encryption key for protecting keys in localStorage.
-	 * The encryption key itself is stored in sessionStorage (cleared on tab close)
-	 * and derived fresh when needed.
+	 * The key persists in localStorage so conversation keys survive tab/browser restarts.
 	 * @returns {Promise<CryptoKey>}
 	 * @private
 	 */
@@ -30,10 +29,23 @@ export class KeyManager {
 
 		if (!browser) throw new Error('Storage encryption only available in browser');
 
-		// Try to load from sessionStorage (survives page reloads within same tab)
-		const storedRaw = sessionStorage.getItem(this.storageEncryptionKeyName);
+		// Try to load from localStorage (persists across sessions)
+		const storedRaw = localStorage.getItem(this.storageEncryptionKeyName);
 		if (storedRaw) {
 			const rawBytes = Base64.decode(storedRaw);
+			this._storageEncKey = await crypto.subtle.importKey(
+				'raw', rawBytes, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+			);
+			return this._storageEncKey;
+		}
+
+		// Also check sessionStorage for migration from old code
+		const sessionRaw = sessionStorage.getItem(this.storageEncryptionKeyName);
+		if (sessionRaw) {
+			// Migrate to localStorage
+			localStorage.setItem(this.storageEncryptionKeyName, sessionRaw);
+			sessionStorage.removeItem(this.storageEncryptionKeyName);
+			const rawBytes = Base64.decode(sessionRaw);
 			this._storageEncKey = await crypto.subtle.importKey(
 				'raw', rawBytes, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
 			);
@@ -45,7 +57,7 @@ export class KeyManager {
 			{ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
 		);
 		const exported = await crypto.subtle.exportKey('raw', this._storageEncKey);
-		sessionStorage.setItem(this.storageEncryptionKeyName, Base64.encode(new Uint8Array(exported)));
+		localStorage.setItem(this.storageEncryptionKeyName, Base64.encode(new Uint8Array(exported)));
 		return this._storageEncKey;
 	}
 
