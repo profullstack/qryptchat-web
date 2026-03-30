@@ -91,7 +91,7 @@ export class PostQuantumEncryptionService {
 			const userData = localStorage.getItem('qrypt_user');
 			if (!userData) return false;
 			const user = JSON.parse(userData);
-			const autoPassword = `qryptchat-auto-${user.phone_number || user.id}`;
+			const autoPassword = `qryptchat-auto-${user.id}`;
 
 			await privateKeyManager.restoreKeysFromServer(autoPassword);
 			console.log('🔐 ✅ Auto-restored keys from server backup');
@@ -112,7 +112,7 @@ export class PostQuantumEncryptionService {
 			const userData = localStorage.getItem('qrypt_user');
 			if (!userData) return;
 			const user = JSON.parse(userData);
-			const autoPassword = `qryptchat-auto-${user.phone_number || user.id}`;
+			const autoPassword = `qryptchat-auto-${user.id}`;
 
 			await privateKeyManager.backupKeysToServer(autoPassword);
 			console.log('🔐 ✅ Auto-backed up keys to server');
