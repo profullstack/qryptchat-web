@@ -130,25 +130,46 @@
 				goto('/chat?welcome=true');
 			} else {
 				// Existing user - check key state
+				// Use the session token from verification since cookies aren't set yet
+				const sessionToken = result.session?.access_token;
+				const authHeaders = sessionToken
+					? { 'Authorization': `Bearer ${sessionToken}` }
+					: {};
+
 				try {
 					const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
-					const hasBackup = await privateKeyManager.hasServerBackup();
-					const pinCheckRes = await fetch('/api/auth/backup-pin');
+
+					// Pass auth header — cookies aren't available yet on new devices
+					const backupRes = await fetch('/api/auth/key-backup', {
+						headers: authHeaders
+					});
+					const hasBackup = backupRes.ok;
+
+					const pinCheckRes = await fetch('/api/auth/backup-pin', {
+						headers: authHeaders
+					});
 					const pinData = pinCheckRes.ok ? await pinCheckRes.json() : { hasPin: false };
 
 					if (hasBackup && !hasLocalKeys) {
 						// Keys on server but not locally - need to restore
+						// Store session so restore step can use it
+						verifiedSession = result.session;
 						step = 'restore';
 						return;
 					}
 
 					if (!pinData.hasPin && hasLocalKeys) {
 						// Has local keys but no backup PIN set - prompt to set one
+						verifiedSession = result.session;
 						step = 'backup';
 						return;
 					}
 				} catch (err) {
 					console.warn('Key check failed:', err);
+					// Don't silently skip — if checks fail, try restore as safe default
+					verifiedSession = result.session;
+					step = 'restore';
+					return;
 				}
 				// Everything set up - proceed normally
 				goto('/chat');

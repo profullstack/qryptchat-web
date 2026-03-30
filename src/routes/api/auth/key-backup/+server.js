@@ -25,9 +25,20 @@ const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KE
  */
 async function authenticateUser(request) {
 	try {
+		// Try Authorization header first (used during login before cookies are set)
+		const authHeader = request.headers.get('authorization');
+		if (authHeader?.startsWith('Bearer ')) {
+			const token = authHeader.substring(7);
+			const { data: { user }, error } = await supabaseClient.auth.getUser(token);
+			if (!error && user) {
+				return { user };
+			}
+		}
+
+		// Fall back to cookies
 		const cookieHeader = request.headers.get('cookie');
 		if (!cookieHeader) {
-			return { error: 'No cookies found' };
+			return { error: 'No authentication found' };
 		}
 
 		const cookies = Object.fromEntries(
