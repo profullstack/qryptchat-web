@@ -139,8 +139,8 @@ export async function POST({ request }) {
 
 		const { pin } = await request.json();
 
-		if (!pin || typeof pin !== 'string' || pin.length < 6) {
-			return json({ error: 'PIN must be at least 6 digits' }, { status: 400 });
+		if (!pin || typeof pin !== 'string' || pin.length !== 6) {
+			return json({ error: 'PIN must be exactly 6 digits' }, { status: 400 });
 		}
 
 		if (!/^\d+$/.test(pin)) {
