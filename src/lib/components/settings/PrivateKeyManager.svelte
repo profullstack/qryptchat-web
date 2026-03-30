@@ -222,7 +222,7 @@
 	<div class="key-section">
 		<div class="section-title">
 			<h4>Backup PIN</h4>
-			<p>A 6-digit PIN used to encrypt your key backups on the server</p>
+			<p>A 6-12 digit PIN used to encrypt your key backups on the server</p>
 		</div>
 
 		{#if pinLoading}
@@ -240,9 +240,9 @@
 					type="password"
 					inputmode="numeric"
 					pattern="[0-9]*"
-					maxlength="6"
+					maxlength="12"
 					bind:value={pin}
-					placeholder="6-digit PIN"
+					placeholder="6-12 digit PIN"
 					disabled={loading}
 				/>
 			</div>
@@ -253,7 +253,7 @@
 					type="password"
 					inputmode="numeric"
 					pattern="[0-9]*"
-					maxlength="6"
+					maxlength="12"
 					bind:value={confirmPin}
 					placeholder="Confirm PIN"
 					disabled={loading}
@@ -305,9 +305,9 @@
 						type="password"
 						inputmode="numeric"
 						pattern="[0-9]*"
-						maxlength="6"
+						maxlength="12"
 						bind:value={backupPin}
-						placeholder="6-digit PIN"
+						placeholder="6-12 digit PIN"
 						disabled={loading}
 					/>
 				</div>
@@ -334,9 +334,9 @@
 					type="password"
 					inputmode="numeric"
 					pattern="[0-9]*"
-					maxlength="6"
+					maxlength="12"
 					bind:value={restorePin}
-					placeholder="6-digit PIN"
+					placeholder="6-12 digit PIN"
 					disabled={loading}
 				/>
 			</div>

@@ -351,8 +351,8 @@
 			return;
 		}
 
-		if (backupPin.length !== 6) {
-			messages.error('PIN must be exactly 6 digits');
+		if (backupPin.length < 6 || backupPin.length > 12) {
+			messages.error('PIN must be 6-12 digits');
 			return;
 		}
 
@@ -664,7 +664,7 @@
 
 				<form onsubmit={setBackupPin}>
 					<div class="input-group">
-						<label for="backup-pin">Backup PIN (6-digits) *</label>
+						<label for="backup-pin">Backup PIN (6-12 digits) *</label>
 						<div class="password-input">
 							<input
 								id="backup-pin"
@@ -672,9 +672,9 @@
 								inputmode="numeric"
 								pattern="[0-9]*"
 								bind:value={backupPin}
-								maxlength="6"
-								oninput={(e) => { backupPin = e.target.value.replace(/\D/g, '').slice(0, 6); }}
-								placeholder="Enter your 6-digit PIN"
+								maxlength="12"
+								oninput={(e) => { backupPin = e.target.value.replace(/\D/g, '').slice(0, 12); }}
+								placeholder="Enter your 6-12 digit PIN"
 								required
 								disabled={$isLoading}
 								class="code-input"
@@ -699,8 +699,8 @@
 								inputmode="numeric"
 								pattern="[0-9]*"
 								bind:value={confirmBackupPin}
-								maxlength="6"
-								oninput={(e) => { confirmBackupPin = e.target.value.replace(/\D/g, '').slice(0, 6); }}
+								maxlength="12"
+								oninput={(e) => { confirmBackupPin = e.target.value.replace(/\D/g, '').slice(0, 12); }}
 								placeholder="Confirm your PIN"
 								required
 								disabled={$isLoading}
@@ -772,9 +772,9 @@
 								inputmode="numeric"
 								pattern="[0-9]*"
 								bind:value={restorePin}
-								maxlength="6"
-								oninput={(e) => { restorePin = e.target.value.replace(/\D/g, '').slice(0, 6); }}
-								placeholder="Enter your 6-digit PIN"
+								maxlength="12"
+								oninput={(e) => { restorePin = e.target.value.replace(/\D/g, '').slice(0, 12); }}
+								placeholder="Enter your 6-12 digit PIN"
 								required
 								disabled={isRestoring}
 								class="code-input"
