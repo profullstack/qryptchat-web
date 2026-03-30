@@ -21,6 +21,12 @@ const apiRateLimiter = new RateLimiter({
 	IPUA: [30, 'm']
 });
 
+// Strict rate limiter for key backup restore (PIN brute-force protection)
+const keyBackupRateLimiter = new RateLimiter({
+	IP: [5, 'h'], // 5 attempts per hour per IP
+	IPUA: [3, 'h'] // 3 attempts per hour per IP+UserAgent
+});
+
 /**
  * Rate limiting middleware
  * @type {import('@sveltejs/kit').Handle}
@@ -28,8 +34,17 @@ const apiRateLimiter = new RateLimiter({
 async function rateLimitHandle({ event, resolve }) {
 	const path = event.url.pathname;
 
+	// Extra strict rate limiting for key backup (PIN brute-force protection)
+	if (path === '/api/auth/key-backup' && event.request.method === 'GET') {
+		if (await keyBackupRateLimiter.isLimited(event)) {
+			return new Response(JSON.stringify({ error: 'Too many restore attempts. Try again later.' }), {
+				status: 429,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+	}
 	// Apply strict rate limiting to auth endpoints
-	if (path.startsWith('/api/auth/')) {
+	else if (path.startsWith('/api/auth/')) {
 		if (await authRateLimiter.isLimited(event)) {
 			return new Response(JSON.stringify({ error: 'Too many requests. Please try again later.' }), {
 				status: 429,

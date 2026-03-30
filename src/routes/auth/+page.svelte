@@ -403,6 +403,9 @@
 		goto('/chat?welcome=true');
 	}
 
+	let restoreAttempts = $state(0);
+	const MAX_RESTORE_ATTEMPTS = 5;
+
 	/**
 	 * Restore keys from server using the backup PIN (existing user login)
 	 */
@@ -412,15 +415,28 @@
 			return;
 		}
 
+		if (restoreAttempts >= MAX_RESTORE_ATTEMPTS) {
+			messages.error('Too many failed attempts. Please try again later.');
+			return;
+		}
+
 		isRestoring = true;
 		try {
 			await privateKeyManager.restoreKeysFromServer(restorePin);
 			messages.success('Encryption keys restored successfully!');
 			restorePin = '';
+			restoreAttempts = 0;
 			goto('/chat');
 		} catch (error) {
+			restoreAttempts++;
+			const remaining = MAX_RESTORE_ATTEMPTS - restoreAttempts;
 			console.error('Failed to restore keys:', error);
-			messages.error('Failed to restore keys. Check your PIN and try again.');
+			if (remaining <= 0) {
+				messages.error('Too many failed attempts. Please try again later.');
+			} else {
+				messages.error(`Wrong PIN. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+			}
+			restorePin = '';
 		} finally {
 			isRestoring = false;
 		}
