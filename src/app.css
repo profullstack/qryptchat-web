@@ -447,3 +447,6 @@ html.mobile-menu-open .chat-container {
 html.mobile-menu-open .chat-layout {
 	overflow: visible !important;
 }
+html.mobile-menu-open .message-input-container {
+	display: none !important;
+}
