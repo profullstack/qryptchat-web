@@ -43,22 +43,82 @@ export class PostQuantumEncryptionService {
 	 */
 	async initialize() {
 		if (typeof window !== 'undefined') {
-			// Load both key pairs
+			// Load both key pairs from local storage
 			await Promise.all([
 				this.loadUserKeys(),
 				this.loadUserKeys768()
 			]);
 			
-			// Generate any missing key pairs
+			// If no local keys, try auto-restore from server backup
+			if (!this.userKeys || !this.userKeys768) {
+				const restored = await this._tryAutoRestore();
+				if (restored) {
+					// Reload keys after restore
+					await Promise.all([
+						this.loadUserKeys(),
+						this.loadUserKeys768()
+					]);
+				}
+			}
+
+			// Generate any missing key pairs only if no backup exists
 			if (!this.userKeys) {
 				await this.generateUserKeys();
 			}
 			if (!this.userKeys768) {
 				await this.generateUserKeys768();
 			}
+
+			// Auto-backup keys to server (fire and forget)
+			this._tryAutoBackup();
 		}
 		this.isInitialized = true;
 		console.log(`🔐 Post-quantum encryption service initialized (${this.kemName} with ${this.kemName768} backward compatibility)`);
+	}
+
+	/**
+	 * Try to auto-restore keys from server using the stored auth PIN
+	 * @returns {Promise<boolean>} Whether keys were restored
+	 * @private
+	 */
+	async _tryAutoRestore() {
+		try {
+			const { privateKeyManager } = await import('./private-key-manager.js');
+			const hasBackup = await privateKeyManager.hasServerBackup();
+			if (!hasBackup) return false;
+
+			// Use phone number as the auto-backup password
+			const userData = localStorage.getItem('qrypt_user');
+			if (!userData) return false;
+			const user = JSON.parse(userData);
+			const autoPassword = `qryptchat-auto-${user.phone_number || user.id}`;
+
+			await privateKeyManager.restoreKeysFromServer(autoPassword);
+			console.log('🔐 ✅ Auto-restored keys from server backup');
+			return true;
+		} catch (err) {
+			console.warn('🔐 Auto-restore failed (may need manual restore):', err.message);
+			return false;
+		}
+	}
+
+	/**
+	 * Auto-backup keys to server using a deterministic password
+	 * @private
+	 */
+	async _tryAutoBackup() {
+		try {
+			const { privateKeyManager } = await import('./private-key-manager.js');
+			const userData = localStorage.getItem('qrypt_user');
+			if (!userData) return;
+			const user = JSON.parse(userData);
+			const autoPassword = `qryptchat-auto-${user.phone_number || user.id}`;
+
+			await privateKeyManager.backupKeysToServer(autoPassword);
+			console.log('🔐 ✅ Auto-backed up keys to server');
+		} catch (err) {
+			console.warn('🔐 Auto-backup failed:', err.message);
+		}
 	}
 
 	/**
