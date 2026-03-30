@@ -5,14 +5,13 @@
  */
 
 import { browser } from '$app/environment';
-import { Base64, HKDF, SecureRandom, CryptoUtils } from './index.js';
+import { Base64, HKDF, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
 import { postQuantumEncryption } from './post-quantum-encryption.js';
-import * as openpgp from 'openpgp';
 
 /**
  * Export format version for compatibility
  */
-const EXPORT_VERSION = '2.0'; // Updated for post-quantum encryption
+const EXPORT_VERSION = '3.0'; // Post-quantum: ChaCha20-Poly1305 + HKDF
 
 /**
  * Private key import/export manager
@@ -55,44 +54,36 @@ export class PrivateKeyManager {
 			const keysJson = JSON.stringify(keysToExport);
 			const keysBytes = new TextEncoder().encode(keysJson);
 
-			// Generate salt and derive encryption key from password
-			const salt = SecureRandom.generateSalt();
-			const encryptionKey = await this._deriveKeyFromPassword(password, salt);
-
-			// Generate IV for AES-GCM encryption
-			const iv = SecureRandom.getRandomBytes(12); // 12 bytes for GCM
-
-			// Import key for WebCrypto API
-			const cryptoKey = await crypto.subtle.importKey(
-				'raw',
-				encryptionKey,
-				{ name: 'AES-GCM', length: 256 },
-				false,
-				['encrypt']
-			);
-
-			// Encrypt the keys using AES-GCM with the password-derived key
-			const encryptedBuffer = await crypto.subtle.encrypt(
-				{
-					name: 'AES-GCM',
-					iv: iv,
-				},
-				cryptoKey,
-				keysBytes
-			);
+			// Generate salt for HKDF key derivation
+			const pbkdfSalt = SecureRandom.generateSalt();
+			const hkdfSalt = SecureRandom.generateSalt();
+			
+			// Derive key material from password using PBKDF2
+			const passwordKey = await this._deriveKeyFromPassword(password, pbkdfSalt);
+			
+			// Derive ChaCha20 key using HKDF (post-quantum key derivation)
+			const chachaKey = await HKDF.derive(passwordKey, hkdfSalt, 'QryptChat-KeyBackup-ChaCha20', 32);
+			
+			// Generate nonce for ChaCha20-Poly1305
+			const nonce = SecureRandom.getRandomBytes(12);
+			
+			// Encrypt with ChaCha20-Poly1305
+			const ciphertext = await ChaCha20Poly1305.encrypt(chachaKey, nonce, keysBytes);
 
 			// Create export data structure
 			const exportData = {
 				version: EXPORT_VERSION,
-				algorithm: 'AES-GCM-256',
+				algorithm: 'ChaCha20-Poly1305-HKDF',
 				timestamp: Date.now(),
-				encryptedKeys: Base64.encode(new Uint8Array(encryptedBuffer)),
-				salt: Base64.encode(salt),
-				iv: Base64.encode(iv)
+				encryptedKeys: Base64.encode(ciphertext),
+				pbkdfSalt: Base64.encode(pbkdfSalt),
+				hkdfSalt: Base64.encode(hkdfSalt),
+				nonce: Base64.encode(nonce)
 			};
 
 			// Clear sensitive data from memory
-			CryptoUtils.secureClear(encryptionKey);
+			CryptoUtils.secureClear(passwordKey);
+			CryptoUtils.secureClear(chachaKey);
 			CryptoUtils.secureClear(keysBytes);
 
 			return JSON.stringify(exportData);
@@ -130,48 +121,58 @@ export class PrivateKeyManager {
 			// Validate export data structure
 			this._validateExportData(parsedData);
 
-			// Check version compatibility - only support secure version 2.0
-			if (parsedData.version !== EXPORT_VERSION) {
-				throw new Error(`Insecure or unsupported export version: ${parsedData.version}. Please export keys again with the current secure version.`);
-			}
-
 			// Initialize post-quantum encryption service
 			await postQuantumEncryption.initialize();
 
-			// Decode base64 data and ensure proper ArrayBuffer backing
-			const encryptedKeysBuffer = new Uint8Array(Base64.decode(parsedData.encryptedKeys));
-			const salt = new Uint8Array(Base64.decode(parsedData.salt));
-			const iv = new Uint8Array(Base64.decode(parsedData.iv));
+			let decryptedJson;
 
-			// Derive decryption key from password
-			const decryptionKey = await this._deriveKeyFromPassword(password, salt);
+			if (parsedData.version === '3.0' && parsedData.algorithm === 'ChaCha20-Poly1305-HKDF') {
+				// v3.0: ChaCha20-Poly1305 + HKDF (post-quantum)
+				const encryptedKeysBuffer = new Uint8Array(Base64.decode(parsedData.encryptedKeys));
+				const pbkdfSalt = new Uint8Array(Base64.decode(parsedData.pbkdfSalt));
+				const hkdfSalt = new Uint8Array(Base64.decode(parsedData.hkdfSalt));
+				const nonce = new Uint8Array(Base64.decode(parsedData.nonce));
 
-			// Import key for WebCrypto API
-			const cryptoKey = await crypto.subtle.importKey(
-				'raw',
-				new Uint8Array(decryptionKey),
-				{ name: 'AES-GCM', length: 256 },
-				false,
-				['decrypt']
-			);
+				const passwordKey = await this._deriveKeyFromPassword(password, pbkdfSalt);
+				const chachaKey = await HKDF.derive(passwordKey, hkdfSalt, 'QryptChat-KeyBackup-ChaCha20', 32);
 
-			// Decrypt the keys using AES-GCM with the password-derived key
-			let decryptedBuffer;
-			try {
-				decryptedBuffer = await crypto.subtle.decrypt(
-					{
-						name: 'AES-GCM',
-						iv: iv,
-					},
-					cryptoKey,
-					encryptedKeysBuffer
+				let plaintext;
+				try {
+					plaintext = await ChaCha20Poly1305.decrypt(chachaKey, nonce, encryptedKeysBuffer);
+				} catch (decryptError) {
+					throw new Error('Invalid password or corrupted data');
+				}
+
+				CryptoUtils.secureClear(passwordKey);
+				CryptoUtils.secureClear(chachaKey);
+				decryptedJson = new TextDecoder().decode(plaintext);
+
+			} else if (parsedData.version === '2.0' && parsedData.algorithm === 'AES-GCM-256') {
+				// v2.0 legacy: AES-GCM-256 (still supported for import)
+				const encryptedKeysBuffer = new Uint8Array(Base64.decode(parsedData.encryptedKeys));
+				const salt = new Uint8Array(Base64.decode(parsedData.salt));
+				const iv = new Uint8Array(Base64.decode(parsedData.iv));
+
+				const decryptionKey = await this._deriveKeyFromPassword(password, salt);
+				const cryptoKey = await crypto.subtle.importKey(
+					'raw', new Uint8Array(decryptionKey),
+					{ name: 'AES-GCM', length: 256 }, false, ['decrypt']
 				);
-			} catch (decryptError) {
-				throw new Error('Invalid password or corrupted data');
-			}
 
-			// Convert decrypted buffer to JSON string
-			const decryptedJson = new TextDecoder().decode(decryptedBuffer);
+				let decryptedBuffer;
+				try {
+					decryptedBuffer = await crypto.subtle.decrypt(
+						{ name: 'AES-GCM', iv }, cryptoKey, encryptedKeysBuffer
+					);
+				} catch (decryptError) {
+					throw new Error('Invalid password or corrupted data');
+				}
+
+				CryptoUtils.secureClear(decryptionKey);
+				decryptedJson = new TextDecoder().decode(decryptedBuffer);
+			} else {
+				throw new Error(`Unsupported export version/algorithm: ${parsedData.version}/${parsedData.algorithm}`);
+			}
 
 			// Parse decrypted keys
 			const importedKeys = JSON.parse(decryptedJson);
@@ -273,37 +274,27 @@ export class PrivateKeyManager {
 	 * @private
 	 */
 	_validateExportData(data) {
-		const requiredFields = ['version', 'timestamp', 'encryptedKeys', 'salt', 'algorithm', 'iv'];
-		
-		for (const field of requiredFields) {
-			if (!data.hasOwnProperty(field)) {
-				throw new Error(`Invalid export format: missing ${field}`);
+		// Common required fields
+		if (!data.version || !data.timestamp || !data.encryptedKeys || !data.algorithm) {
+			throw new Error('Invalid export format: missing required fields');
+		}
+
+		if (typeof data.version !== 'string' || typeof data.timestamp !== 'number' || 
+			typeof data.encryptedKeys !== 'string' || typeof data.algorithm !== 'string') {
+			throw new Error('Invalid export format: invalid field types');
+		}
+
+		// Validate based on version
+		if (data.algorithm === 'ChaCha20-Poly1305-HKDF') {
+			if (!data.pbkdfSalt || !data.hkdfSalt || !data.nonce) {
+				throw new Error('Invalid v3.0 export: missing pbkdfSalt, hkdfSalt, or nonce');
 			}
-		}
-
-		// Validate field types
-		if (typeof data.version !== 'string') {
-			throw new Error('Invalid export format: version must be a string');
-		}
-		if (typeof data.timestamp !== 'number') {
-			throw new Error('Invalid export format: timestamp must be a number');
-		}
-		if (typeof data.encryptedKeys !== 'string') {
-			throw new Error('Invalid export format: encryptedKeys must be a string');
-		}
-		if (typeof data.salt !== 'string') {
-			throw new Error('Invalid export format: salt must be a string');
-		}
-		if (typeof data.algorithm !== 'string') {
-			throw new Error('Invalid export format: algorithm must be a string');
-		}
-		if (typeof data.iv !== 'string') {
-			throw new Error('Invalid export format: iv must be a string');
-		}
-
-		// Validate that we only support the secure AES-GCM format
-		if (data.algorithm !== 'AES-GCM-256') {
-			throw new Error(`Unsupported or insecure algorithm: ${data.algorithm}. Only AES-GCM-256 is supported.`);
+		} else if (data.algorithm === 'AES-GCM-256') {
+			if (!data.salt || !data.iv) {
+				throw new Error('Invalid v2.0 export: missing salt or iv');
+			}
+		} else {
+			throw new Error(`Unsupported algorithm: ${data.algorithm}`);
 		}
 
 		// Reject any exports that contain insecure tempPrivateKey
