@@ -11,7 +11,8 @@
 	import AvatarUpload from '$lib/components/AvatarUpload.svelte';
 	import { keyManager } from '$lib/crypto/key-manager.js';
 	import { privateKeyManager } from '$lib/crypto/private-key-manager.js';
-	/** @type {'phone' | 'verify' | 'profile' | 'backup'} */
+	import { indexedDBManager } from '$lib/crypto/indexed-db-manager.js';
+	/** @type {'phone' | 'verify' | 'profile' | 'backup' | 'restore'} */
 	let step = $state('phone');
 	let phoneNumber = $state('');
 	let verificationCode = $state('');
@@ -29,11 +30,15 @@
 	/** @type {string | null | undefined} */
 	let createdUserId = $state(null); // Store user ID after account creation for avatar upload
 
-	// Key backup prompts
-	let showKeyBackupPrompt = $state(false);
-	let keyBackupPassword = $state('');
-	let confirmKeyBackupPassword = $state('');
-	let showBackupPassword = $state(false);
+	// Backup PIN
+	let backupPin = $state('');
+	let confirmBackupPin = $state('');
+	let showBackupPin = $state(false);
+
+	// Restore PIN (for existing user login)
+	let restorePin = $state('');
+	let showRestorePin = $state(false);
+	let isRestoring = $state(false);
 
 	// Redirect if already authenticated
 	onMount(() => {
@@ -124,7 +129,20 @@
 				// New user - show success and redirect
 				goto('/chat?welcome=true');
 			} else {
-				// Existing user - redirect to chat
+				// Existing user - check if key restore is needed
+				try {
+					const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
+					const hasBackup = await privateKeyManager.hasServerBackup();
+
+					if (hasBackup && !hasLocalKeys) {
+						// Keys on server but not locally - need to restore
+						step = 'restore';
+						return;
+					}
+				} catch (err) {
+					console.warn('Key restore check failed:', err);
+				}
+				// Keys exist locally or no backup - proceed normally
 				goto('/chat');
 			}
 		} else if (result.requiresUsername) {
@@ -292,9 +310,9 @@
 					await keyManager.generateUserKeys();
 					console.log('🔑 Generated encryption keys for new user');
 
-					// Go to backup step
+					// Go to backup step (set PIN)
 					step = 'backup';
-					messages.success('Account created successfully! Please backup your encryption keys.');
+					messages.success('Account created! Please set a Backup PIN to protect your encryption keys.');
 				} catch (keyError) {
 					console.error('Failed to generate encryption keys:', keyError);
 					messages.warning(
@@ -312,50 +330,100 @@
 	}
 
 	/**
-	 * Download key backup during registration
+	 * Set backup PIN and encrypt keys to server during registration
 	 */
-	async function downloadKeyBackup() {
-		if (!keyBackupPassword || keyBackupPassword.trim().length === 0) {
-			messages.error('Please enter a password to protect your key backup');
+	async function setBackupPin() {
+		if (!backupPin || backupPin.trim().length === 0) {
+			messages.error('Please enter a Backup PIN');
 			return;
 		}
 
-		if (keyBackupPassword !== confirmKeyBackupPassword) {
-			messages.error('Passwords do not match');
+		if (!/^\d+$/.test(backupPin)) {
+			messages.error('PIN must contain only digits');
 			return;
 		}
 
-		if (keyBackupPassword.length < 8) {
-			messages.error('Password must be at least 8 characters long');
+		if (backupPin.length < 6) {
+			messages.error('PIN must be at least 6 digits');
+			return;
+		}
+
+		if (backupPin !== confirmBackupPin) {
+			messages.error('PINs do not match');
 			return;
 		}
 
 		try {
-			// Standard export
-			const exportedData = await privateKeyManager.exportPrivateKeys(keyBackupPassword);
-			privateKeyManager.downloadExportedKeys(exportedData);
-			messages.success('Key backup downloaded! Welcome to QryptChat!');
+			// Store the PIN hash on the server
+			const headers = /** @type {Record<string, string>} */ ({
+				'Content-Type': 'application/json'
+			});
+			if (verifiedSession?.access_token) {
+				headers['Authorization'] = `Bearer ${verifiedSession.access_token}`;
+			}
 
-			// Clear passwords and proceed to chat
-			keyBackupPassword = '';
-			confirmKeyBackupPassword = '';
-			showKeyBackupPrompt = false;
+			const pinResponse = await fetch('/api/auth/backup-pin', {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({ pin: backupPin })
+			});
 
+			if (!pinResponse.ok) {
+				const err = await pinResponse.json().catch(() => ({}));
+				throw new Error(err.error || 'Failed to save PIN');
+			}
+
+			// Backup keys to server encrypted with the PIN
+			await privateKeyManager.backupKeysToServer(backupPin);
+
+			messages.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
+			backupPin = '';
+			confirmBackupPin = '';
 			goto('/chat?welcome=true');
 		} catch (error) {
-			console.error('Failed to download key backup:', error);
+			console.error('Failed to set backup PIN:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			messages.error('Failed to download key backup: ' + errorMessage);
+			messages.error('Failed to set backup PIN: ' + errorMessage);
 		}
 	}
 
 	/**
-	 * Skip key backup (not recommended but allowed)
+	 * Skip backup PIN (not recommended but allowed)
 	 */
-	function skipKeyBackup() {
-		messages.warning('Key backup skipped. You can create a backup later in Settings.');
-		showKeyBackupPrompt = false;
+	function skipBackupPin() {
+		messages.warning('Backup PIN skipped. You can set one later in Settings.');
 		goto('/chat?welcome=true');
+	}
+
+	/**
+	 * Restore keys from server using the backup PIN (existing user login)
+	 */
+	async function restoreWithPin() {
+		if (!restorePin || restorePin.trim().length === 0) {
+			messages.error('Please enter your Backup PIN');
+			return;
+		}
+
+		isRestoring = true;
+		try {
+			await privateKeyManager.restoreKeysFromServer(restorePin);
+			messages.success('Encryption keys restored successfully!');
+			restorePin = '';
+			goto('/chat');
+		} catch (error) {
+			console.error('Failed to restore keys:', error);
+			messages.error('Failed to restore keys. Check your PIN and try again.');
+		} finally {
+			isRestoring = false;
+		}
+	}
+
+	/**
+	 * Skip key restore and proceed without keys
+	 */
+	function skipRestore() {
+		messages.warning('Key restore skipped. You can restore your keys later in Settings.');
+		goto('/chat');
 	}
 
 	onMount(() => {
@@ -555,63 +623,70 @@
 			</div>
 		{/if}
 
-		<!-- Key Backup Step -->
+		<!-- Backup PIN Step (Registration) -->
 		{#if step === 'backup'}
 			<div class="auth-step">
-				<h2>🔐 Backup Your Encryption Keys</h2>
+				<h2>Set Your Backup PIN</h2>
 				<p class="step-description">
-					Your encryption keys have been generated! Please create a secure backup to ensure you
-					never lose access to your messages.
+					This PIN protects your encryption keys. You will need it to restore your keys on a new device.
 				</p>
 
 				<div class="backup-warning">
 					<p>
-						<strong>⚠️ Critical:</strong> Without this backup, you will lose access to all your encrypted
-						messages if you lose this device or clear your browser data.
+						<strong>Important:</strong> Remember this PIN! Without it, you cannot restore your encryption
+						keys if you lose this device or clear your browser data.
 					</p>
 				</div>
 
-				<form onsubmit={downloadKeyBackup}>
+				<form onsubmit={setBackupPin}>
 					<div class="input-group">
-						<label for="backup-password">Backup Password *</label>
+						<label for="backup-pin">Backup PIN (6+ digits) *</label>
 						<div class="password-input">
 							<input
-								id="backup-password"
-								type={showBackupPassword ? 'text' : 'password'}
-								bind:value={keyBackupPassword}
-								placeholder="Enter a strong password to protect your backup"
+								id="backup-pin"
+								type={showBackupPin ? 'text' : 'password'}
+								inputmode="numeric"
+								pattern="[0-9]*"
+								bind:value={backupPin}
+								oninput={(e) => { backupPin = e.target.value.replace(/\D/g, ''); }}
+								placeholder="Enter a 6+ digit PIN"
 								required
 								disabled={$isLoading}
+								class="code-input"
 							/>
 							<button
 								type="button"
 								class="toggle-password"
-								onclick={() => (showBackupPassword = !showBackupPassword)}
+								onclick={() => (showBackupPin = !showBackupPin)}
 								disabled={$isLoading}
 							>
-								{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+								{showBackupPin ? '👁️' : '👁️‍🗨️'}
 							</button>
 						</div>
 					</div>
 
 					<div class="input-group">
-						<label for="confirm-backup-password">Confirm Password *</label>
+						<label for="confirm-backup-pin">Confirm PIN *</label>
 						<div class="password-input">
 							<input
-								id="confirm-backup-password"
-								type={showBackupPassword ? 'text' : 'password'}
-								bind:value={confirmKeyBackupPassword}
-								placeholder="Confirm your password"
+								id="confirm-backup-pin"
+								type={showBackupPin ? 'text' : 'password'}
+								inputmode="numeric"
+								pattern="[0-9]*"
+								bind:value={confirmBackupPin}
+								oninput={(e) => { confirmBackupPin = e.target.value.replace(/\D/g, ''); }}
+								placeholder="Confirm your PIN"
 								required
 								disabled={$isLoading}
+								class="code-input"
 							/>
 							<button
 								type="button"
 								class="toggle-password"
-								onclick={() => (showBackupPassword = !showBackupPassword)}
+								onclick={() => (showBackupPin = !showBackupPin)}
 								disabled={$isLoading}
 							>
-								{showBackupPassword ? '👁️' : '👁️‍🗨️'}
+								{showBackupPin ? '👁️' : '👁️‍🗨️'}
 							</button>
 						</div>
 					</div>
@@ -619,21 +694,21 @@
 					<div class="button-group">
 						<button
 							type="submit"
-							disabled={$isLoading || !keyBackupPassword || !confirmKeyBackupPassword}
+							disabled={$isLoading || !backupPin || !confirmBackupPin}
 							class="primary-button"
 						>
 							{#if $isLoading}
 								<span class="loading-spinner"></span>
-								Creating Backup...
+								Setting PIN...
 							{:else}
-								📁 Download Backup
+								Set Backup PIN
 							{/if}
 						</button>
 
 						<button
 							type="button"
 							class="secondary-button"
-							onclick={skipKeyBackup}
+							onclick={skipBackupPin}
 							disabled={$isLoading}
 						>
 							Skip (Not Recommended)
@@ -642,14 +717,76 @@
 				</form>
 
 				<div class="backup-info">
-					<p><strong>💡 Tips:</strong></p>
+					<p><strong>About your Backup PIN:</strong></p>
 					<ul>
-						<li>Use a strong, unique password for your backup</li>
-						<li>Store the backup file in a secure location (cloud storage, USB drive, etc.)</li>
-						<li>Remember both passwords - you'll need them to restore your keys</li>
-						<li>You can create additional backups later in Settings</li>
+						<li>Use a PIN you can remember (like a wallet passphrase)</li>
+						<li>It encrypts your keys before uploading to the server</li>
+						<li>On a new device, enter this PIN to restore your keys</li>
+						<li>This is NOT your SMS verification code</li>
 					</ul>
 				</div>
+			</div>
+		{/if}
+
+		<!-- Restore Keys Step (Existing User Login) -->
+		{#if step === 'restore'}
+			<div class="auth-step">
+				<h2>Restore Your Encryption Keys</h2>
+				<p class="step-description">
+					A key backup was found on the server. Enter your Backup PIN to restore your encryption keys on this device.
+				</p>
+
+				<form onsubmit={restoreWithPin}>
+					<div class="input-group">
+						<label for="restore-pin">Backup PIN *</label>
+						<div class="password-input">
+							<input
+								id="restore-pin"
+								type={showRestorePin ? 'text' : 'password'}
+								inputmode="numeric"
+								pattern="[0-9]*"
+								bind:value={restorePin}
+								oninput={(e) => { restorePin = e.target.value.replace(/\D/g, ''); }}
+								placeholder="Enter your Backup PIN"
+								required
+								disabled={isRestoring}
+								class="code-input"
+							/>
+							<button
+								type="button"
+								class="toggle-password"
+								onclick={() => (showRestorePin = !showRestorePin)}
+								disabled={isRestoring}
+							>
+								{showRestorePin ? '👁️' : '👁️‍🗨️'}
+							</button>
+						</div>
+					</div>
+
+					<div class="button-group">
+						<button
+							type="submit"
+							disabled={isRestoring || !restorePin}
+							class="primary-button"
+						>
+							{#if isRestoring}
+								<span class="loading-spinner"></span>
+								Restoring Keys...
+							{:else}
+								Restore Keys
+							{/if}
+						</button>
+
+						<button
+							type="button"
+							class="secondary-button"
+							onclick={skipRestore}
+							disabled={isRestoring}
+						>
+							Skip
+						</button>
+					</div>
+				</form>
 			</div>
 		{/if}
 
