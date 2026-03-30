@@ -129,20 +129,28 @@
 				// New user - show success and redirect
 				goto('/chat?welcome=true');
 			} else {
-				// Existing user - check if key restore is needed
+				// Existing user - check key state
 				try {
 					const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
 					const hasBackup = await privateKeyManager.hasServerBackup();
+					const pinCheckRes = await fetch('/api/auth/backup-pin');
+					const pinData = pinCheckRes.ok ? await pinCheckRes.json() : { hasPin: false };
 
 					if (hasBackup && !hasLocalKeys) {
 						// Keys on server but not locally - need to restore
 						step = 'restore';
 						return;
 					}
+
+					if (!pinData.hasPin && hasLocalKeys) {
+						// Has local keys but no backup PIN set - prompt to set one
+						step = 'backup';
+						return;
+					}
 				} catch (err) {
-					console.warn('Key restore check failed:', err);
+					console.warn('Key check failed:', err);
 				}
-				// Keys exist locally or no backup - proceed normally
+				// Everything set up - proceed normally
 				goto('/chat');
 			}
 		} else if (result.requiresUsername) {
