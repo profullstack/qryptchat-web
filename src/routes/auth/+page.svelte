@@ -14,6 +14,7 @@
 	import { indexedDBManager } from '$lib/crypto/indexed-db-manager.js';
 	/** @type {'phone' | 'verify' | 'profile' | 'backup' | 'restore'} */
 	let step = $state('phone');
+	let verifying = $state(false); // Guard against double OTP submission
 	let phoneNumber = $state('');
 	let verificationCode = $state('');
 	let username = $state('');
@@ -43,7 +44,7 @@
 	// Redirect if already authenticated
 	onMount(() => {
 		if ($isAuthenticated) {
-			goto('/chat');
+			goto('/chats');
 		}
 
 		// Ensure theme is applied
@@ -120,14 +121,29 @@
 			return;
 		}
 
+		// Guard against double submission (auto-verify + button click)
+		if (verifying || $isLoading) {
+			return;
+		}
+		verifying = true;
+
 		// For initial verification, don't send username/displayName
 		// These are only needed for new user profile completion
-		const result = await auth.verifySMS(phoneNumber, verificationCode);
+		let result;
+		try {
+			result = await auth.verifySMS(phoneNumber, verificationCode);
+		} catch (err) {
+			verifying = false;
+			throw err;
+		}
+		if (!result.success && !result.requiresUsername) {
+			verifying = false;
+		}
 
 		if (result.success) {
 			if (result.isNewUser) {
 				// New user - show success and redirect
-				goto('/chat?welcome=true');
+				goto('/chats');
 			} else {
 				// Existing user - check key state
 				// Use the session token from verification since cookies aren't set yet
@@ -172,7 +188,7 @@
 					return;
 				}
 				// Everything set up - proceed normally
-				goto('/chat');
+				goto('/chats');
 			}
 		} else if (result.requiresUsername) {
 			// New user needs to provide username - store session for account creation
@@ -347,7 +363,7 @@
 					messages.warning(
 						'Account created but failed to generate encryption keys. You can generate them later in Settings.'
 					);
-					goto('/chat?welcome=true');
+					goto('/chats');
 				}
 			} else {
 				messages.error(data.error || 'Failed to create account');
@@ -403,12 +419,28 @@
 			}
 
 			// Backup keys to server encrypted with the PIN
-			await privateKeyManager.backupKeysToServer(backupPin);
+			// Do it manually with auth header since cookies may not be set yet
+			const encryptedData = await privateKeyManager.exportPrivateKeys(backupPin);
+			const backupHeaders = /** @type {Record<string, string>} */ ({
+				'Content-Type': 'application/json'
+			});
+			if (verifiedSession?.access_token) {
+				backupHeaders['Authorization'] = `Bearer ${verifiedSession.access_token}`;
+			}
+			const backupResponse = await fetch('/api/auth/key-backup', {
+				method: 'PUT',
+				headers: backupHeaders,
+				body: JSON.stringify({ encrypted_keys: encryptedData })
+			});
+			if (!backupResponse.ok) {
+				const backupErr = await backupResponse.json().catch(() => ({}));
+				throw new Error(backupErr.error || `Key backup failed (${backupResponse.status})`);
+			}
 
 			messages.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
 			backupPin = '';
 			confirmBackupPin = '';
-			goto('/chat?welcome=true');
+			goto('/chats');
 		} catch (error) {
 			console.error('Failed to set backup PIN:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -421,7 +453,7 @@
 	 */
 	function skipBackupPin() {
 		messages.warning('Backup PIN skipped. You can set one later in Settings.');
-		goto('/chat?welcome=true');
+		goto('/chats');
 	}
 
 	let restoreAttempts = $state(0);
@@ -447,7 +479,7 @@
 			messages.success('Encryption keys restored successfully!');
 			restorePin = '';
 			restoreAttempts = 0;
-			goto('/chat');
+			goto('/chats');
 		} catch (error) {
 			restoreAttempts++;
 			const remaining = MAX_RESTORE_ATTEMPTS - restoreAttempts;
@@ -468,7 +500,7 @@
 	 */
 	function skipRestore() {
 		messages.warning('Key restore skipped. You can restore your keys later in Settings.');
-		goto('/chat');
+		goto('/chats');
 	}
 
 	onMount(() => {
