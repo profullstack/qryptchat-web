@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '$lib/stores/i18n';
-  let lastUpdated = 'September 24, 2025'; // Update this regularly
+  let lastUpdated = 'March 31, 2026'; // Update this regularly
 </script>
 
 <svelte:head>
