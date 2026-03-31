@@ -44,7 +44,7 @@
 	// Redirect if already authenticated
 	onMount(() => {
 		if ($isAuthenticated) {
-			goto('/chats');
+			goto('/chat');
 		}
 
 		// Ensure theme is applied
@@ -143,7 +143,7 @@
 		if (result.success) {
 			if (result.isNewUser) {
 				// New user - show success and redirect
-				goto('/chats');
+				goto('/chat');
 			} else {
 				// Existing user - check key state
 				// Use the session token from verification since cookies aren't set yet
@@ -188,7 +188,7 @@
 					return;
 				}
 				// Everything set up - proceed normally
-				goto('/chats');
+				goto('/chat');
 			}
 		} else if (result.requiresUsername) {
 			// New user needs to provide username - store session for account creation
@@ -363,7 +363,7 @@
 					messages.warning(
 						'Account created but failed to generate encryption keys. You can generate them later in Settings.'
 					);
-					goto('/chats');
+					goto('/chat');
 				}
 			} else {
 				messages.error(data.error || 'Failed to create account');
@@ -440,7 +440,7 @@
 			messages.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
 			backupPin = '';
 			confirmBackupPin = '';
-			goto('/chats');
+			goto('/chat');
 		} catch (error) {
 			console.error('Failed to set backup PIN:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -453,7 +453,7 @@
 	 */
 	function skipBackupPin() {
 		messages.warning('Backup PIN skipped. You can set one later in Settings.');
-		goto('/chats');
+		goto('/chat');
 	}
 
 	let restoreAttempts = $state(0);
@@ -479,7 +479,7 @@
 			messages.success('Encryption keys restored successfully!');
 			restorePin = '';
 			restoreAttempts = 0;
-			goto('/chats');
+			goto('/chat');
 		} catch (error) {
 			restoreAttempts++;
 			const remaining = MAX_RESTORE_ATTEMPTS - restoreAttempts;
@@ -500,7 +500,7 @@
 	 */
 	function skipRestore() {
 		messages.warning('Key restore skipped. You can restore your keys later in Settings.');
-		goto('/chats');
+		goto('/chat');
 	}
 
 	onMount(() => {
