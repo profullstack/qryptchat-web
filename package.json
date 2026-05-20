@@ -76,13 +76,9 @@
       "glob": ">=10.5.0",
       "jws": ">=3.2.3",
       "js-yaml": ">=4.1.1",
-      "cookie": ">=0.7.0",
-      "diff": ">=8.0.3"
+      "cookie": "1.1.1",
+      "diff": "8.0.4",
+      "serialize-javascript": "7.0.5"
     }
-  },
-  "overrides": {
-    "cookie": "1.1.1",
-    "serialize-javascript": "7.0.5",
-    "diff": "8.0.4"
   }
 }
