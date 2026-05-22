@@ -62,7 +62,7 @@ ENV VITE_LOG_LEVEL=$VITE_LOG_LEVEL
 # App build
 WORKDIR /app
 # Copy lockfiles first for better caching
-COPY pnpm-lock.yaml* package.json ./
+COPY pnpm-lock.yaml* package.json pnpm-workspace.yaml ./
 RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN pnpm install --frozen-lockfile
 
