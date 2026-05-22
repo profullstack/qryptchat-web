@@ -1,0 +1,16 @@
+# pnpm v10 moved the `overrides` (and several other configs) from
+# package.json's "pnpm" block to this file. Without this move, pnpm@10
+# silently ignores the overrides while the lockfile still has them
+# recorded — frozen-lockfile installs then fail with
+# ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+#
+# Source of truth for the consolidated overrides:
+# https://pnpm.io/settings#overrides
+
+overrides:
+  glob: ">=10.5.0"
+  jws: ">=3.2.3"
+  js-yaml: ">=4.1.1"
+  cookie: "1.1.1"
+  diff: "8.0.4"
+  serialize-javascript: "7.0.5"
