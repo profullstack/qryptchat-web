@@ -14,3 +14,12 @@ overrides:
   cookie: "1.1.1"
   diff: "8.0.4"
   serialize-javascript: "7.0.5"
+
+# pnpm v10 sandboxes install scripts by default. Anything not listed
+# here gets its postinstall skipped — and in CI (or any non-interactive
+# context) that becomes ERR_PNPM_IGNORED_BUILDS instead of a warning.
+# These three packages need their native-build / setup hooks to run.
+onlyBuiltDependencies:
+  - esbuild
+  - msw
+  - sharp
