@@ -63,7 +63,11 @@ ENV VITE_LOG_LEVEL=$VITE_LOG_LEVEL
 WORKDIR /app
 # Copy lockfiles first for better caching
 COPY pnpm-lock.yaml* package.json pnpm-workspace.yaml ./
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pin pnpm to a known-good version. `pnpm@latest` pulls whatever's on
+# the npm registry RIGHT NOW, so Railway can suddenly start failing
+# when pnpm ships a stricter minor (e.g. ERR_PNPM_IGNORED_BUILDS hard-
+# fail vs warn). Bump intentionally when we test a new version.
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 RUN pnpm install --frozen-lockfile
 
 # Copy the rest and build
