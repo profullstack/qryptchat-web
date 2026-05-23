@@ -27,7 +27,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "icons:generate": "node scripts/generate-icons.js",
-    "icons:install": "scripts/install-desktop-icons.sh"
+    "icons:install": "scripts/install-desktop-icons.sh",
+    "postinstall": "pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm",
+    "dependencies": "pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.5.4",
