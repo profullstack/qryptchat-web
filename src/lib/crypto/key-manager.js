@@ -5,6 +5,7 @@
 
 import { browser } from '$app/environment';
 import { Base64, CryptoUtils } from './index.js';
+import { indexedDBManager } from './indexed-db-manager.js';
 import { MasterKeyDerivation } from './master-key-derivation.js';
 
 /**
@@ -29,35 +30,49 @@ export class KeyManager {
 
 		if (!browser) throw new Error('Storage encryption only available in browser');
 
-		// Try to load from localStorage (persists across sessions)
+		// Try to load from IndexedDB (persistent non-extractable CryptoKey handle)
+		try {
+			const storedKey = await indexedDBManager.get(this.storageEncryptionKeyName);
+			if (storedKey) {
+				this._storageEncKey = storedKey;
+				return this._storageEncKey;
+			}
+		} catch (error) {
+			console.warn('🔑 Failed to load storage encryption key from IndexedDB:', error);
+		}
+
+		// Migrate legacy key material stored in local/session storage to IndexedDB key handle
 		const storedRaw = localStorage.getItem(this.storageEncryptionKeyName);
-		if (storedRaw) {
-			const rawBytes = Base64.decode(storedRaw);
-			this._storageEncKey = await crypto.subtle.importKey(
-				'raw', rawBytes, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
-			);
-			return this._storageEncKey;
-		}
-
-		// Also check sessionStorage for migration from old code
 		const sessionRaw = sessionStorage.getItem(this.storageEncryptionKeyName);
-		if (sessionRaw) {
-			// Migrate to localStorage
-			localStorage.setItem(this.storageEncryptionKeyName, sessionRaw);
-			sessionStorage.removeItem(this.storageEncryptionKeyName);
-			const rawBytes = Base64.decode(sessionRaw);
+		const legacyRaw = storedRaw || sessionRaw;
+		if (legacyRaw) {
+			const rawBytes = Base64.decode(legacyRaw);
 			this._storageEncKey = await crypto.subtle.importKey(
-				'raw', rawBytes, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+				'raw', rawBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
 			);
+			localStorage.removeItem(this.storageEncryptionKeyName);
+			sessionStorage.removeItem(this.storageEncryptionKeyName);
+
+			try {
+				await indexedDBManager.set(this.storageEncryptionKeyName, this._storageEncKey);
+			} catch (error) {
+				console.warn('🔑 Failed to persist migrated storage key in IndexedDB:', error);
+			}
+
 			return this._storageEncKey;
 		}
 
-		// Generate a new random encryption key
+		// Generate a new non-extractable random encryption key
 		this._storageEncKey = await crypto.subtle.generateKey(
-			{ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+			{ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
 		);
-		const exported = await crypto.subtle.exportKey('raw', this._storageEncKey);
-		localStorage.setItem(this.storageEncryptionKeyName, Base64.encode(new Uint8Array(exported)));
+
+		try {
+			await indexedDBManager.set(this.storageEncryptionKeyName, this._storageEncKey);
+		} catch (error) {
+			console.warn('🔑 Failed to persist storage encryption key in IndexedDB:', error);
+		}
+
 		return this._storageEncKey;
 	}
 
