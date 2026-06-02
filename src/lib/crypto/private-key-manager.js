@@ -11,7 +11,7 @@ import { postQuantumEncryption } from './post-quantum-encryption.js';
 /**
  * Export format version for compatibility
  */
-const EXPORT_VERSION = '3.0'; // Post-quantum: ChaCha20-Poly1305 + HKDF
+const EXPORT_VERSION = '3.1'; // Post-quantum: ChaCha20-Poly1305 + HKDF (version-bound HKDF info)
 
 /**
  * Private key import/export manager
@@ -62,7 +62,7 @@ export class PrivateKeyManager {
 			const passwordKey = await this._deriveKeyFromPassword(password, pbkdfSalt);
 			
 			// Derive ChaCha20 key using HKDF (post-quantum key derivation)
-			const chachaKey = await HKDF.derive(passwordKey, hkdfSalt, 'QryptChat-KeyBackup-ChaCha20', 32);
+			const chachaKey = await HKDF.derive(passwordKey, hkdfSalt, `QryptChat-KeyBackup-v${EXPORT_VERSION}-ChaCha20`, 32);
 			
 			// Generate nonce for ChaCha20-Poly1305
 			const nonce = SecureRandom.getRandomBytes(12);
@@ -126,15 +126,19 @@ export class PrivateKeyManager {
 
 			let decryptedJson;
 
-			if (parsedData.version === '3.0' && parsedData.algorithm === 'ChaCha20-Poly1305-HKDF') {
-				// v3.0: ChaCha20-Poly1305 + HKDF (post-quantum)
+			if ((parsedData.version === '3.0' || parsedData.version === '3.1') && parsedData.algorithm === 'ChaCha20-Poly1305-HKDF') {
+				// v3.0/v3.1: ChaCha20-Poly1305 + HKDF (post-quantum)
+				// v3.0 used a static HKDF info string; v3.1+ binds the version to the info string
 				const encryptedKeysBuffer = new Uint8Array(Base64.decode(parsedData.encryptedKeys));
 				const pbkdfSalt = new Uint8Array(Base64.decode(parsedData.pbkdfSalt));
 				const hkdfSalt = new Uint8Array(Base64.decode(parsedData.hkdfSalt));
 				const nonce = new Uint8Array(Base64.decode(parsedData.nonce));
 
 				const passwordKey = await this._deriveKeyFromPassword(password, pbkdfSalt);
-				const chachaKey = await HKDF.derive(passwordKey, hkdfSalt, 'QryptChat-KeyBackup-ChaCha20', 32);
+				const hkdfInfo = parsedData.version === '3.0'
+					? 'QryptChat-KeyBackup-ChaCha20'
+					: `QryptChat-KeyBackup-v${parsedData.version}-ChaCha20`;
+				const chachaKey = await HKDF.derive(passwordKey, hkdfSalt, hkdfInfo, 32);
 
 				let plaintext;
 				try {
