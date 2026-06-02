@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useThemeStore, themeUtils } from '@/lib/stores/theme.js';
 import { useI18n } from '@/lib/hooks/useI18n.js';
@@ -15,14 +15,17 @@ export default function ClientLayout({ children }) {
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const { t: _t } = useI18n();
   const shouldShowFooter = pathname !== '/chat';
+  // Prevent hydration mismatch: don't render client-only UI until mounted
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+
     let theme = localStorage.getItem('qrypt-theme');
     if (!theme) {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     themeUtils.setTheme(theme);
-    // i18n initializes from Svelte store on mount
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
@@ -33,17 +36,21 @@ export default function ClientLayout({ children }) {
   }, []);
 
   useEffect(() => {
-    themeUtils.applyTheme(currentTheme);
-  }, [currentTheme]);
+    if (mounted) themeUtils.applyTheme(currentTheme);
+  }, [currentTheme, mounted]);
 
   return (
-    <div className="app">
+    <div className="app" suppressHydrationWarning>
       <Navbar />
       <main className="main-content">{children}</main>
       {shouldShowFooter && <Footer />}
-      <PWAToastManager />
-      <IncomingCallModal />
-      <ActiveCallInterface />
+      {mounted && (
+        <>
+          <PWAToastManager />
+          <IncomingCallModal />
+          <ActiveCallInterface />
+        </>
+      )}
       <style>{`
         .app {
           min-height: 100vh;
