@@ -104,5 +104,31 @@ async function wwwRedirectHandle({ event, resolve }) {
 	return resolve(event);
 }
 
-// Combine hooks: rate limiting runs first, then www redirect
-export const handle = sequence(rateLimitHandle, wwwRedirectHandle);
+/**
+ * Security headers middleware
+ * @type {import('@sveltejs/kit').Handle}
+ */
+async function securityHeadersHandle({ event, resolve }) {
+	const response = await resolve(event);
+
+	// Only add headers to HTML responses (not API/binary responses)
+	const contentType = response.headers.get('content-type') || '';
+	if (contentType.includes('text/html') || contentType === '') {
+		const path = event.url.pathname;
+		// Skip API routes — they have their own content-type and don't need HTML security headers
+		if (!path.startsWith('/api/')) {
+			response.headers.set(
+				'Strict-Transport-Security',
+				'max-age=31536000; includeSubDomains'
+			);
+			response.headers.set('X-Content-Type-Options', 'nosniff');
+			response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+			response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+		}
+	}
+
+	return response;
+}
+
+// Combine hooks: rate limiting, www redirect, then security headers
+export const handle = sequence(rateLimitHandle, wwwRedirectHandle, securityHeadersHandle);

@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=auto" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 		
 		<!-- Primary Meta Tags -->
 		<title>QryptChat - Quantum-Resistant Messaging</title>
@@ -116,6 +116,56 @@
 			src="https://datafa.st/js/script.js">
 		</script>
 		
+		<!-- JSON-LD Structured Data -->
+		<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "Organization",
+			"name": "Profullstack, Inc.",
+			"url": "https://qrypt.chat/",
+			"logo": "https://qrypt.chat/logo.svg",
+			"description": "Secure, quantum-resistant end-to-end encrypted messaging",
+			"sameAs": [
+				"https://github.com/profullstack/qryptchat-web",
+				"https://discord.gg/w5nHdzpQ29",
+				"https://x.com/profullstackinc"
+			],
+			"contactPoint": {
+				"@type": "ContactPoint",
+				"email": "support@qrypt.chat",
+				"contactType": "customer support"
+			}
+		}
+		</script>
+		<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "SoftwareApplication",
+			"name": "QryptChat",
+			"url": "https://qrypt.chat/",
+			"applicationCategory": "SecurityApplication",
+			"operatingSystem": "Web, iOS, Android",
+			"description": "Quantum-resistant end-to-end encrypted messaging using ML-KEM-1024 (CRYSTALS-Kyber) and CRYSTALS-Dilithium, approved by NIST.",
+			"offers": {
+				"@type": "Offer",
+				"price": "0",
+				"priceCurrency": "USD"
+			},
+			"featureList": [
+				"ML-KEM-1024 post-quantum encryption",
+				"CRYSTALS-Dilithium digital signatures",
+				"End-to-end encrypted voice and video calls",
+				"Zero-knowledge architecture",
+				"Tor .onion accessible",
+				"Open source (MIT)"
+			],
+			"author": {
+				"@type": "Organization",
+				"name": "Profullstack, Inc."
+			}
+		}
+		</script>
+
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover" class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
