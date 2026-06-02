@@ -1,0 +1,29 @@
+# QryptChat
+
+> Quantum-resistant, end-to-end encrypted messaging by Profullstack, Inc.
+
+QryptChat uses NIST-approved post-quantum algorithms (ML-KEM-1024 / CRYSTALS-Kyber and CRYSTALS-Dilithium) to protect messages against both current and future quantum-computer attacks. It is open source (MIT), self-hostable, and accessible over Tor.
+
+## Key pages
+
+- [Home](https://qrypt.chat/) — Product overview and feature highlights
+- [About](https://qrypt.chat/about) — Mission, team, and differentiators
+- [Security](https://qrypt.chat/security) — Encryption algorithms, zero-knowledge architecture, audit status
+- [Encryption Test](https://qrypt.chat/encryption-test) — Live ML-KEM-1024 demo in the browser
+- [Contact](https://qrypt.chat/contact) — Support, security, and business contact emails
+- [Privacy Policy](https://qrypt.chat/privacy) — Data minimization, GDPR rights, no ads or tracking
+- [Terms of Service](https://qrypt.chat/terms) — Usage terms
+- [Warrant Canary](https://qrypt.chat/warrant-canary) — Transparency statement
+
+## Company
+
+- **Name**: Profullstack, Inc.
+- **Product**: QryptChat
+- **Founded**: 2024
+- **Team**: Anthony Ettinger (Founder & Developer), mrpthedev (Developer)
+- **Support**: support@qrypt.chat
+- **Security**: security@qrypt.chat
+- **Business**: business@qrypt.chat
+- **GitHub**: https://github.com/profullstack/qryptchat-web
+- **License**: MIT
+- **Pricing**: Free / open source
