@@ -3,14 +3,12 @@
  * Updates the OS taskbar/dock badge with unread message count
  */
 
-import { browser } from '$app/environment';
-
 /**
  * Check if the Badging API is supported
  * @returns {boolean}
  */
 export function isBadgingSupported() {
-	return browser && 'setAppBadge' in navigator;
+	return typeof window !== 'undefined' && 'setAppBadge' in navigator;
 }
 
 /**

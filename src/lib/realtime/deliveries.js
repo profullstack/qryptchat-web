@@ -1,8 +1,7 @@
 // Realtime subscription utilities for delivery tracking
 // Handles disappearing message expiry events via Supabase Realtime
 
-import { browser } from '$app/environment';
-import { supabase } from '$lib/supabase.js';
+import { supabase } from '@/lib/supabase.js';
 
 /**
  * Subscribe to delivery changes for the current user
@@ -15,7 +14,7 @@ import { supabase } from '$lib/supabase.js';
  * @returns {Function} Unsubscribe function
  */
 export function subscribeDeliveriesForUser(userId, { onExpire, onRead, onDelivered } = {}) {
-  if (!browser) return () => {};
+  if (typeof window === 'undefined') return () => {};
 
   const channel = supabase.channel(`deliveries-${userId}`)
     .on(
@@ -85,7 +84,7 @@ export function subscribeDeliveriesForUser(userId, { onExpire, onRead, onDeliver
  * @returns {Function} Unsubscribe function
  */
 export function subscribeConversationDeliveries(conversationId, userId, callbacks = {}) {
-  if (!browser) return () => {};
+  if (typeof window === 'undefined') return () => {};
 
   const channel = supabase.channel(`conversation-deliveries-${conversationId}`)
     .on(

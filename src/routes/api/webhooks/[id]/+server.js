@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { withAuth } from '$lib/api/middleware/auth.js';
+import { withAuth } from '@/lib/api/middleware/auth.js';
 
 /** Delete a webhook by ID */
 export const DELETE = withAuth(async (event) => {

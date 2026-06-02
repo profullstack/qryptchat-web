@@ -4,8 +4,7 @@
  */
 
 import 'webrtc-adapter';
-import { browser } from '$app/environment';
-import { currentCall, voiceCallManager } from '$lib/stores/voice-call.js';
+import { currentCall, voiceCallManager } from '@/lib/stores/voice-call.js';
 
 /**
  * WebRTC configuration with STUN and optional TURN servers.
@@ -65,7 +64,7 @@ export class WebRTCService {
 	 * @param {WebSocket} wsConnection - WebSocket connection for signaling
 	 */
 	async initialize(wsConnection) {
-		if (!browser || this.isInitialized) return;
+		if (!(typeof window !== 'undefined') || this.isInitialized) return;
 
 		this.wsConnection = wsConnection;
 		this.isInitialized = true;
@@ -222,7 +221,7 @@ export class WebRTCService {
 	 * @returns {HTMLVideoElement|null}
 	 */
 	getLocalVideoElement() {
-		if (!browser) return null;
+		if (typeof window === 'undefined') return null;
 		return document.getElementById('local-video');
 	}
 
@@ -231,7 +230,7 @@ export class WebRTCService {
 	 * @returns {HTMLVideoElement|null}
 	 */
 	getRemoteVideoElement() {
-		if (!browser) return null;
+		if (typeof window === 'undefined') return null;
 		return document.getElementById('remote-video');
 	}
 
@@ -240,7 +239,7 @@ export class WebRTCService {
 	 * @returns {HTMLAudioElement|null}
 	 */
 	getRemoteAudioElement() {
-		if (!browser) return null;
+		if (typeof window === 'undefined') return null;
 		return document.getElementById('remote-audio');
 	}
 
@@ -500,7 +499,7 @@ export class WebRTCService {
 	 */
 	static isSupported() {
 		return !!(
-			browser &&
+			typeof window !== 'undefined' &&
 			window.RTCPeerConnection &&
 			navigator.mediaDevices &&
 			navigator.mediaDevices.getUserMedia
@@ -519,7 +518,7 @@ class WebRTCCallManager {
 		this.pendingSdpOffer = null;
 
 		// Subscribe to call state changes
-		if (browser) {
+		if (typeof window !== 'undefined') {
 			currentCall.subscribe(call => {
 				this.handleCallStateChange(call);
 			});

@@ -3,9 +3,8 @@
  * Specifically designed to help diagnose Linux/KDE/Wayland PWA session loss problems
  */
 
-import { browser } from '$app/environment';
-import { auth } from '$lib/stores/auth.js';
-import { chat, wsChat } from '$lib/stores/chat.js';
+import { auth } from '@/lib/stores/auth.js';
+import { chat, wsChat } from '@/lib/stores/chat.js';
 import { pwaSessionManager } from './pwa-session-manager.js';
 
 /**
@@ -19,7 +18,7 @@ export class PWADiagnostics {
 			session: {},
 			websocket: {},
 			pwa: {},
-			browser: {},
+			(typeof window !== 'undefined'): {},
 			errors: []
 		};
 	}
@@ -56,7 +55,7 @@ export class PWADiagnostics {
 	 * Collect environment information
 	 */
 	async collectEnvironmentInfo() {
-		if (!browser) return;
+		if (typeof window === 'undefined') return;
 
 		this.diagnosticData.environment = {
 			userAgent: navigator.userAgent,
@@ -86,7 +85,7 @@ export class PWADiagnostics {
 	 * Collect session information
 	 */
 	async collectSessionInfo() {
-		if (!browser) return;
+		if (typeof window === 'undefined') return;
 
 		try {
 			// Check localStorage session
@@ -198,7 +197,7 @@ export class PWADiagnostics {
 	 * Collect PWA information
 	 */
 	async collectPWAInfo() {
-		if (!browser) return;
+		if (typeof window === 'undefined') return;
 
 		try {
 			this.diagnosticData.pwa = {
@@ -250,13 +249,13 @@ export class PWADiagnostics {
 	}
 
 	/**
-	 * Collect browser-specific information
+	 * Collect (typeof window !== 'undefined')-specific information
 	 */
 	async collectBrowserInfo() {
-		if (!browser) return;
+		if (typeof window === 'undefined') return;
 
 		try {
-			this.diagnosticData.browser = {
+			this.diagnosticData.(typeof window !== 'undefined') = {
 				localStorage: {
 					available: typeof Storage !== 'undefined',
 					quota: null,
@@ -279,10 +278,10 @@ export class PWADiagnostics {
 			if ('storage' in navigator && 'estimate' in navigator.storage) {
 				try {
 					const estimate = await navigator.storage.estimate();
-					this.diagnosticData.browser.localStorage.quota = estimate.quota;
-					this.diagnosticData.browser.localStorage.usage = estimate.usage;
+					this.diagnosticData.(typeof window !== 'undefined').localStorage.quota = estimate.quota;
+					this.diagnosticData.(typeof window !== 'undefined').localStorage.usage = estimate.usage;
 				} catch (error) {
-					this.diagnosticData.browser.localStorage.quotaError = error.message;
+					this.diagnosticData.(typeof window !== 'undefined').localStorage.quotaError = error.message;
 				}
 			}
 
@@ -411,21 +410,21 @@ export class PWADiagnostics {
 		}
 
 		// Browser compatibility issues
-		if (!this.diagnosticData.browser.visibilityAPI.available) {
+		if (!this.diagnosticData.(typeof window !== 'undefined').visibilityAPI.available) {
 			issues.push({
 				type: 'no_visibility_api',
 				severity: 'warning',
 				message: 'Visibility API not available - PWA state detection limited',
-				category: 'browser'
+				category: '(typeof window !== 'undefined')'
 			});
 		}
 
-		if (!this.diagnosticData.browser.webSocket.available) {
+		if (!this.diagnosticData.(typeof window !== 'undefined').webSocket.available) {
 			issues.push({
 				type: 'no_websocket_support',
 				severity: 'critical',
-				message: 'WebSocket not supported in this browser',
-				category: 'browser'
+				message: 'WebSocket not supported in this (typeof window !== 'undefined')',
+				category: '(typeof window !== 'undefined')'
 			});
 		}
 
@@ -464,7 +463,7 @@ export class PWADiagnostics {
 			recommendations.push({
 				type: 'linux_pwa_workaround',
 				priority: 'medium',
-				message: 'Consider keeping PWA visible or use browser version for better stability',
+				message: 'Consider keeping PWA visible or use (typeof window !== 'undefined') version for better stability',
 				actions: ['avoid_minimize', 'use_browser']
 			});
 		}
@@ -483,7 +482,7 @@ export class PWADiagnostics {
 	 * Save diagnostics to localStorage for debugging
 	 */
 	saveDiagnostics() {
-		if (!browser) return;
+		if (typeof window === 'undefined') return;
 
 		try {
 			const timestamp = new Date().toISOString();
@@ -502,7 +501,7 @@ export class PWADiagnostics {
 export const pwaDiagnostics = new PWADiagnostics();
 
 // Expose diagnostics globally for debugging
-if (browser) {
+if (typeof window !== 'undefined') {
 	window.pwaDiagnostics = pwaDiagnostics;
 	
 	// Add keyboard shortcut for quick diagnostics (Ctrl+Shift+D)

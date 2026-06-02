@@ -4,10 +4,10 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
-import { SMSDebugLogger, formatSMSError } from '$lib/utils/sms-debug.js';
-import { getSMSErrorDetails } from '$lib/utils/twilio-validator.js';
-import { applyRateLimit, authRateLimiter } from '$lib/server/rate-limiter.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { SMSDebugLogger, formatSMSError } from '@/lib/utils/sms-debug.js';
+import { getSMSErrorDetails } from '@/lib/utils/twilio-validator.js';
+import { applyRateLimit, authRateLimiter } from '@/lib/server/rate-limiter.js';
 
 /**
  * Validate phone number format
@@ -76,7 +76,7 @@ export async function POST(event) {
 		const supabase = createSupabaseServerClient(event);
 		
 		logger.info('Attempting to send SMS via Supabase Auth');
-		logger.info('Supabase project URL:', process.env.PUBLIC_SUPABASE_URL);
+		logger.info('Supabase project URL:', process.env.process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 		// Send SMS using Supabase Auth (this handles everything internally)
 		const { error: smsError } = await supabase.auth.signInWithOtp({

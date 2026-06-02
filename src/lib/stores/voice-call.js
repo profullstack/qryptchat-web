@@ -1,422 +1,151 @@
-/**
- * @fileoverview Voice call store for QryptChat
- * Manages voice/video call state and provides reactive call management
- */
+import { create } from 'zustand';
 
-import { writable, derived } from 'svelte/store';
-import { browser } from '$app/environment';
+export const useVoiceCallStore = create((set, get) => ({
+  currentCall: null,
+  callPermissions: { microphone: false, camera: false },
+  callStats: { duration: 0, quality: 'unknown' },
 
-/**
- * Current call session
- */
-export const currentCall = writable(null);
+  get isInCall() { return get().currentCall?.state === 'connected'; },
+  get hasIncomingCall() {
+    const c = get().currentCall;
+    return c?.isIncoming && c?.state === 'ringing';
+  },
+  get isCallInProgress() {
+    const c = get().currentCall;
+    return c && ['calling', 'ringing', 'connecting', 'connected'].includes(c.state);
+  },
 
-/**
- * Call permissions state
- */
-export const callPermissions = writable({
-	microphone: false,
-	camera: false
-});
+  isTorBrowser() {
+    return typeof window !== 'undefined' && (
+      window.location.hostname.endsWith('.onion') ||
+      navigator.userAgent.includes('Tor Browser') ||
+      !navigator.permissions
+    );
+  },
 
-/**
- * Call statistics
- */
-export const callStats = writable({
-	duration: 0,
-	quality: 'unknown'
-});
+  async checkPermissions() {
+    if (get().isTorBrowser()) {
+      set({ callPermissions: { microphone: false, camera: false } });
+      return { microphone: false, camera: false };
+    }
+    try {
+      const mic = await navigator.permissions.query({ name: 'microphone' });
+      const micGranted = mic.state === 'granted';
+      let cameraGranted = false;
+      try {
+        const cam = await navigator.permissions.query({ name: 'camera' });
+        cameraGranted = cam.state === 'granted';
+      } catch {}
+      set({ callPermissions: { microphone: micGranted, camera: cameraGranted } });
+      return { microphone: micGranted, camera: cameraGranted };
+    } catch {
+      set({ callPermissions: { microphone: false, camera: false } });
+      return { microphone: false, camera: false };
+    }
+  },
 
-/**
- * Derived store for call status
- */
-export const isInCall = derived(
-	currentCall,
-	($currentCall) => $currentCall?.state === 'connected'
-);
+  async requestPermissions(callType = 'voice') {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: callType === 'video',
+      });
+      stream.getTracks().forEach((t) => t.stop());
+      await get().checkPermissions();
+      return true;
+    } catch {
+      return false;
+    }
+  },
 
-/**
- * Derived store for incoming call
- */
-export const hasIncomingCall = derived(
-	currentCall,
-	($currentCall) => $currentCall?.isIncoming && $currentCall?.state === 'ringing'
-);
+  async startCall(participantId, participantName, callType = 'voice', participantAvatar = null) {
+    const current = get().currentCall;
+    if (current && !['idle', 'ended'].includes(current.state)) {
+      throw new Error('Already in a call');
+    }
+    const hasPermissions = await get().requestPermissions(callType);
+    if (!hasPermissions) throw new Error('Media permissions required for calls');
+    const callId = `call-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    const callSession = {
+      id: callId, type: callType, participantId, participantName, participantAvatar,
+      state: 'calling', isIncoming: false, isMuted: false,
+      isVideoEnabled: callType === 'video', startTime: Date.now(), endTime: null, error: null,
+    };
+    set({ currentCall: callSession });
+    return callSession;
+  },
 
-/**
- * Derived store for call in progress
- */
-export const isCallInProgress = derived(
-	currentCall,
-	($currentCall) => $currentCall && ['calling', 'ringing', 'connecting', 'connected'].includes($currentCall.state)
-);
+  async acceptCall(callId) {
+    const current = get().currentCall;
+    if (!current || current.id !== callId || !current.isIncoming) throw new Error('Invalid call');
+    const hasPermissions = await get().requestPermissions(current.type);
+    if (!hasPermissions) throw new Error('Media permissions required');
+    set({ currentCall: { ...current, state: 'connecting' } });
+    get()._startCallTimer();
+  },
 
-/**
- * Voice call manager class
- */
-class VoiceCallManager {
-	constructor() {
-		this.callDurationInterval = null;
-		this.initialized = false;
-	}
+  async endCall(callId) {
+    const current = get().currentCall;
+    if (!current || current.id !== callId) return;
+    get()._stopCallTimer();
+    set({ currentCall: { ...current, state: 'ended', endTime: Date.now() } });
+    setTimeout(() => set({ currentCall: null }), 3000);
+  },
 
-	/**
-	 * Initialize the voice call manager
-	 */
-	async initialize() {
-		if (!browser || this.initialized) return;
+  toggleMute() {
+    const current = get().currentCall;
+    if (!current) return;
+    set({ currentCall: { ...current, isMuted: !current.isMuted } });
+  },
 
-		try {
-			// Check for media permissions
-			await this.checkPermissions();
-			this.initialized = true;
-			console.log('📞 Voice call manager initialized');
-		} catch (error) {
-			console.error('📞 Failed to initialize voice call manager:', error);
-		}
-	}
+  toggleVideo() {
+    const current = get().currentCall;
+    if (!current || current.type === 'voice') return;
+    set({ currentCall: { ...current, isVideoEnabled: !current.isVideoEnabled } });
+  },
 
-	/**
-	 * Detect if running in Tor Browser
-	 * @returns {boolean}
-	 */
-	isTorBrowser() {
-		// Tor Browser detection
-		return (
-			typeof window !== 'undefined' &&
-			(window.location.hostname.endsWith('.onion') ||
-			 navigator.userAgent.includes('Tor Browser') ||
-			 !navigator.permissions) // Tor Browser often disables Permissions API
-		);
-	}
+  handleIncomingCall(callData) {
+    const callSession = {
+      id: callData.callId || `call-${Date.now()}`,
+      type: callData.type || 'voice',
+      participantId: callData.from || '',
+      participantName: callData.fromName || 'Unknown',
+      participantAvatar: callData.fromAvatar || null,
+      state: 'ringing', isIncoming: true, isMuted: false,
+      isVideoEnabled: (callData.type || 'voice') === 'video',
+      startTime: Date.now(), endTime: null, error: null,
+    };
+    set({ currentCall: callSession });
+  },
 
-	/**
-	 * Check and request media permissions
-	 */
-	async checkPermissions() {
-		try {
-			// Skip Permissions API check in Tor Browser
-			if (this.isTorBrowser()) {
-				console.log('📞 Tor Browser detected - skipping Permissions API check');
-				console.log('📞 Media permissions will be checked when actually requesting media');
-				
-				// Set permissions as unknown for Tor Browser
-				callPermissions.set({
-					microphone: false,
-					camera: false
-				});
-				
-				return { microphone: false, camera: false };
-			}
+  formatDuration(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  },
 
-			// Check microphone permission (regular browsers)
-			const micPermission = await navigator.permissions.query({ name: 'microphone' });
-			const micGranted = micPermission.state === 'granted';
+  _callDurationInterval: null,
+  _startCallTimer() {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      set({ callStats: { duration: Math.floor((Date.now() - start) / 1000), quality: 'unknown' } });
+    }, 1000);
+    set({ _callDurationInterval: interval });
+  },
+  _stopCallTimer() {
+    const { _callDurationInterval } = get();
+    if (_callDurationInterval) clearInterval(_callDurationInterval);
+    set({ _callDurationInterval: null });
+  },
+}));
 
-			// Check camera permission
-			let cameraGranted = false;
-			try {
-				const cameraPermission = await navigator.permissions.query({ name: 'camera' });
-				cameraGranted = cameraPermission.state === 'granted';
-			} catch (e) {
-				// Camera permission might not be available
-				console.warn('📞 Camera permission check not available');
-			}
-
-			callPermissions.set({
-				microphone: micGranted,
-				camera: cameraGranted
-			});
-
-			return { microphone: micGranted, camera: cameraGranted };
-		} catch (error) {
-			console.error('📞 Permission check failed:', error);
-			
-			// Fallback for browsers that don't support Permissions API
-			callPermissions.set({
-				microphone: false,
-				camera: false
-			});
-			
-			return { microphone: false, camera: false };
-		}
-	}
-
-	/**
-	 * Request media permissions
-	 * @param {string} callType - Type of call (voice or video)
-	 */
-	async requestPermissions(callType = 'voice') {
-		try {
-			const constraints = {
-				audio: true,
-				video: callType === 'video'
-			};
-
-			const stream = await navigator.mediaDevices.getUserMedia(constraints);
-			
-			// Stop the test stream immediately
-			stream.getTracks().forEach(track => track.stop());
-
-			// Update permissions
-			await this.checkPermissions();
-			
-			return true;
-		} catch (error) {
-			console.error('📞 Permission request failed:', error);
-			return false;
-		}
-	}
-
-	/**
-	 * Start a new call
-	 * @param {string} participantId - Participant user ID
-	 * @param {string} participantName - Participant display name
-	 * @param {string} callType - Call type (voice or video)
-	 * @param {string} participantAvatar - Participant avatar URL
-	 */
-	async startCall(participantId, participantName, callType = 'voice', participantAvatar = null) {
-		try {
-			// Check if already in a call
-			const current = this.getCurrentCall();
-			if (current && current.state !== 'idle' && current.state !== 'ended') {
-				throw new Error('Already in a call');
-			}
-
-			// Request permissions first
-			const hasPermissions = await this.requestPermissions(callType);
-			if (!hasPermissions) {
-				throw new Error('Media permissions required for calls');
-			}
-
-			// Generate call ID
-			const callId = `call-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-
-			// Create call session
-			const callSession = {
-				id: callId,
-				type: callType,
-				participantId,
-				participantName,
-				participantAvatar,
-				state: 'calling',
-				isIncoming: false,
-				isMuted: false,
-				isVideoEnabled: callType === 'video',
-				startTime: Date.now(),
-				endTime: null,
-				error: null
-			};
-
-			currentCall.set(callSession);
-			
-			console.log(`📞 Starting ${callType} call with ${participantName}`, callSession);
-
-			// TODO: Implement WebRTC signaling
-			// This would send a call offer through the WebSocket connection
-
-			return callSession;
-		} catch (error) {
-			console.error('📞 Failed to start call:', error);
-			
-			// Set error state
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			currentCall.update(call => {
-				if (!call) return null;
-				return { ...call, state: 'error', error: errorMessage };
-			});
-			
-			throw error;
-		}
-	}
-
-	/**
-	 * Accept an incoming call
-	 * @param {string} callId - Call ID to accept
-	 */
-	async acceptCall(callId) {
-		const current = this.getCurrentCall();
-		if (!current || current.id !== callId || !current.isIncoming) {
-			throw new Error('Invalid call to accept');
-		}
-
-		try {
-			// Request permissions
-			const hasPermissions = await this.requestPermissions(current.type);
-			if (!hasPermissions) {
-				throw new Error('Media permissions required for calls');
-			}
-
-			// Update call state - WebRTCCallManager reacts to this
-			// and initiates the WebRTC answer with the stored SDP offer.
-			// State transitions to 'connected' when the peer connection succeeds.
-			currentCall.update(call => {
-				if (!call) return null;
-				return { ...call, state: 'connecting' };
-			});
-
-			this.startCallTimer();
-
-			console.log('📞 Accepting call:', callId);
-
-		} catch (error) {
-			console.error('📞 Failed to accept call:', error);
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			currentCall.update(call => {
-				if (!call) return null;
-				return { ...call, state: 'error', error: errorMessage };
-			});
-		}
-	}
-
-	/**
-	 * Decline or end a call
-	 * @param {string} callId - Call ID to end
-	 */
-	async endCall(callId) {
-		const current = this.getCurrentCall();
-		if (!current || current.id !== callId) {
-			console.warn('📞 No active call to end');
-			return;
-		}
-
-		try {
-			console.log('📞 Ending call:', callId);
-
-			// Stop call timer
-			this.stopCallTimer();
-
-			// Update call state
-			currentCall.update(call => {
-				if (!call) return null;
-				return { ...call, state: 'ended', endTime: Date.now() };
-			});
-
-			// TODO: Implement WebRTC cleanup and signaling
-
-			// Clear call after a delay
-			setTimeout(() => {
-				currentCall.set(null);
-			}, 3000);
-
-		} catch (error) {
-			console.error('📞 Failed to end call:', error);
-		}
-	}
-
-	/**
-	 * Toggle mute state
-	 */
-	toggleMute() {
-		currentCall.update(call => {
-			if (!call) return null;
-			
-			const newMutedState = !call.isMuted;
-			console.log(`📞 ${newMutedState ? 'Muting' : 'Unmuting'} microphone`);
-			
-			// TODO: Mute/unmute audio track in WebRTC
-			
-			return { ...call, isMuted: newMutedState };
-		});
-	}
-
-	/**
-	 * Toggle video state (for video calls)
-	 */
-	toggleVideo() {
-		currentCall.update(call => {
-			if (!call || call.type === 'voice') return call;
-			
-			const newVideoState = !call.isVideoEnabled;
-			console.log(`📞 ${newVideoState ? 'Enabling' : 'Disabling'} video`);
-			
-			// TODO: Enable/disable video track in WebRTC
-			
-			return { ...call, isVideoEnabled: newVideoState };
-		});
-	}
-
-	/**
-	 * Handle incoming call
-	 * @param {object} callData - Incoming call data
-	 */
-	handleIncomingCall(callData) {
-		console.log('📞 Incoming call:', callData);
-
-		const callSession = {
-			id: callData.callId || `call-${Date.now()}`,
-			type: callData.type || 'voice',
-			participantId: callData.from || '',
-			participantName: callData.fromName || 'Unknown',
-			participantAvatar: callData.fromAvatar || null,
-			state: 'ringing',
-			isIncoming: true,
-			isMuted: false,
-			isVideoEnabled: (callData.type || 'voice') === 'video',
-			startTime: Date.now(),
-			endTime: null,
-			error: null
-		};
-
-		currentCall.set(callSession);
-	}
-
-	/**
-	 * Start call duration timer
-	 * @private
-	 */
-	startCallTimer() {
-		if (this.callDurationInterval) {
-			clearInterval(this.callDurationInterval);
-		}
-
-		const startTime = Date.now();
-		this.callDurationInterval = setInterval(() => {
-			const duration = Math.floor((Date.now() - startTime) / 1000);
-			callStats.update(stats => ({ ...stats, duration }));
-		}, 1000);
-	}
-
-	/**
-	 * Stop call duration timer
-	 * @private
-	 */
-	stopCallTimer() {
-		if (this.callDurationInterval) {
-			clearInterval(this.callDurationInterval);
-			this.callDurationInterval = null;
-		}
-	}
-
-	/**
-	 * Get current call session
-	 * @returns {object|null}
-	 */
-	getCurrentCall() {
-		let current = null;
-		const unsubscribe = currentCall.subscribe(call => {
-			current = call;
-		});
-		unsubscribe();
-		return current;
-	}
-
-	/**
-	 * Format call duration
-	 * @param {number} seconds - Duration in seconds
-	 * @returns {string} Formatted duration (MM:SS)
-	 */
-	formatDuration(seconds) {
-		const minutes = Math.floor(seconds / 60);
-		const remainingSeconds = seconds % 60;
-		return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-	}
-}
-
-// Export singleton instance
-export const voiceCallManager = new VoiceCallManager();
-
-// Auto-initialize in browser
-if (browser) {
-	voiceCallManager.initialize();
-}
+// Legacy export
+export const voiceCallManager = {
+  startCall: (...args) => useVoiceCallStore.getState().startCall(...args),
+  acceptCall: (...args) => useVoiceCallStore.getState().acceptCall(...args),
+  endCall: (...args) => useVoiceCallStore.getState().endCall(...args),
+  toggleMute: () => useVoiceCallStore.getState().toggleMute(),
+  toggleVideo: () => useVoiceCallStore.getState().toggleVideo(),
+  handleIncomingCall: (...args) => useVoiceCallStore.getState().handleIncomingCall(...args),
+  formatDuration: (...args) => useVoiceCallStore.getState().formatDuration(...args),
+};

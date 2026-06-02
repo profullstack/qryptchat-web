@@ -6,8 +6,8 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { SMSAuthDiagnostics } from '$lib/utils/sms-debug.js';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { SMSAuthDiagnostics } from '@/lib/utils/sms-debug.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 // Security check - only allow in development
 function isDevelopment() {

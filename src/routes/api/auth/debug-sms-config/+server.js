@@ -6,7 +6,7 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { diagnoseSMSConfig, generateDiagnosticReport } from '$lib/utils/sms-config-diagnostic.js';
+import { diagnoseSMSConfig, generateDiagnosticReport } from '@/lib/utils/sms-config-diagnostic.js';
 
 // Security check - only allow in development
 function isDevelopment() {

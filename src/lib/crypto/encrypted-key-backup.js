@@ -3,7 +3,6 @@
  * Handles encryption/decryption of user keys for secure cloud storage
  */
 
-import { browser } from '$app/environment';
 import { Base64 } from './index.js';
 
 /**
@@ -18,7 +17,7 @@ export class EncryptedKeyBackup {
 	 * @returns {Promise<{ encryptedData: Uint8Array, nonce: Uint8Array }>} Encrypted key data
 	 */
 	static async encryptIdentityKeys(identityKeys, masterKey) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key encryption only available in browser');
 		}
 
@@ -76,7 +75,7 @@ export class EncryptedKeyBackup {
 	 * @returns {Promise<{ publicKey: Uint8Array, privateKey: Uint8Array }>} Decrypted identity keys
 	 */
 	static async decryptIdentityKeys(encryptedKeys, masterKey) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key decryption only available in browser');
 		}
 
@@ -125,7 +124,7 @@ export class EncryptedKeyBackup {
 	 * @returns {Promise<{ encryptedData: Uint8Array, nonce: Uint8Array }>} Encrypted conversation keys
 	 */
 	static async encryptConversationKeys(conversationKeys, masterKey) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key encryption only available in browser');
 		}
 
@@ -187,7 +186,7 @@ export class EncryptedKeyBackup {
 	 * @returns {Promise<Record<string, Uint8Array>>} Decrypted conversation keys
 	 */
 	static async decryptConversationKeys(encryptedKeys, masterKey) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key decryption only available in browser');
 		}
 

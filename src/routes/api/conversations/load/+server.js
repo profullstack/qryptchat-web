@@ -4,7 +4,7 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { withAuth } from '$lib/api/middleware/auth.js';
+import { withAuth } from '@/lib/api/middleware/auth.js';
 
 export const POST = withAuth(async ({ locals }) => {
 	try {

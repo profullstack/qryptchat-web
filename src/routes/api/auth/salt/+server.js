@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 function getServiceRoleClient() {
 	return createServiceRoleClient();

@@ -6,8 +6,8 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { withAuth } from '$lib/api/middleware/auth.js';
-import { getServiceRoleClient } from '$lib/supabase/service-role.js';
+import { withAuth } from '@/lib/api/middleware/auth.js';
+import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {

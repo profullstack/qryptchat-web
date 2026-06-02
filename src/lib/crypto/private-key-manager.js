@@ -4,7 +4,6 @@
  * Uses ML-KEM-1024 for quantum-resistant key management
  */
 
-import { browser } from '$app/environment';
 import { Base64, HKDF, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
 import { postQuantumEncryption } from './post-quantum-encryption.js';
 
@@ -28,7 +27,7 @@ export class PrivateKeyManager {
 			throw new Error('Password is required for key export');
 		}
 
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key export is only available in browser environment');
 		}
 
@@ -105,7 +104,7 @@ export class PrivateKeyManager {
 			throw new Error('Password is required for key import');
 		}
 
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key import is only available in browser environment');
 		}
 
@@ -377,11 +376,11 @@ export class PrivateKeyManager {
 	}
 
 	/**
-	 * Check if browser supports file download
+	 * Check if (typeof window !== 'undefined') supports file download
 	 * @returns {boolean} Whether file download is supported
 	 */
 	supportsFileDownload() {
-		return browser && typeof document !== 'undefined' && 'createElement' in document;
+		return typeof window !== 'undefined' && typeof document !== 'undefined' && 'createElement' in document;
 	}
 
 	/**
@@ -563,7 +562,7 @@ export class PrivateKeyManager {
 	 * @returns {Promise<void>}
 	 */
 	async backupKeysToServer(password) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key backup is only available in browser environment');
 		}
 
@@ -595,7 +594,7 @@ export class PrivateKeyManager {
 	 * @returns {Promise<void>}
 	 */
 	async restoreKeysFromServer(password) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Key restore is only available in browser environment');
 		}
 
@@ -631,7 +630,7 @@ export class PrivateKeyManager {
 	 * @returns {Promise<boolean>}
 	 */
 	async hasServerBackup() {
-		if (!browser) return false;
+		if (typeof window === 'undefined') return false;
 
 		try {
 			const response = await fetch('/api/auth/key-backup');
@@ -648,7 +647,7 @@ export class PrivateKeyManager {
 		*/
 	async _syncPublicKeyToDatabase() {
 		try {
-			if (!browser) return;
+			if (typeof window === 'undefined') return;
 
 			// Get the current user's public key from post-quantum encryption
 			await postQuantumEncryption.initialize();

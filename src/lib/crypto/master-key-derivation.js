@@ -3,8 +3,6 @@
  * Derives encryption keys from phone number + PIN/password using PBKDF2
  */
 
-import { browser } from '$app/environment';
-
 /**
  * Master key derivation service
  * Uses PBKDF2 with SHA-256 to derive keys from user credentials
@@ -18,7 +16,7 @@ export class MasterKeyDerivation {
 	 * @returns {Promise<Uint8Array>} 256-bit master key
 	 */
 	static async deriveFromCredentials(phoneNumber, pin, iterations = 100000) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Master key derivation only available in browser');
 		}
 
@@ -77,7 +75,7 @@ export class MasterKeyDerivation {
 	 * @returns {Promise<Uint8Array>} 256-bit master key
 	 */
 	static async deriveWithSalt(phoneNumber, pin, salt, iterations = 100000) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			throw new Error('Master key derivation only available in browser');
 		}
 

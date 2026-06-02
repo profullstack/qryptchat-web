@@ -1,6 +1,6 @@
 // API endpoint to get encrypted file data for client-side decryption
 import { json, error } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function GET(event) {
 	try {

@@ -4,8 +4,8 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { withAuth } from '$lib/api/middleware/auth.js';
-import { sseManager } from '$lib/api/sse-manager.js';
+import { withAuth } from '@/lib/api/middleware/auth.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {

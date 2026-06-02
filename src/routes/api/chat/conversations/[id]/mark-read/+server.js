@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 /**
  * Mark all messages in a conversation as read for the current user

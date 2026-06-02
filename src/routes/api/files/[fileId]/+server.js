@@ -1,7 +1,7 @@
 // API endpoint for encrypted file downloads
 import { json, error } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
-import { postQuantumEncryption } from '$lib/crypto/post-quantum-encryption.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 
 export async function GET(event) {
 	try {

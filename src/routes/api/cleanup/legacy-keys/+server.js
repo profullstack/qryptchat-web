@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { createSupabaseClient } from '$lib/supabase.js';
+import { createSupabaseClient } from '@/lib/supabase.js';
 
 /** @type {import('./$types').RequestHandler} */
 export async function DELETE({ request, cookies, locals }) {

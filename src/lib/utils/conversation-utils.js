@@ -3,8 +3,6 @@
  * Used by both SSE and WebSocket chat stores
  */
 
-import { browser } from '$app/environment';
-
 /**
  * Update the cached set of archived conversation IDs.
  * The service worker reads this cache entry to suppress push notifications
@@ -13,7 +11,7 @@ import { browser } from '$app/environment';
  * @param {boolean} archived - Whether the conversation is now archived
  */
 export async function updateArchivedConversationsCache(conversationId, archived) {
-	if (!browser) return;
+	if (typeof window === 'undefined') return;
 	try {
 		const cache = await caches.open('settings-cache');
 		const res = await cache.match('archived-conversations');
@@ -40,7 +38,7 @@ export async function updateArchivedConversationsCache(conversationId, archived)
  * @returns {Promise<boolean>}
  */
 export async function isConversationArchived(conversationId) {
-	if (!browser) return false;
+	if (typeof window === 'undefined') return false;
 	try {
 		const cache = await caches.open('settings-cache');
 		const res = await cache.match('archived-conversations');

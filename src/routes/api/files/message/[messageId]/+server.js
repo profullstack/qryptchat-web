@@ -1,6 +1,6 @@
 // API endpoint to get files for a specific message
 import { json, error } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function GET(event) {
 	try {

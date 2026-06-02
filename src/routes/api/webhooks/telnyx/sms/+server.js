@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
-import { createSMSWebhookEmailService } from '$lib/services/mailgun-email-service.js';
+import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
+import { createSMSWebhookEmailService } from '@/lib/services/mailgun-email-service.js';
 import crypto from 'crypto';
 
 // Lazy service role client creation

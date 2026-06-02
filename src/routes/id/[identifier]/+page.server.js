@@ -2,7 +2,7 @@
 // Route: /id/[identifier]
 
 import { error, redirect } from '@sveltejs/kit';
-import { validateUniqueIdentifier } from '$lib/utils/unique-identifier.js';
+import { validateUniqueIdentifier } from '@/lib/utils/unique-identifier.js';
 
 export async function load({ params, url }) {
 	const { identifier } = params;

@@ -3,8 +3,7 @@
  * Handles WebSocket upgrade requests and integrates with the chat WebSocket server
  */
 
-import { dev } from '$app/environment';
-import { ChatWebSocketServer } from '$lib/websocket/server.js';
+import { ChatWebSocketServer } from '@/lib/websocket/server.js';
 
 // Global server instance for development
 let wsServer = null;

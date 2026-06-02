@@ -3,7 +3,6 @@
  * Handles syncing client-side generated public keys to the database
  */
 
-import { browser } from '$app/environment';
 import { postQuantumEncryption } from './post-quantum-encryption.js';
 
 /**
@@ -23,7 +22,7 @@ export class KeySyncService {
 	 * @returns {Promise<{success: boolean, error?: string}>}
 	 */
 	async syncPublicKey(force = false) {
-		if (!browser) {
+		if (typeof window === 'undefined') {
 			return { success: false, error: 'Not in browser environment' };
 		}
 
@@ -115,7 +114,7 @@ export class KeySyncService {
 	 * @returns {Promise<boolean>}
 	 */
 	async needsKeySync() {
-		if (!browser) return false;
+		if (typeof window === 'undefined') return false;
 
 		try {
 			// Check if we have local keys

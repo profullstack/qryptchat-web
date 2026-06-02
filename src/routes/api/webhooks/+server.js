@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { withAuth } from '$lib/api/middleware/auth.js';
+import { withAuth } from '@/lib/api/middleware/auth.js';
 
 /** List webhooks for the authenticated user */
 export const GET = withAuth(async (event) => {

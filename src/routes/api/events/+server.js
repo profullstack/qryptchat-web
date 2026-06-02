@@ -3,8 +3,8 @@
  * Handles Server-Sent Events connections for real-time updates
  */
 
-import { sseManager } from '$lib/api/sse-manager.js';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 /**
  * GET handler for SSE connections

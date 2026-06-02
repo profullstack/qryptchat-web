@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { pluginManager } from '$lib/plugins/PluginManager.js';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { pluginManager } from '@/lib/plugins/PluginManager.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 /**
  * POST /api/plugins/execute

@@ -3,7 +3,6 @@
  * Handles secure storage and retrieval of encryption keys
  */
 
-import { browser } from '$app/environment';
 import { Base64, CryptoUtils } from './index.js';
 import { MasterKeyDerivation } from './master-key-derivation.js';
 
@@ -20,14 +19,14 @@ export class KeyManager {
 
 	/**
 	 * Get or generate the storage encryption key for protecting keys in localStorage.
-	 * The key persists in localStorage so conversation keys survive tab/browser restarts.
+	 * The key persists in localStorage so conversation keys survive tab/(typeof window !== 'undefined') restarts.
 	 * @returns {Promise<CryptoKey>}
 	 * @private
 	 */
 	async _getStorageEncryptionKey() {
 		if (this._storageEncKey) return this._storageEncKey;
 
-		if (!browser) throw new Error('Storage encryption only available in browser');
+		if (typeof window === 'undefined') throw new Error('Storage encryption only available in browser');
 
 		// Try to load from localStorage (persists across sessions)
 		const storedRaw = localStorage.getItem(this.storageEncryptionKeyName);
@@ -98,7 +97,7 @@ export class KeyManager {
 	 * Initialize the key manager
 	 */
 	async initialize() {
-		if (browser) {
+		if (typeof window !== 'undefined') {
 			// Load keys from localStorage on initialization
 			await this.loadKeysFromStorage();
 			console.log('🔑 Key manager initialized');
@@ -116,7 +115,7 @@ export class KeyManager {
 			// Store in session memory
 			this.sessionKeys.set(conversationId, key);
 
-			if (persist && browser) {
+			if (persist && typeof window !== 'undefined') {
 				// Store in localStorage encrypted with session-scoped AES key
 				const keyData = {
 					conversationId,
@@ -149,7 +148,7 @@ export class KeyManager {
 			}
 
 			// Then check localStorage (encrypted)
-			if (browser) {
+			if (typeof window !== 'undefined') {
 				const storedKeys = await this.getStoredKeys();
 				const keyData = storedKeys[conversationId];
 
@@ -204,7 +203,7 @@ export class KeyManager {
 			}
 
 			// Remove from localStorage (encrypted)
-			if (browser) {
+			if (typeof window !== 'undefined') {
 				const storedKeys = await this.getStoredKeys();
 				delete storedKeys[conversationId];
 				const encrypted = await this._encryptForStorage(JSON.stringify(storedKeys));
@@ -225,7 +224,7 @@ export class KeyManager {
 		try {
 			const sessionIds = Array.from(this.sessionKeys.keys());
 			
-			if (browser) {
+			if (typeof window !== 'undefined') {
 				const storedKeys = await this.getStoredKeys();
 				const persistedIds = Object.keys(storedKeys);
 				
@@ -252,7 +251,7 @@ export class KeyManager {
 			this.sessionKeys.clear();
 
 			// Clear localStorage
-			if (browser) {
+			if (typeof window !== 'undefined') {
 				localStorage.removeItem(this.storageKey);
 			}
 
@@ -304,7 +303,7 @@ export class KeyManager {
 	 */
 	async getStoredKeys() {
 		try {
-			if (!browser) return {};
+			if (typeof window === 'undefined') return {};
 			
 			const stored = localStorage.getItem(this.storageKey);
 			if (!stored) return {};
@@ -339,7 +338,7 @@ export class KeyManager {
 	 */
 	async loadKeysFromStorage() {
 		try {
-			if (!browser) return;
+			if (typeof window === 'undefined') return;
 
 			const storedKeys = await this.getStoredKeys();
 			
@@ -366,7 +365,7 @@ export class KeyManager {
 			return true;
 		}
 
-		if (browser) {
+		if (typeof window !== 'undefined') {
 			const storedKeys = await this.getStoredKeys();
 			return !!storedKeys[conversationId];
 		}
@@ -380,7 +379,7 @@ export class KeyManager {
 	 */
 	async hasUserKeys() {
 		try {
-			if (!browser) return false;
+			if (typeof window === 'undefined') return false;
 			
 			const userKeys = localStorage.getItem('qryptchat_user_keys');
 			return !!userKeys;
@@ -396,7 +395,7 @@ export class KeyManager {
 	 */
 	async generateUserKeys() {
 		try {
-			if (!browser) {
+			if (typeof window === 'undefined') {
 				throw new Error('User keys can only be generated in browser environment');
 			}
 
@@ -433,7 +432,7 @@ export class KeyManager {
 	 */
 	async clearUserKeys() {
 		try {
-			if (!browser) return;
+			if (typeof window === 'undefined') return;
 			
 			localStorage.removeItem('qryptchat_user_keys');
 			console.log('🔑 Cleared user encryption keys');
@@ -449,7 +448,7 @@ export class KeyManager {
 	 */
 	async getUserKeys() {
 		try {
-			if (!browser) return null;
+			if (typeof window === 'undefined') return null;
 			
 			const stored = localStorage.getItem('qryptchat_user_keys');
 			return stored ? JSON.parse(stored) : null;

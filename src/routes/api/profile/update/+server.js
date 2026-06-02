@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 /** @type {import('./$types').RequestHandler} */
 export async function POST(event) {

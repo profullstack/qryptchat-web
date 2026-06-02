@@ -4,7 +4,7 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { TwilioSMSProvider } from '$lib/services/twilio-sms-provider.js';
+import { TwilioSMSProvider } from '@/lib/services/twilio-sms-provider.js';
 
 /**
  * Send SMS notification

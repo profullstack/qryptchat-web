@@ -70,23 +70,27 @@ export const authRateLimiter = new RateLimiter({ maxRequests: 5, windowMs: 60 * 
 export const apiRateLimiter = new RateLimiter({ maxRequests: 30, windowMs: 60 * 1000 }); // 30 req/min
 
 /**
- * SvelteKit helper: extract client IP from request event
- * @param {import('@sveltejs/kit').RequestEvent} event
+ * Extract client IP from a Next.js Request object
+ * @param {Request} request
  * @returns {string}
  */
-export function getClientIp(event) {
-	return event.getClientAddress() || 'unknown';
+export function getClientIp(request) {
+	return (
+		request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+		request.headers.get('x-real-ip') ||
+		'unknown'
+	);
 }
 
 /**
- * SvelteKit helper: apply rate limiting to a request event.
+ * Apply rate limiting to a Next.js request.
  * Returns a 429 Response if rate limited, or null if allowed.
- * @param {import('@sveltejs/kit').RequestEvent} event
+ * @param {Request} request
  * @param {RateLimiter} limiter
  * @returns {Response|null}
  */
-export function applyRateLimit(event, limiter = authRateLimiter) {
-	const ip = getClientIp(event);
+export function applyRateLimit(request, limiter = authRateLimiter) {
+	const ip = getClientIp(request);
 	const { allowed, remaining, resetAt } = limiter.check(ip);
 
 	if (!allowed) {

@@ -4,7 +4,6 @@
  */
 
 import { postQuantumEncryption } from './post-quantum-encryption.js';
-import { browser } from '$app/environment';
 import { Base64 } from './index.js';
 
 /**

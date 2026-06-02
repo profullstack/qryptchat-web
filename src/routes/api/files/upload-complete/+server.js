@@ -1,8 +1,8 @@
 // API endpoint for completing direct file upload after successful upload to Supabase Storage
 import { json, error } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
-import { sseManager } from '$lib/api/sse-manager.js';
-import { MESSAGE_TYPES } from '$lib/api/protocol.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
+import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 
 export async function POST(event) {
 	try {

@@ -1,0 +1,146 @@
+/**
+ * @fileoverview SMS Authentication Debug Endpoint
+ * Provides comprehensive debugging for SMS authentication issues
+ * 
+ * SECURITY: This endpoint is restricted to development mode only
+ */
+
+import { NextResponse } from 'next/server';
+import { SMSAuthDiagnostics } from '@/lib/utils/sms-debug.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
+
+// Security check - only allow in development
+function isDevelopment() {
+	return process.env.NODE_ENV === 'development';
+}
+
+/**
+ * Verify the request is authenticated (defense in depth alongside NODE_ENV check)
+ */
+async function verifyAuth(event) {
+	const supabase = createSupabaseServerClient();
+	const { data: { user }, error } = await supabase.auth.getUser();
+	return !error && !!user;
+}
+
+/**
+ * POST /api/auth/debug-sms
+ * Run SMS authentication diagnostics
+ * @param {import('@sveltejs/kit').RequestEvent} event
+ */
+export async function POST(request, { params } = {}) {
+	// SECURITY: Block in production AND require authentication
+	if (!isDevelopment()) {
+		return NextResponse.json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+	if (!(await verifyAuth(event))) {
+		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+		
+	try {
+		const { phoneNumber, action = 'diagnose' } = await request.NextResponse.json();
+
+		if (!phoneNumber) {
+			return NextResponse.json(
+				{ error: 'Phone number is required for diagnostics' },
+				{ status: 400 }
+			);
+		}
+
+		const diagnostics = new SMSAuthDiagnostics(event);
+
+		switch (action) {
+			case 'diagnose':
+				const result = await diagnostics.runDiagnostics(phoneNumber);
+				return NextResponse.json(result);
+
+			case 'test-send':
+				const sendResult = await diagnostics.testSMSSending(phoneNumber);
+				return NextResponse.json({
+					success: sendResult.success,
+					error: sendResult.error?.message,
+					logs: diagnostics.logger.getLogs()
+				});
+
+			case 'test-verify':
+				const { verificationCode } = await request.NextResponse.json();
+				if (!verificationCode) {
+					return NextResponse.json(
+						{ error: 'Verification code is required for verify test' },
+						{ status: 400 }
+					);
+				}
+				
+				const verifyResult = await diagnostics.testSMSVerification(phoneNumber, verificationCode);
+				return NextResponse.json({
+					success: verifyResult.success,
+					error: verifyResult.error?.message,
+					data: verifyResult.data,
+					logs: diagnostics.logger.getLogs()
+				});
+
+			default:
+				return NextResponse.json(
+					{ error: 'Invalid action. Use: diagnose, test-send, or test-verify' },
+					{ status: 400 }
+				);
+		}
+
+	} catch (error) {
+		console.error( 'SMS Debug endpoint error:', error);
+		return NextResponse.json(
+			{ 
+				error: 'Internal server error',
+				details: error.message,
+				stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+			},
+			{ status: 500 }
+		);
+	}
+}
+
+/**
+ * GET /api/auth/debug-sms
+ * Get SMS authentication system status
+ */
+export async function GET(request, { params } = {}) {
+	// SECURITY: Block in production AND require authentication
+	if (!isDevelopment()) {
+		return NextResponse.json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
+	}
+	if (!(await verifyAuth(event))) {
+		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+	try {
+		const diagnostics = new SMSAuthDiagnostics(event);
+		
+		// Run basic system checks without phone number
+		const result = await diagnostics.runDiagnostics('+1234567890'); // Dummy number for format check
+		
+		return NextResponse.json({
+			systemStatus: result.success ? 'healthy' : 'issues_detected',
+			environment: process.env.NODE_ENV,
+			timestamp: new Date().toISOString(),
+			checks: {
+				environment: result.issues.filter(issue => issue.includes('environment')).length === 0,
+				supabase: result.issues.filter(issue => issue.includes('Supabase')).length === 0,
+				database: result.issues.filter(issue => issue.includes('Database')).length === 0
+			},
+			issues: result.issues,
+			logs: result.logs
+		});
+
+	} catch (error) {
+		console.error( 'SMS Debug status error:', error);
+		return NextResponse.json(
+			{ 
+				systemStatus: 'error',
+				error: error.message,
+				timestamp: new Date().toISOString()
+			},
+			{ status: 500 }
+		);
+	}
+}

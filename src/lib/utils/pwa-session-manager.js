@@ -3,9 +3,8 @@
  * Specifically addresses session loss issues on Linux/KDE/Wayland when PWA is minimized
  */
 
-import { browser } from '$app/environment';
-import { auth } from '$lib/stores/auth.js';
-import { chat, wsChat } from '$lib/stores/chat.js';
+import { auth } from '@/lib/stores/auth.js';
+import { chat, wsChat } from '@/lib/stores/chat.js';
 
 /**
  * PWA Session Manager class
@@ -40,7 +39,7 @@ export class PWASessionManager {
 	 * Initialize the PWA session manager
 	 */
 	init() {
-		if (!browser || this.isInitialized) return;
+		if (!(typeof window !== 'undefined') || this.isInitialized) return;
 
 		console.log('🔄 Initializing PWA Session Manager...');
 
@@ -64,7 +63,7 @@ export class PWASessionManager {
 	 * Clean up event listeners and intervals
 	 */
 	destroy() {
-		if (!browser || !this.isInitialized) return;
+		if (!(typeof window !== 'undefined') || !this.isInitialized) return;
 
 		console.log('🧹 Cleaning up PWA Session Manager...');
 
@@ -396,7 +395,7 @@ export class PWASessionManager {
 export const pwaSessionManager = new PWASessionManager();
 
 // Auto-initialize in browser environment
-if (browser) {
+if (typeof window !== 'undefined') {
 	// Initialize after a short delay to ensure other stores are ready
 	setTimeout(() => {
 		pwaSessionManager.init();

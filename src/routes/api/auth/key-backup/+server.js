@@ -3,8 +3,7 @@
 
 import { json } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 // Lazy service role client creation
 let supabaseServiceRole = null;
@@ -16,7 +15,7 @@ function getServiceRoleClient() {
 }
 
 // Create regular client for JWT validation
-const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 /**
  * Authenticate user from request cookies

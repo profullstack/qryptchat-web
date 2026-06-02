@@ -4,10 +4,10 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { withAuth } from '$lib/api/middleware/auth.js';
-import { sseManager } from '$lib/api/sse-manager.js';
-import { MESSAGE_TYPES } from '$lib/api/protocol.js';
-import { getServiceRoleClient } from '$lib/supabase/service-role.js';
+import { withAuth } from '@/lib/api/middleware/auth.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
+import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
+import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {

@@ -1,6 +1,6 @@
 // API endpoint for generating signed upload URLs for direct file upload to Supabase Storage
 import { json, error } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function POST(event) {
 	try {

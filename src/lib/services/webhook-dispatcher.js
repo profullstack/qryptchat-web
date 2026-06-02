@@ -1,4 +1,4 @@
-import { getServiceRoleClient } from '$lib/supabase/service-role.js';
+import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 /**
  * Dispatch an event to all registered webhooks that subscribe to it.

@@ -2,8 +2,8 @@
 // GET /api/users/by-id/[identifier]
 
 import { json } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
-import { validateUniqueIdentifier } from '$lib/utils/unique-identifier.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { validateUniqueIdentifier } from '@/lib/utils/unique-identifier.js';
 
 export async function GET(event) {
 	try {

@@ -1,6 +1,6 @@
 // Debug endpoint for file upload testing
 import { json, error } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function POST(event) {
 	try {

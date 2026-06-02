@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 // Lazy service role client creation
 let supabase = null;

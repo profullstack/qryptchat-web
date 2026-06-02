@@ -1,0 +1,98 @@
+import { NextResponse } from 'next/server';
+import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
+
+// Lazy service role client creation
+let supabase = null;
+function getServiceRoleClient() {
+	if (!supabase) {
+		supabase = createServiceRoleClient();
+	}
+	return supabase;
+}
+
+
+export async function GET({ request }) {
+	try {
+		const authHeader = request.headers.get('authorization');
+		if (!authHeader?.startsWith('Bearer ')) {
+			return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
+		}
+
+		const token = authHeader.split(' ')[1];
+		
+		// Verify the JWT token and get user
+		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+		if (authError || !user) {
+			return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+		}
+
+		// Get user's current disappearing messages setting
+		const { data: profile, error: profileError } = await supabase
+			.from('users')
+			.select('default_message_retention_days')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (profileError) {
+			console.error('Error fetching user profile:', profileError);
+			return NextResponse.json({ error: 'Failed to fetch user settings' }, { status: 500 });
+		}
+
+		return NextResponse.json({
+			success: true,
+			default_message_retention_days: profile.default_message_retention_days
+		});
+
+	} catch (error) {
+		console.error('Error in disappearing messages GET:', error);
+		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+	}
+}
+
+
+export async function PUT({ request }) {
+	try {
+		const authHeader = request.headers.get('authorization');
+		if (!authHeader?.startsWith('Bearer ')) {
+			return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
+		}
+
+		const token = authHeader.split(' ')[1];
+		
+		// Verify the JWT token and get user
+		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+		if (authError || !user) {
+			return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+		}
+
+		const { default_message_retention_days } = await request.NextResponse.json();
+
+		// Validate input
+		if (typeof default_message_retention_days !== 'number' || default_message_retention_days < 0) {
+			return NextResponse.json({ error: 'Invalid retention days value' }, { status: 400 });
+		}
+
+		// Update user's disappearing messages setting
+		const { error: updateError } = await getServiceRoleClient()
+			.from('users')
+			.update({
+				default_message_retention_days,
+				updated_at: new Date().toISOString()
+			})
+			.eq('auth_user_id', user.id);
+
+		if (updateError) {
+			console.error('Error updating user profile:', updateError);
+			return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
+		}
+
+		return NextResponse.json({
+			success: true,
+			message: 'Disappearing messages setting updated successfully'
+		});
+
+	} catch (error) {
+		console.error('Error in disappearing messages PUT:', error);
+		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+	}
+}

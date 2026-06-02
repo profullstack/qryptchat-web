@@ -4,11 +4,8 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-
 /** @type {import('./$types').RequestHandler} */
 export async function POST(event) {
 	try {
@@ -25,7 +22,7 @@ export async function POST(event) {
 		console.log('Key deletion request for authenticated user:', user.id);
 
 		// Create service role client for database operations
-		const serviceSupabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+		const serviceSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 			auth: {
 				autoRefreshToken: false,
 				persistSession: false

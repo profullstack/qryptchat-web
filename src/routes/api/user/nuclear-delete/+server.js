@@ -1,10 +1,8 @@
 import { json } from '@sveltejs/kit';
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-
 // Create regular Supabase client for authentication
-const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 /**
  * Authenticate user from request cookies

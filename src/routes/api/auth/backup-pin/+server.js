@@ -3,8 +3,7 @@
 
 import { json } from '@sveltejs/kit';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-import { createServiceRoleClient } from '$lib/supabase/service-role.js';
+import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 let supabaseServiceRole = null;
 function getServiceRoleClient() {
@@ -14,7 +13,7 @@ function getServiceRoleClient() {
 	return supabaseServiceRole;
 }
 
-const supabaseClient = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 /**
  * Authenticate user from request cookies

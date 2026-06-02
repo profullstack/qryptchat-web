@@ -3,7 +3,7 @@
  * Provides comprehensive debugging tools for SMS authentication issues
  */
 
-import { createSupabaseServerClient } from '$lib/supabase.js';
+import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 /**
  * SMS Debug levels
@@ -135,8 +135,8 @@ export class SMSAuthDiagnostics {
 		this.logger.info('Checking environment configuration');
 
 		const requiredEnvVars = [
-			'PUBLIC_SUPABASE_URL',
-			'PUBLIC_SUPABASE_ANON_KEY'
+			'process.env.NEXT_PUBLIC_SUPABASE_URL',
+			'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY'
 		];
 
 		for (const envVar of requiredEnvVars) {
