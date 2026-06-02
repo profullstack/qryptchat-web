@@ -15,7 +15,7 @@ vi.mock('../src/lib/crypto/indexed-db-manager.js', () => {
 			set: vi.fn(async (id, value) => {
 				db.set(id, value);
 			}),
-			__clear: () => db.clear()
+			clearForTesting: () => db.clear()
 		}
 	};
 });
@@ -49,7 +49,7 @@ describe('KeyManager storage encryption key hardening', () => {
 		global.localStorage = createStorageMock();
 		global.sessionStorage = createStorageMock();
 
-		indexedDBManager.__clear();
+		indexedDBManager.clearForTesting();
 		indexedDBManager.get.mockClear();
 		indexedDBManager.set.mockClear();
 
@@ -75,19 +75,38 @@ describe('KeyManager storage encryption key hardening', () => {
 	});
 
 	it('migrates legacy Base64 key from localStorage into non-extractable IndexedDB key handle', async () => {
-		localStorage.setItem('qryptchat_storage_enc_key', Base64.encode(new Uint8Array([1, 2, 3, 4])));
+		const legacyKeyBytes = new Uint8Array(32).fill(7);
+		localStorage.setItem('qryptchat_storage_enc_key', Base64.encode(legacyKeyBytes));
 
 		const storageKey = await keyManager._getStorageEncryptionKey();
 
 		expect(storageKey).toEqual({ id: 'migrated-storage-key' });
 		expect(importKeySpy).toHaveBeenCalledWith(
 			'raw',
-			new Uint8Array([1, 2, 3, 4]),
+			legacyKeyBytes,
 			{ name: 'AES-GCM', length: 256 },
 			false,
 			['encrypt', 'decrypt']
 		);
 		expect(indexedDBManager.set).toHaveBeenCalledWith('qryptchat_storage_enc_key', storageKey);
 		expect(localStorage.getItem('qryptchat_storage_enc_key')).toBeNull();
+	});
+
+	it('migrates legacy Base64 key from sessionStorage into non-extractable IndexedDB key handle', async () => {
+		const legacyKeyBytes = new Uint8Array(32).fill(9);
+		sessionStorage.setItem('qryptchat_storage_enc_key', Base64.encode(legacyKeyBytes));
+
+		const storageKey = await keyManager._getStorageEncryptionKey();
+
+		expect(storageKey).toEqual({ id: 'migrated-storage-key' });
+		expect(importKeySpy).toHaveBeenCalledWith(
+			'raw',
+			legacyKeyBytes,
+			{ name: 'AES-GCM', length: 256 },
+			false,
+			['encrypt', 'decrypt']
+		);
+		expect(indexedDBManager.set).toHaveBeenCalledWith('qryptchat_storage_enc_key', storageKey);
+		expect(sessionStorage.getItem('qryptchat_storage_enc_key')).toBeNull();
 	});
 });

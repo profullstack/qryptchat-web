@@ -38,7 +38,10 @@ export class KeyManager {
 				return this._storageEncKey;
 			}
 		} catch (error) {
-			console.warn('🔑 Failed to load storage encryption key from IndexedDB:', error);
+			console.warn(
+				'🔑 Failed to load storage encryption key from IndexedDB; attempting migration or key generation:',
+				error
+			);
 		}
 
 		// Migrate legacy key material stored in local/session storage to IndexedDB key handle
@@ -56,7 +59,8 @@ export class KeyManager {
 			try {
 				await indexedDBManager.set(this.storageEncryptionKeyName, this._storageEncKey);
 			} catch (error) {
-				console.warn('🔑 Failed to persist migrated storage key in IndexedDB:', error);
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				throw new Error(`Failed to persist migrated storage key in IndexedDB: ${errorMessage}`);
 			}
 
 			return this._storageEncKey;
@@ -70,7 +74,8 @@ export class KeyManager {
 		try {
 			await indexedDBManager.set(this.storageEncryptionKeyName, this._storageEncKey);
 		} catch (error) {
-			console.warn('🔑 Failed to persist storage encryption key in IndexedDB:', error);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			throw new Error(`Failed to persist storage encryption key in IndexedDB: ${errorMessage}`);
 		}
 
 		return this._storageEncKey;
