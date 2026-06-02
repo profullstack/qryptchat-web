@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Railway/SvelteKit-friendly defaults
+# Next.js-friendly defaults
 export HOST="${HOST:-0.0.0.0}"
 export PORT="${PORT:-8080}"
 
@@ -101,24 +101,23 @@ else
 fi
 
 # Check build artifacts before starting
-echo "Checking SvelteKit build artifacts..."
-if [ ! -d "/app/build" ]; then
-  echo "❌ ERROR: /app/build directory not found!"
+echo "Checking Next.js build artifacts..."
+if [ ! -d "/app/.next" ]; then
+  echo "❌ ERROR: /app/.next directory not found!"
   echo "Build may have failed. Checking for build artifacts..."
-  ls -la /app/ | grep -E "(build|dist|.svelte-kit)"
+  ls -la /app/
   exit 1
 fi
 
-if [ ! -f "/app/build/handler.js" ]; then
-  echo "❌ ERROR: /app/build/handler.js not found!"
-  echo "SvelteKit build incomplete. Contents of /app/build:"
-  ls -la /app/build/
+if [ ! -f "/app/.next/BUILD_ID" ]; then
+  echo "❌ ERROR: /app/.next/BUILD_ID not found!"
+  echo "Next.js build incomplete. Contents of /app/.next:"
+  ls -la /app/.next/
   exit 1
 fi
 
-echo "✅ Build artifacts found"
-echo "Contents of /app/build:"
-ls -la /app/build/
+echo "✅ Next.js build artifacts found"
+echo "BUILD_ID: $(cat /app/.next/BUILD_ID)"
 
 # Debug environment before starting
 echo "=== ENVIRONMENT DEBUG ==="
@@ -130,7 +129,7 @@ echo "=========================="
 # Ensure production environment and start app in background
 echo "Starting Node.js application on ${HOST}:${PORT} in production mode"
 echo "Forcing NODE_ENV=production (Railway may have set it to development)"
-NODE_ENV=production HOST="${HOST}" PORT="${PORT}" pnpm start &
+NODE_ENV=production HOST="${HOST}" PORT="${PORT}" pnpm next start -p "${PORT}" &
 APP_PID=$!
 
 # Wait for either the app or Tor to exit
