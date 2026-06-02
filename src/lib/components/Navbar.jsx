@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useThemeStore, themeUtils, themes } from '@/lib/stores/theme.js';
-import { useI18nStore, languages, i18nUtils } from '@/lib/stores/i18n.js';
-// Note: useI18nStore from hybrid i18n.js is a snapshot function, not a Zustand hook
+import { useI18n } from '@/lib/hooks/useI18n.js';
+import { languages } from '@/lib/stores/i18n.js';
 import { useAuthStore } from '@/lib/stores/auth.js';
 
 export default function Navbar() {
@@ -17,9 +17,7 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const currentTheme = useThemeStore((s) => s.currentTheme);
-  const i18nStore = useI18nStore();
-  const currentLanguage = i18nStore.currentLanguage;
-  const t = i18nStore.t.bind(i18nStore);
+  const { t, currentLanguage, setLanguage } = useI18n();
   const { user, isAuthenticated, logout } = useAuthStore((s) => ({
     user: s.user,
     isAuthenticated: !!s.user,
@@ -57,7 +55,7 @@ export default function Navbar() {
   }
 
   async function switchLanguage(code) {
-    await i18nUtils.setLanguage(code);
+    await setLanguage(code);
     setLanguageDropdownOpen(false);
   }
 

@@ -106,6 +106,22 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/webhooks/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/chats/[id]",
+      "regex": "^/chats/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/chats/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/u/[username]",
+      "regex": "^/u/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPusername": "nxtPusername"
+      },
+      "namedRegex": "^/u/(?<nxtPusername>[^/]+?)(?:/)?$"
     }
   ],
   "staticRoutes": [
@@ -144,6 +160,18 @@
       "regex": "^/contact(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/contact(?:/)?$"
+    },
+    {
+      "page": "/encryption-test",
+      "regex": "^/encryption\\-test(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/encryption\\-test(?:/)?$"
+    },
+    {
+      "page": "/plugins",
+      "regex": "^/plugins(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/plugins(?:/)?$"
     },
     {
       "page": "/premium",

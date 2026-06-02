@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useThemeStore, themeUtils } from '@/lib/stores/theme.js';
-import { useI18nStore, i18nUtils } from '@/lib/stores/i18n.js';
+import { useI18n } from '@/lib/hooks/useI18n.js';
 import Navbar from '@/lib/components/Navbar.jsx';
 import Footer from '@/lib/components/Footer.jsx';
 import PWAToastManager from '@/lib/components/PWAToastManager.jsx';
@@ -13,7 +13,7 @@ import ActiveCallInterface from '@/lib/components/voice-call/ActiveCallInterface
 export default function ClientLayout({ children }) {
   const pathname = usePathname();
   const currentTheme = useThemeStore((s) => s.currentTheme);
-  const i18nStore = useI18nStore();
+  const { t: _t } = useI18n();
   const shouldShowFooter = pathname !== '/chat';
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export default function ClientLayout({ children }) {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     themeUtils.setTheme(theme);
-    i18nStore.init();
+    // i18n initializes from Svelte store on mount
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker

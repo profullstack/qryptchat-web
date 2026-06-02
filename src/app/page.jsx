@@ -1,11 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useI18nStore } from '@/lib/stores/i18n.js';
+import { useI18n } from '@/lib/hooks/useI18n.js';
 
 export default function HomePage() {
-  const store = useI18nStore();
-  const t = store.t.bind(store);
+  const { t } = useI18n();
 
   return (
     <>

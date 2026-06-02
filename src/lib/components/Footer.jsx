@@ -1,6 +1,6 @@
 'use client';
 
-import { useI18nStore } from '@/lib/stores/i18n.js';
+import { useI18n } from '@/lib/hooks/useI18n.js';
 
 const socialLinks = [
   { name: 'Discord', url: 'https://discord.gg/w5nHdzpQ29' },
@@ -12,8 +12,7 @@ const socialLinks = [
 const currentYear = new Date().getFullYear();
 
 export default function Footer() {
-  const i18n = useI18nStore();
-  const t = i18n.t.bind(i18n);
+  const { t } = useI18n();
   const onionUrl = process.env.NEXT_PUBLIC_ONION_URL;
   const isOnionSite = typeof window !== 'undefined' && window.location.hostname.endsWith('.onion');
 
