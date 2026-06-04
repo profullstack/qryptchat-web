@@ -147,27 +147,40 @@ export class PrivateKeyManager {
 				decryptedJson = new TextDecoder().decode(plaintext);
 
 			} else if (parsedData.version === '2.0' && parsedData.algorithm === 'AES-GCM-256') {
-				// v2.0 legacy: AES-GCM-256 (still supported for import)
+				// v2.0 legacy: AES-GCM-256.
+				// Older exports used HKDF; newer exports use PBKDF2. Try PBKDF2 first,
+				// fall back to HKDF so old backup files still import correctly.
 				const encryptedKeysBuffer = new Uint8Array(Base64.decode(parsedData.encryptedKeys));
 				const salt = new Uint8Array(Base64.decode(parsedData.salt));
 				const iv = new Uint8Array(Base64.decode(parsedData.iv));
 
-				const decryptionKey = await this._deriveKeyFromPassword(password, salt);
-				const cryptoKey = await crypto.subtle.importKey(
-					'raw', new Uint8Array(decryptionKey),
-					{ name: 'AES-GCM', length: 256 }, false, ['decrypt']
-				);
+				const tryDecrypt = async (key) => {
+					const cryptoKey = await crypto.subtle.importKey(
+						'raw', new Uint8Array(key),
+						{ name: 'AES-GCM', length: 256 }, false, ['decrypt']
+					);
+					return crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, encryptedKeysBuffer);
+				};
 
 				let decryptedBuffer;
+				// Attempt 1: PBKDF2 (current derivation)
+				const pbkdf2Key = await this._deriveKeyFromPassword(password, salt);
 				try {
-					decryptedBuffer = await crypto.subtle.decrypt(
-						{ name: 'AES-GCM', iv }, cryptoKey, encryptedKeysBuffer
-					);
-				} catch (decryptError) {
-					throw new Error('Invalid password or corrupted data');
+					decryptedBuffer = await tryDecrypt(pbkdf2Key);
+				} catch {
+					// Attempt 2: HKDF (legacy derivation used before PBKDF2 migration)
+					const passwordBytes = new TextEncoder().encode(password);
+					const hkdfKey = await HKDF.derive(passwordBytes, salt, 'PostQuantumKeyExport', 32);
+					CryptoUtils.secureClear(passwordBytes);
+					try {
+						decryptedBuffer = await tryDecrypt(hkdfKey);
+					} catch {
+						CryptoUtils.secureClear(hkdfKey);
+						throw new Error('Invalid password or corrupted data');
+					}
+					CryptoUtils.secureClear(hkdfKey);
 				}
-
-				CryptoUtils.secureClear(decryptionKey);
+				CryptoUtils.secureClear(pbkdf2Key);
 				decryptedJson = new TextDecoder().decode(decryptedBuffer);
 			} else {
 				throw new Error(`Unsupported export version/algorithm: ${parsedData.version}/${parsedData.algorithm}`);
@@ -206,9 +219,6 @@ export class PrivateKeyManager {
 					importedKeys.keys768.algorithm
 				);
 			}
-
-			// Clear sensitive data from memory
-			CryptoUtils.secureClear(decryptionKey);
 
 			console.log('🔑 Post-quantum private keys imported successfully');
 			
