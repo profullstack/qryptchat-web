@@ -46,14 +46,6 @@
     "vitest": "^4.1.8",
     "ws": "^8.18.3"
   },
-  "overrides": {
-    "glob": ">=10.5.0",
-    "jws": ">=3.2.3",
-    "js-yaml": ">=4.1.1",
-    "cookie": "1.1.1",
-    "diff": "8.0.4",
-    "serialize-javascript": "7.0.5"
-  },
   "dependencies": {
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
@@ -77,6 +69,11 @@
     "zustand": "^5.0.0"
   },
   "overrides": {
+    "glob": ">=10.5.0",
+    "jws": ">=3.2.3",
+    "js-yaml": ">=4.1.1",
+    "cookie": "1.1.1",
+    "diff": "8.0.4",
     "serialize-javascript": ">=7.0.5",
     "postcss": ">=8.5.10",
     "axios": ">=1.8.2"
