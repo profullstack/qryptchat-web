@@ -11,7 +11,7 @@ function UserProfileInner() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/user/profile`, { credentials: 'include' })
+    fetch(`/api/users/by-username/${encodeURIComponent(username)}`, { credentials: 'include' })
       .then(r => r.json())
       .then(d => setProfile(d.user || null))
       .catch(() => {})
@@ -36,9 +36,9 @@ function UserProfileInner() {
       {profile ? (
         <div style={{ textAlign: 'center' }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--color-brand-primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', fontWeight: 700, margin: '0 auto 1rem' }}>
-            {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (profile.displayName || username).charAt(0).toUpperCase()}
+            {profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (profile.display_name || username).charAt(0).toUpperCase()}
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>{profile.displayName || profile.username}</h1>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>{profile.display_name || profile.username}</h1>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>@{profile.username}</p>
           {currentUser && currentUser.id !== profile.id && (
             <button className="btn btn-primary" onClick={startChat}>Start Chat</button>
