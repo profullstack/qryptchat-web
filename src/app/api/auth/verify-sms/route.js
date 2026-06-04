@@ -22,7 +22,7 @@ function isValidPhoneNumber(phoneNumber) {
 /**
  * POST /api/auth/verify-sms
  * Verify SMS code and create/login user
- * @param {import('@sveltejs/kit').RequestEvent} event
+ * @param {import('next/server').NextRequest} event
  */
 export async function POST(request, { params } = {}) {
 		const logger = new SMSDebugLogger();

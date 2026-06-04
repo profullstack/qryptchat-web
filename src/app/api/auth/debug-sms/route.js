@@ -26,7 +26,7 @@ async function verifyAuth(event) {
 /**
  * POST /api/auth/debug-sms
  * Run SMS authentication diagnostics
- * @param {import('@sveltejs/kit').RequestEvent} event
+ * @param {import('next/server').NextRequest} event
  */
 export async function POST(request, { params } = {}) {
 	// SECURITY: Block in production AND require authentication

@@ -33,7 +33,7 @@ function generateVerificationCode() {
 /**
  * POST /api/auth/send-sms
  * Send SMS verification code
- * @param {import('@sveltejs/kit').RequestEvent} event
+ * @param {import('next/server').NextRequest} event
  */
 export async function POST(request, { params } = {}) {
 	// Rate limit: 5 requests per minute per IP

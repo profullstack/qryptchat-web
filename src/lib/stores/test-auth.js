@@ -1,37 +1,46 @@
 // Test authentication store for development/testing purposes
-import { writable } from 'svelte/store';
 
-// Mock user data for testing
 const mockUser = {
-	id: 'test-user-123',
-	username: 'testuser',
-	displayName: 'Test User',
-	phone: '+15551234567',
-	avatarUrl: null,
-	createdAt: new Date().toISOString()
+  id: 'test-user-123',
+  username: 'testuser',
+  displayName: 'Test User',
+  phone: '+15551234567',
+  avatarUrl: null,
+  createdAt: new Date().toISOString(),
 };
 
-// Create test authentication stores with proper typing
-export const testUser = writable(/** @type {typeof mockUser | null} */ (null));
-export const testIsAuthenticated = writable(false);
+let _user = null;
+let _authenticated = false;
+const _subs = new Set();
 
-// Test authentication functions
+function notify() {
+  _subs.forEach((fn) => fn({ user: _user, isAuthenticated: _authenticated }));
+}
+
+export const testUserStore = {
+  subscribe(fn) {
+    _subs.add(fn);
+    fn({ user: _user, isAuthenticated: _authenticated });
+    return () => _subs.delete(fn);
+  },
+};
+
 export const testAuth = {
-	async login() {
-		testUser.set(mockUser);
-		testIsAuthenticated.set(true);
-		return { success: true };
-	},
-
-	async logout() {
-		testUser.set(null);
-		testIsAuthenticated.set(false);
-		return { success: true };
-	},
-
-	async initialize() {
-		// Simulate being logged in for testing
-		testUser.set(mockUser);
-		testIsAuthenticated.set(true);
-	}
+  async login() {
+    _user = mockUser;
+    _authenticated = true;
+    notify();
+    return { success: true };
+  },
+  async logout() {
+    _user = null;
+    _authenticated = false;
+    notify();
+    return { success: true };
+  },
+  async initialize() {
+    _user = mockUser;
+    _authenticated = true;
+    notify();
+  },
 };

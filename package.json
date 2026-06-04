@@ -24,8 +24,8 @@
     "format:check": "prettier --check .",
     "icons:generate": "node scripts/generate-icons.js",
     "icons:install": "scripts/install-desktop-icons.sh",
-    "postinstall": "pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm",
-    "dependencies": "pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm"
+    "postinstall": "command -v pnpm && pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm || true",
+    "dependencies": "command -v pnpm && pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm || true"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.8.0",

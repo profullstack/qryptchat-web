@@ -5,7 +5,16 @@
  */
 
 import { CallKeyExchange, MLKEMUtils } from '../crypto/ml-kem.js';
-import { writable } from 'svelte/store';
+
+function writable(initial) {
+  let value = initial;
+  const subs = new Set();
+  return {
+    subscribe(fn) { subs.add(fn); fn(value); return () => subs.delete(fn); },
+    set(v) { value = v; subs.forEach((fn) => fn(v)); },
+    update(fn) { this.set(fn(value)); },
+  };
+}
 
 /**
  * Call states for the ML-KEM call manager

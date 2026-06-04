@@ -16,7 +16,7 @@ function isDevelopment() {
 /**
  * GET /api/auth/debug-sms-config
  * Run SMS configuration diagnostics
- * @param {import('@sveltejs/kit').RequestEvent} event
+ * @param {import('next/server').NextRequest} event
  */
 export async function GET(request, { params } = {}) {
 	// SECURITY: Block in production
@@ -69,7 +69,7 @@ export async function GET(request, { params } = {}) {
 /**
  * POST /api/auth/debug-sms-config
  * Test SMS configuration with a specific phone number
- * @param {import('@sveltejs/kit').RequestEvent} event
+ * @param {import('next/server').NextRequest} event
  */
 export async function POST(request, { params } = {}) {
 	// SECURITY: Block in production
