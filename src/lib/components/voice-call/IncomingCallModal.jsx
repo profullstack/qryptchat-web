@@ -1,13 +1,12 @@
 'use client';
 
 import { useVoiceCallStore } from '@/lib/stores/voice-call.js';
+import { useShallow } from 'zustand/react/shallow';
 
 export default function IncomingCallModal() {
-  const { currentCall, acceptCall, endCall } = useVoiceCallStore((s) => ({
-    currentCall: s.currentCall,
-    acceptCall: s.acceptCall,
-    endCall: s.endCall,
-  }));
+  const { currentCall, acceptCall, endCall } = useVoiceCallStore(
+    useShallow((s) => ({ currentCall: s.currentCall, acceptCall: s.acceptCall, endCall: s.endCall }))
+  );
 
   if (!currentCall || !currentCall.isIncoming || currentCall.state !== 'ringing') return null;
 

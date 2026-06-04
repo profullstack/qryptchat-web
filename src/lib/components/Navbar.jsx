@@ -7,6 +7,7 @@ import { useThemeStore, themeUtils, themes } from '@/lib/stores/theme.js';
 import { useI18n } from '@/lib/hooks/useI18n.js';
 import { languages } from '@/lib/stores/i18n.js';
 import { useAuthStore } from '@/lib/stores/auth.js';
+import { useShallow } from 'zustand/react/shallow';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -18,11 +19,9 @@ export default function Navbar() {
 
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const { t, currentLanguage, setLanguage } = useI18n();
-  const { user, isAuthenticated, logout } = useAuthStore((s) => ({
-    user: s.user,
-    isAuthenticated: !!s.user,
-    logout: s.logout,
-  }));
+  const { user, isAuthenticated, logout } = useAuthStore(
+    useShallow((s) => ({ user: s.user, isAuthenticated: !!s.user, logout: s.logout }))
+  );
 
   const currentLanguageInfo = languages[currentLanguage] || languages.en;
 

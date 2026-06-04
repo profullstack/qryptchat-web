@@ -2,14 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 import { useChatStore } from '@/lib/stores/chat.js';
+import { useShallow } from 'zustand/react/shallow';
 
 export default function ConversationMenu({ conversation, position, onClose }) {
   const ref = useRef(null);
-  const { archiveConversation, unarchiveConversation, deleteConversation } = useChatStore((s) => ({
-    archiveConversation: s.archiveConversation,
-    unarchiveConversation: s.unarchiveConversation,
-    deleteConversation: s.deleteConversation,
-  }));
+  const { archiveConversation, unarchiveConversation, deleteConversation } = useChatStore(
+    useShallow((s) => ({ archiveConversation: s.archiveConversation, unarchiveConversation: s.unarchiveConversation, deleteConversation: s.deleteConversation }))
+  );
 
   useEffect(() => {
     function handleClickOutside(e) {

@@ -1,15 +1,12 @@
 'use client';
 
 import { useVoiceCallStore } from '@/lib/stores/voice-call.js';
+import { useShallow } from 'zustand/react/shallow';
 
 export default function ActiveCallInterface() {
-  const { currentCall, callStats, toggleMute, toggleVideo, endCall } = useVoiceCallStore((s) => ({
-    currentCall: s.currentCall,
-    callStats: s.callStats,
-    toggleMute: s.toggleMute,
-    toggleVideo: s.toggleVideo,
-    endCall: s.endCall,
-  }));
+  const { currentCall, callStats, toggleMute, toggleVideo, endCall } = useVoiceCallStore(
+    useShallow((s) => ({ currentCall: s.currentCall, callStats: s.callStats, toggleMute: s.toggleMute, toggleVideo: s.toggleVideo, endCall: s.endCall }))
+  );
 
   if (!currentCall || !['connecting', 'connected', 'calling'].includes(currentCall.state)) return null;
 

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '@/lib/stores/chat.js';
+import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { detectTextFormat } from '@profullstack/text-type-detection';
 import { trackMessageSent } from '@/lib/utils/analytics.js';
@@ -17,11 +18,9 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const typingTimeoutRef = useRef(null);
 
   const user = useAuthStore((s) => s.user);
-  const { sendMessage, setTyping, stopTyping } = useChatStore((s) => ({
-    sendMessage: s.sendMessage,
-    setTyping: s.setTyping,
-    stopTyping: s.stopTyping,
-  }));
+  const { sendMessage, setTyping, stopTyping } = useChatStore(
+    useShallow((s) => ({ sendMessage: s.sendMessage, setTyping: s.setTyping, stopTyping: s.stopTyping }))
+  );
   const addMessage = useMessagesStore((s) => s.error);
 
   useEffect(() => {

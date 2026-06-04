@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/stores/auth.js';
+import { useShallow } from 'zustand/react/shallow';
 import { useMessagesStore } from '@/lib/stores/messages.js';
 import { createSupabaseClient } from '@/lib/supabase.js';
 import { keyManager } from '@/lib/crypto/key-manager.js';
@@ -12,13 +13,9 @@ import Message from '@/lib/components/Message.jsx';
 
 export default function AuthPage() {
   const router = useRouter();
-  const { user, isAuthenticated: authenticated, loading, sendSMS, verifySMS } = useAuthStore((s) => ({
-    user: s.user,
-    isAuthenticated: !!s.user,
-    loading: s.loading,
-    sendSMS: s.sendSMS,
-    verifySMS: s.verifySMS,
-  }));
+  const { user, isAuthenticated: authenticated, loading, sendSMS, verifySMS } = useAuthStore(
+    useShallow((s) => ({ user: s.user, isAuthenticated: !!s.user, loading: s.loading, sendSMS: s.sendSMS, verifySMS: s.verifySMS }))
+  );
   const msgs = useMessagesStore((s) => s.messages);
   const removeMsg = useMessagesStore((s) => s.remove);
 

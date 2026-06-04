@@ -9,7 +9,7 @@ import NewChatModal from './NewChatModal.jsx';
 
 export default function ChatSidebar({ activeConversationId, onConversationSelect }) {
   const user = useAuthStore((s) => s.user);
-  const { authenticated } = useChatStore((s) => ({ authenticated: s.authenticated }));
+  const authenticated = useChatStore((s) => s.authenticated);
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChatModal, setShowNewChatModal] = useState(false);

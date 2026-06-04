@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useChatStore } from '@/lib/stores/chat.js';
+import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import MessageItem from './MessageItem.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
@@ -9,12 +10,9 @@ import TypingIndicator from './TypingIndicator.jsx';
 export default function MessageList({ conversationId }) {
   const containerRef = useRef(null);
   const user = useAuthStore((s) => s.user);
-  const { messages, typingUsers, loadMessages, joinConversation } = useChatStore((s) => ({
-    messages: s.messages,
-    typingUsers: s.typingUsers,
-    loadMessages: s.loadMessages,
-    joinConversation: s.joinConversation,
-  }));
+  const { messages, typingUsers, loadMessages, joinConversation } = useChatStore(
+    useShallow((s) => ({ messages: s.messages, typingUsers: s.typingUsers, loadMessages: s.loadMessages, joinConversation: s.joinConversation }))
+  );
 
   useEffect(() => {
     if (!conversationId || !user?.id) return;

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { useChatStore } from '@/lib/stores/chat.js';
+import { useShallow } from 'zustand/react/shallow';
 import ChatSidebar from '@/lib/components/ChatSidebar.jsx';
 import MessageList from '@/lib/components/chat/MessageList.jsx';
 import MessageInput from '@/lib/components/chat/MessageInput.jsx';
@@ -20,7 +21,9 @@ function ChatPageInner() {
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => !!s.user);
-  const { connect, connected } = useChatStore((s) => ({ connect: s.connect, connected: s.connected }));
+  const { connect, connected } = useChatStore(
+    useShallow((s) => ({ connect: s.connect, connected: s.connected }))
+  );
 
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [showSidebar, setShowSidebar] = useState(true);
