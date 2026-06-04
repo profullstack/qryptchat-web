@@ -72,7 +72,7 @@ async function authenticateUser(request) {
  * GET /api/conversations/:id/disappearing-messages
  * Get current user's disappearing message settings for a conversation
  */
-export async function GET({ params, request }) {
+export async function GET(request, { params } = {}) {
   try {
     console.log('🔐 [API] GET /api/conversations/:id/disappearing-messages - Starting authentication');
 
@@ -141,7 +141,7 @@ export async function GET({ params, request }) {
  * PUT /api/conversations/:id/disappearing-messages
  * Update current user's disappearing message settings for a conversation
  */
-export async function PUT({ params, request }) {
+export async function PUT(request, { params } = {}) {
   try {
     console.log('🔐 [API] PUT /api/conversations/:id/disappearing-messages - Starting authentication');
 

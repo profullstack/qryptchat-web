@@ -111,7 +111,7 @@ async function authenticateUser(request) {
  * GET /api/chat/conversations/[id]/participants
  * Get all participants in a conversation
  */
-export async function GET({ params, request }) {
+export async function GET(request, { params } = {}) {
 	try {
 		// Authenticate user
 		const { user, error: authError } = await authenticateUser(request);

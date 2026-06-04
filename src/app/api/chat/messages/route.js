@@ -73,7 +73,7 @@ async function authenticateUser(request) {
  * POST /api/chat/messages
  * Create a new message and fan out deliveries to recipients
  */
-export async function POST({ request }) {
+export async function POST(request) {
   try {
     console.log('🔐 [API] POST /api/chat/messages - Starting authentication');
 
@@ -247,7 +247,8 @@ export async function POST({ request }) {
  * GET /api/chat/messages?conversation_id=xxx
  * Get messages for a conversation (filtered by user's active deliveries)
  */
-export async function GET({ url, request }) {
+export async function GET(request) {
+  const url = new URL(request.url);
   try {
     console.log('🔐 [API] GET /api/chat/messages - Starting authentication');
 
@@ -438,7 +439,7 @@ export async function GET({ url, request }) {
  * PATCH /api/chat/messages/:id/read
  * Mark a message as read (starts read-based timer if configured)
  */
-export async function PATCH({ request, params }) {
+export async function PATCH(request, { params } = {}) {
   try {
     console.log('🔐 [API] PATCH /api/chat/messages/:id/read - Starting authentication');
 

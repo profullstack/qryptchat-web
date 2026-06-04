@@ -48,7 +48,7 @@ async function authenticateUser(request) {
  * GET /api/chat/messages/[id]
  * Fetch a specific message with encrypted content for the authenticated user
  */
-export async function GET({ params, request }) {
+export async function GET(request, { params } = {}) {
 	try {
 		const messageId = params.id;
 		

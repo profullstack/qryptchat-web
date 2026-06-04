@@ -11,7 +11,7 @@ function getServiceRoleClient() {
 }
 
 
-export async function GET({ request }) {
+export async function GET(request) {
 	try {
 		const authHeader = request.headers.get('authorization');
 		if (!authHeader?.startsWith('Bearer ')) {
@@ -50,7 +50,7 @@ export async function GET({ request }) {
 }
 
 
-export async function PUT({ request }) {
+export async function PUT(request) {
 	try {
 		const authHeader = request.headers.get('authorization');
 		if (!authHeader?.startsWith('Bearer ')) {

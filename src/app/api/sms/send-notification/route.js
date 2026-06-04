@@ -11,7 +11,7 @@ import { TwilioSMSProvider } from '@/lib/services/twilio-sms-provider.js';
  * @param {Object} params - SvelteKit request parameters
  * @param {Request} params.request - The request object
  */
-export async function POST({ request }) {
+export async function POST(request) {
   try {
     const { phoneNumber, message } = await request.json();
 

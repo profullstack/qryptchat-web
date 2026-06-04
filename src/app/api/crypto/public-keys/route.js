@@ -96,7 +96,8 @@ async function authenticateUser(request) {
  * GET /api/crypto/public-keys?user_id=xxx
  * Get a single user's public key
  */
-export async function GET({ url, request }) {
+export async function GET(request) {
+	const url = new URL(request.url);
 	try {
 		// Authenticate user
 		const { user, error: authError } = await authenticateUser(request);
@@ -148,7 +149,7 @@ export async function GET({ url, request }) {
  * POST /api/crypto/public-keys
  * Get multiple users' public keys
  */
-export async function POST({ request }) {
+export async function POST(request) {
 	try {
 		// Authenticate user
 		const { user, error: authError } = await authenticateUser(request);
@@ -213,7 +214,7 @@ export async function POST({ request }) {
  * PUT /api/crypto/public-keys
  * Update/sync user's public key to database
  */
-export async function PUT({ request }) {
+export async function PUT(request) {
 	try {
 		// Authenticate user
 		const { user, error: authError } = await authenticateUser(request);

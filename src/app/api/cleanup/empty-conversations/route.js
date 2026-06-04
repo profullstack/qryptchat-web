@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseClient } from '@/lib/supabase.js';
 
 
-export async function DELETE({ request, cookies, locals }) {
+export async function DELETE(request) {
 	try {
 		// Get supabase client (will use cookies automatically)
 		const supabase = createSupabaseClient();

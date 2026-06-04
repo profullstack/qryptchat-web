@@ -61,7 +61,7 @@ function verifyTelnyxSignature(payload, signature, timestamp, publicKey) {
  * Webhook endpoint for receiving inbound SMS messages from Telnyx
  * This handles SMS replies for OTP verification during registration
  */
-export async function POST({ request }) {
+export async function POST(request) {
 	try {
 		// Get raw body for signature verification
 		const rawBody = await request.text();

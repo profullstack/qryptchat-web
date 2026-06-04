@@ -6,7 +6,8 @@ function getServiceRoleClient() {
 }
 
 
-export async function GET({ url }) {
+export async function GET(request) {
+	const url = new URL(request.url);
 	try {
 		const phone = url.searchParams.get('phone');
 		if (!phone) {
@@ -31,7 +32,7 @@ export async function GET({ url }) {
 }
 
 
-export async function POST({ request }) {
+export async function POST(request) {
 	try {
 		const { phone, salt } = await request.json();
 

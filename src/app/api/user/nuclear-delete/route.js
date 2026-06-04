@@ -88,7 +88,7 @@ async function authenticateUser(request) {
 	}
 }
 
-export async function DELETE({ request }) {
+export async function DELETE(request) {
 	try {
 		console.log('🔐 [API] DELETE /api/user/nuclear-delete - Starting authentication');
 

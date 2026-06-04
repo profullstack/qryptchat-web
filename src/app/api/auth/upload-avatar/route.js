@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-export async function POST({ request }) {
+export async function POST(request) {
 	try {
 		// Get the authorization header
 		const authHeader = request.headers.get('authorization');
@@ -117,7 +117,7 @@ export async function POST({ request }) {
 	}
 }
 
-export async function DELETE({ request }) {
+export async function DELETE(request) {
 	try {
 		// Get the authorization header
 		const authHeader = request.headers.get('authorization');

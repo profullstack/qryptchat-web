@@ -63,7 +63,7 @@ async function authenticateUser(request) {
  * GET /api/conversations/:id/disappearing-messages/presets
  * Get common timer presets for UI
  */
-export async function GET({ params, request }) {
+export async function GET(request, { params } = {}) {
   try {
     console.log('🔐 [API] GET /api/conversations/:id/disappearing-messages/presets - Starting authentication');
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseClient } from '@/lib/supabase.js';
 
-export async function GET({ cookies }) {
+export async function GET(request) {
 	try {
 		const supabase = createSupabaseClient();
 		
