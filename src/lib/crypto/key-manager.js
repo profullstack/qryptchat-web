@@ -5,6 +5,7 @@
 
 import { Base64, CryptoUtils } from './index.js';
 import { MasterKeyDerivation } from './master-key-derivation.js';
+import { indexedDBManager } from './indexed-db-manager.js';
 
 /**
  * Client-side key management service
@@ -380,9 +381,14 @@ export class KeyManager {
 	async hasUserKeys() {
 		try {
 			if (typeof window === 'undefined') return false;
-			
-			const userKeys = localStorage.getItem('qryptchat_user_keys');
-			return !!userKeys;
+
+			// Fast path: localStorage marker set by generateUserKeys
+			if (localStorage.getItem('qryptchat_user_keys')) return true;
+
+			// Fallback: keys imported from backup go straight to IndexedDB
+			// without touching localStorage, so check there too.
+			const pqKeys = await indexedDBManager.get('qryptchat_pq_keypair');
+			return !!pqKeys;
 		} catch (error) {
 			console.error('🔑 Failed to check user keys:', error);
 			return false;
