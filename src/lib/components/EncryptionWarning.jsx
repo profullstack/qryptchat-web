@@ -10,8 +10,8 @@ export default function EncryptionWarning() {
   useEffect(() => {
     async function check() {
       try {
-        const keys = await keyManager.getLocalKeys();
-        setHasKeys(!!keys);
+        const has = await keyManager.hasUserKeys();
+        setHasKeys(has);
       } catch {
         setHasKeys(false);
       }
