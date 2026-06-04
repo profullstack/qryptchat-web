@@ -1,10 +1,7 @@
-import { getServiceRoleClient } from '$lib/supabase/service-role.js';
-
-/** @typedef {{ slug: string, title: string, date: string, excerpt: string, html: string|null, image_url: string|null, source: string }} Post */
+import { getServiceRoleClient } from '@/lib/supabase/service-role';
 
 const FIELDS = 'slug, title, meta_description, content_html, image_url, published_at, source';
 
-/** @param {import('@supabase/supabase-js').PostgrestSingleResponse<any>['data']} row */
 function rowToPost(row) {
   return {
     slug: row.slug,
@@ -17,7 +14,6 @@ function rowToPost(row) {
   };
 }
 
-/** @returns {Promise<Post[]>} */
 export async function loadAllPosts() {
   try {
     const sb = getServiceRoleClient();
@@ -33,10 +29,6 @@ export async function loadAllPosts() {
   }
 }
 
-/**
- * @param {string} slug
- * @returns {Promise<Post|undefined>}
- */
 export async function findPost(slug) {
   try {
     const sb = getServiceRoleClient();

@@ -1,9 +1,11 @@
 import { buildRssXml } from '@profullstack/autoblog/feeds';
-import { loadAllPosts } from '$lib/blog/posts.js';
+import { loadAllPosts } from '@/lib/blog/posts';
+
+export const revalidate = 60;
 
 export async function GET() {
   const posts = await loadAllPosts();
-  const siteUrl = (process.env.PUBLIC_APP_URL ?? 'https://qrypt.chat').replace(/\/$/, '');
+  const siteUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://qrypt.chat').replace(/\/$/, '');
 
   const xml = buildRssXml({
     title: 'QryptChat Blog',
