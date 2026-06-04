@@ -35,7 +35,7 @@ export async function POST(request, { params } = {}) {
 			conversationId,
 			messageId,
 			encryptedMetadata
-		} = await request.NextResponse.json();
+		} = await request.json();
 
 		// Validate inputs
 		if (!conversationId || !messageId || !encryptedMetadata) {

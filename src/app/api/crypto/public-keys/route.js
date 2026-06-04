@@ -156,7 +156,7 @@ export async function POST({ request }) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { user_ids } = await request.NextResponse.json();
+		const { user_ids } = await request.json();
 		
 		if (!user_ids || !Array.isArray(user_ids)) {
 			return NextResponse.json({ error: 'Missing or invalid user_ids array' }, { status: 400 });
@@ -221,7 +221,7 @@ export async function PUT({ request }) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { public_key, key_type = 'ML-KEM-1024' } = await request.NextResponse.json();
+		const { public_key, key_type = 'ML-KEM-1024' } = await request.json();
 		
 		if (!public_key) {
 			return NextResponse.json({ error: 'Missing public_key' }, { status: 400 });

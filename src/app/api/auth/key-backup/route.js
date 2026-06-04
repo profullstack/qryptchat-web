@@ -138,7 +138,7 @@ export async function PUT({ request }) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { encrypted_keys } = await request.NextResponse.json();
+		const { encrypted_keys } = await request.json();
 
 		if (!encrypted_keys || typeof encrypted_keys !== 'string') {
 			return NextResponse.json({ error: 'Missing or invalid encrypted_keys' }, { status: 400 });

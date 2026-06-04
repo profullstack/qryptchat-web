@@ -9,7 +9,7 @@ import { sseManager } from '@/lib/api/sse-manager.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { conversationId } = await request.NextResponse.json();
+		const { conversationId } = await request.json();
 
 		if (!conversationId) {
 			return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });

@@ -11,7 +11,7 @@ import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { conversationId, encryptedContents, messageType = 'text', replyToId, metadata } = await request.NextResponse.json();
+		const { conversationId, encryptedContents, messageType = 'text', replyToId, metadata } = await request.json();
 
 		if (!conversationId || !encryptedContents) {
 			return NextResponse.json({ error: 'Conversation ID and encrypted contents are required' }, { status: 400 });

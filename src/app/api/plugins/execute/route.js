@@ -15,7 +15,7 @@ export async function POST(request, { params } = {}) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { message, context = {} } = await request.NextResponse.json();
+    const { message, context = {} } = await request.json();
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });

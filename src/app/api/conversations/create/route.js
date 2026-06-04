@@ -10,7 +10,7 @@ import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { participantIds, name, isGroup } = await request.NextResponse.json();
+		const { participantIds, name, isGroup } = await request.json();
 
 		if (!participantIds || !Array.isArray(participantIds)) {
 			return NextResponse.json({ error: 'Missing or invalid participantIds' }, { status: 400 });

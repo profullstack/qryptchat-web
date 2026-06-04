@@ -101,7 +101,7 @@ export async function POST({ request }) {
     const userId = userData.id;
     console.log('🔐 [API] ✅ Internal user ID:', userId);
 
-    const { conversation_id, encrypted_contents, content_type = 'text', has_attachments = false, reply_to_id } = await request.NextResponse.json();
+    const { conversation_id, encrypted_contents, content_type = 'text', has_attachments = false, reply_to_id } = await request.json();
 
     // Validate required fields
     if (!conversation_id || !encrypted_contents) {

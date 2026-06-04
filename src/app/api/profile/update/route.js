@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function POST(request, { params } = {}) {
 	try {
-		const { bio, website } = await request.NextResponse.json();
+		const { bio, website } = await request.json();
 
 		// Get authorization header
 		const authHeader = request.headers.get('authorization');

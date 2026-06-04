@@ -13,7 +13,7 @@ import { TwilioSMSProvider } from '@/lib/services/twilio-sms-provider.js';
  */
 export async function POST({ request }) {
   try {
-    const { phoneNumber, message } = await request.NextResponse.json();
+    const { phoneNumber, message } = await request.json();
 
     if (!phoneNumber || !message) {
       return NextResponse.json(

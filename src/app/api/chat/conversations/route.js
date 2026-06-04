@@ -84,7 +84,7 @@ export async function GET(request, { params } = {}) {
 export async function POST(request, { params } = {}) {
 	try {
 		const supabase = await createSupabaseServerClient();
-		const { type, name, participant_ids, group_id } = await request.NextResponse.json();
+		const { type, name, participant_ids, group_id } = await request.json();
 		
 		// Get user from session
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -227,7 +227,7 @@ export async function POST(request, { params } = {}) {
 export async function PATCH(request, { params } = {}) {
 	try {
 		const supabase = await createSupabaseServerClient();
-		const { conversation_id, action } = await request.NextResponse.json();
+		const { conversation_id, action } = await request.json();
 		
 		// Get user from session
 		const { data: { user }, error: userError } = await supabase.auth.getUser();

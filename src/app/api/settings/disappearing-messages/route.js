@@ -65,7 +65,7 @@ export async function PUT({ request }) {
 			return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 		}
 
-		const { default_message_retention_days } = await request.NextResponse.json();
+		const { default_message_retention_days } = await request.json();
 
 		// Validate input
 		if (typeof default_message_retention_days !== 'number' || default_message_retention_days < 0) {

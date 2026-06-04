@@ -117,7 +117,7 @@ export async function DELETE({ request }) {
 		console.log('🔐 [API] ✅ Internal user ID:', userId);
 		
 		// Additional confirmation check - require confirmation in request body
-		const body = await request.NextResponse.json().catch(() => ({}));
+		const body = await request.json().catch(() => ({}));
 		const { confirmation } = body;
 		
 		if (confirmation !== 'DELETE_ALL_MY_DATA') {

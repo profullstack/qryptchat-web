@@ -40,7 +40,7 @@ export async function POST(request, { params } = {}) {
 
 		// Parse JSON request body
 		try {
-			requestBody = await request.NextResponse.json();
+			requestBody = await request.json();
 			({ phoneNumber, verificationCode, username, displayName, useSession } = requestBody);
 		} catch (parseError) {
 			logger.error( 'Request body parsing failed', { error: parseError });

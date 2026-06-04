@@ -39,7 +39,7 @@ export async function POST(request, { params } = {}) {
 
 		
 	try {
-		const { phoneNumber, action = 'diagnose' } = await request.NextResponse.json();
+		const { phoneNumber, action = 'diagnose' } = await request.json();
 
 		if (!phoneNumber) {
 			return NextResponse.json(
@@ -64,7 +64,7 @@ export async function POST(request, { params } = {}) {
 				});
 
 			case 'test-verify':
-				const { verificationCode } = await request.NextResponse.json();
+				const { verificationCode } = await request.json();
 				if (!verificationCode) {
 					return NextResponse.json(
 						{ error: 'Verification code is required for verify test' },

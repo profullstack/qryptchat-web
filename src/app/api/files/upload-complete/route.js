@@ -22,7 +22,7 @@ export async function POST(request, { params } = {}) {
 			storagePath,
 			fileId,
 			metadata
-		} = await request.NextResponse.json();
+		} = await request.json();
 
 		// Validate inputs
 		if (!storagePath || !fileId || !metadata) {

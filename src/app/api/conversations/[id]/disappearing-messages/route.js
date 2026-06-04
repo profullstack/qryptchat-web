@@ -174,7 +174,7 @@ export async function PUT({ params, request }) {
       return NextResponse.json({ error: 'Missing conversation ID' }, { status: 400 });
     }
 
-    const { disappear_seconds, start_on } = await request.NextResponse.json();
+    const { disappear_seconds, start_on } = await request.json();
 
     // Validate input
     if (typeof disappear_seconds !== 'number' || disappear_seconds < 0) {

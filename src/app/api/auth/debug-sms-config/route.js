@@ -79,7 +79,7 @@ export async function POST(request, { params } = {}) {
 
 		
 	try {
-		const { testPhoneNumber } = await request.NextResponse.json();
+		const { testPhoneNumber } = await request.json();
 		
 		if (!testPhoneNumber) {
 			return NextResponse.json(

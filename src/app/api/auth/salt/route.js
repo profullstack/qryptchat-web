@@ -33,7 +33,7 @@ export async function GET({ url }) {
 
 export async function POST({ request }) {
 	try {
-		const { phone, salt } = await request.NextResponse.json();
+		const { phone, salt } = await request.json();
 
 		if (!phone || !salt) {
 			return NextResponse.json({ error: 'Missing phone or salt' }, { status: 400 });

@@ -11,7 +11,7 @@ export async function POST(request, { params } = {}) {
 	try {
 		
 		// Get the request body
-		const { publicKey } = await request.NextResponse.json();
+		const { publicKey } = await request.json();
 
 		if (!publicKey) {
 			return NextResponse.json({ error: 'Missing required field: publicKey' }, { status: 400 });
