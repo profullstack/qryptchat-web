@@ -99,7 +99,8 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 8080
 # Tor requires root at startup (chown /var/lib/tor, run tor daemon); entrypoint
 # drops to debian-tor for the tor process. A non-root USER here would break it.
-# nosemgrep: dockerfile.security.missing-user-entrypoint,dockerfile.security.missing-user
+# nosemgrep: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint
 ENTRYPOINT ["/usr/bin/tini","--"]
+# nosemgrep: dockerfile.security.missing-user.missing-user
 CMD ["/entrypoint.sh"]
 
