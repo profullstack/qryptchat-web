@@ -243,7 +243,7 @@ export const useChatStore = create((set, get) => {
           return { success: true, data: sentMessage };
         }
       } catch (error) {
-        let errorMessage = 'Failed to send message';
+        let errorMessage = error?.message || 'Failed to send message';
         if (error?.message) {
           if (error.message.includes('KYBER') || error.message.includes('Nuclear Key Reset')) {
             errorMessage = 'Encryption failed due to incompatible key format. All participants must use the Nuclear Key Reset option in Settings.';
@@ -251,8 +251,8 @@ export const useChatStore = create((set, get) => {
             errorMessage = 'Encryption failed due to key compatibility issues. Both participants need to reset their encryption keys.';
           } else if (error.message.includes('Failed to encrypt message for any participants')) {
             errorMessage = 'Failed to encrypt message for any participants. Try using the Nuclear Key Reset option in Settings.';
-          } else if (error.message.includes('Users with incompatible keys detected')) {
-            errorMessage = error.message;
+          } else if (error.message.includes('No participant keys found')) {
+            errorMessage = 'No encryption keys found for participants. Go to Settings and ensure your keys are set up, then ask your contact to do the same.';
           }
         }
         return { success: false, error: errorMessage };
