@@ -100,7 +100,7 @@ async function hashPin(pin) {
  * GET /api/auth/backup-pin
  * Check if the authenticated user has a backup PIN set
  */
-export async function GET({ request }) {
+export async function GET(request) {
 	try {
 		const { user, error: authError } = await authenticateUser(request);
 		if (authError || !user) {
@@ -129,7 +129,7 @@ export async function GET({ request }) {
  * POST /api/auth/backup-pin
  * Set or update the backup PIN for the authenticated user
  */
-export async function POST({ request }) {
+export async function POST(request) {
 	try {
 		const { user, error: authError } = await authenticateUser(request);
 		if (authError || !user) {

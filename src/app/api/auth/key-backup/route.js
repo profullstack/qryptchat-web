@@ -91,7 +91,7 @@ async function authenticateUser(request) {
  * GET /api/auth/key-backup
  * Fetch the authenticated user's encrypted key backup
  */
-export async function GET({ request }) {
+export async function GET(request) {
 	try {
 		const { user, error: authError } = await authenticateUser(request);
 		if (authError || !user) {
@@ -131,7 +131,7 @@ export async function GET({ request }) {
  * PUT /api/auth/key-backup
  * Store or update the authenticated user's encrypted key backup
  */
-export async function PUT({ request }) {
+export async function PUT(request) {
 	try {
 		const { user, error: authError } = await authenticateUser(request);
 		if (authError || !user) {
