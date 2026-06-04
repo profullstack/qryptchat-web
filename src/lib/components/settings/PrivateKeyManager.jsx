@@ -21,6 +21,10 @@ export default function PrivateKeyManager() {
   const [backupPin, setBackupPin] = useState('');
   const [restorePin, setRestorePin] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPassword, setImportPassword] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importAndBackup, setImportAndBackup] = useState(false);
 
   useEffect(() => {
     if (user) { checkKeys(); checkPin(); checkBackup(); }
@@ -77,6 +81,32 @@ export default function PrivateKeyManager() {
       setHasKeys(true); setRestorePin(''); setSuccess('Keys restored!');
     } catch (err) { setError(err.message || 'Wrong PIN or restore failed'); }
     finally { setLoading(false); }
+  }
+
+  async function importFromFile() {
+    if (!importFile || !importPassword) return;
+    setImportLoading(true); setError(''); setSuccess('');
+    try {
+      const text = await importFile.text();
+      await privateKeyManager.importPrivateKeys(text, importPassword);
+      setHasKeys(true);
+
+      if (importAndBackup) {
+        const encrypted = await privateKeyManager.exportPrivateKeys(importPassword);
+        const res = await fetch('/api/auth/key-backup', {
+          method: 'PUT', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ encrypted_keys: encrypted }),
+        });
+        if (res.ok) { setHasBackup(true); }
+      }
+
+      setImportFile(null);
+      setImportPassword('');
+      setSuccess(`Keys imported${importAndBackup ? ' and backed up to server' : ''} successfully!`);
+    } catch (err) {
+      setError(err.message || 'Import failed — wrong password or invalid file');
+    } finally { setImportLoading(false); }
   }
 
   async function setNewPin() {
@@ -157,6 +187,45 @@ export default function PrivateKeyManager() {
             )}
           </>
         )}
+      </div>
+
+      <div className="pkm-card">
+        <h4>Import Keys from File</h4>
+        <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)', marginBottom: '.75rem' }}>
+          Import an encrypted key backup JSON file (e.g. <code>profullstack-qryptchat-pq-keys-*.json</code>).
+          Enter the password you used when the backup was created.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+          <input
+            type="file"
+            accept=".json,application/json"
+            className="pkm-input"
+            style={{ padding: '.375rem .5rem', cursor: 'pointer' }}
+            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+          />
+          <input
+            type="password"
+            value={importPassword}
+            onChange={(e) => setImportPassword(e.target.value)}
+            placeholder="Password used to encrypt the backup"
+            className="pkm-input"
+          />
+          <label className="pkm-label">
+            <input
+              type="checkbox"
+              checked={importAndBackup}
+              onChange={(e) => setImportAndBackup(e.target.checked)}
+            />
+            Also save encrypted backup to server
+          </label>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={importFromFile}
+            disabled={importLoading || !importFile || !importPassword}
+          >
+            {importLoading ? 'Importing...' : 'Import Keys'}
+          </button>
+        </div>
       </div>
 
       <style>{`
