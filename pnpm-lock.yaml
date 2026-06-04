@@ -22,6 +22,9 @@ importers:
       '@noble/hashes':
         specifier: ^2.0.0
         version: 2.0.1
+      '@profullstack/autoblog':
+        specifier: github:profullstack/autoblog#75e54af
+        version: https://codeload.github.com/profullstack/autoblog/tar.gz/75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f
       '@profullstack/text-type-detection':
         specifier: ^1.0.0
         version: 1.0.0
@@ -792,6 +795,11 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@profullstack/autoblog@https://codeload.github.com/profullstack/autoblog/tar.gz/75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f':
+    resolution: {tarball: https://codeload.github.com/profullstack/autoblog/tar.gz/75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f}
+    version: 0.4.0
+    engines: {node: '>=18'}
 
   '@profullstack/text-type-detection@1.0.0':
     resolution: {integrity: sha512-3tG0Icz2gwLfwbOwdYxgCTTcjCyAAhEnU82ReIrbOQiN8f3R84WrPLWfE4Pqg/ce57VFVPpNkSmd5doaXKV+dw==}
@@ -3726,6 +3734,8 @@ snapshots:
   '@open-draft/until@2.1.0': {}
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@profullstack/autoblog@https://codeload.github.com/profullstack/autoblog/tar.gz/75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f': {}
 
   '@profullstack/text-type-detection@1.0.0': {}
 
