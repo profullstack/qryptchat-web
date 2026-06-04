@@ -82,6 +82,8 @@ export const themeUtils = {
   },
 };
 
+// Always start with 'light' so server and client initial renders match.
+// ClientLayout's useEffect applies the stored/preferred theme after mount.
 export const useThemeStore = create(() => ({
-  currentTheme: typeof window !== 'undefined' ? getInitialTheme() : 'light',
+  currentTheme: 'light',
 }));

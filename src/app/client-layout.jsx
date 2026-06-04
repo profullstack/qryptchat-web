@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useThemeStore, themeUtils } from '@/lib/stores/theme.js';
 import { useI18n } from '@/lib/hooks/useI18n.js';
+import { i18nUtils, languages } from '@/lib/stores/i18n.js';
 import Navbar from '@/lib/components/Navbar.jsx';
 import Footer from '@/lib/components/Footer.jsx';
 import PWAToastManager from '@/lib/components/PWAToastManager.jsx';
@@ -21,11 +22,21 @@ export default function ClientLayout({ children }) {
   useEffect(() => {
     setMounted(true);
 
+    // Apply stored or system theme
     let theme = localStorage.getItem('qrypt-theme');
     if (!theme) {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     themeUtils.setTheme(theme);
+
+    // Apply stored or browser language (non-English only — 'en' is already loaded)
+    const storedLang = localStorage.getItem('qrypt-language');
+    const browserLang = navigator.language.split('-')[0];
+    const lang = (storedLang && languages[storedLang]) ? storedLang
+                : (languages[browserLang] ? browserLang : 'en');
+    if (lang !== 'en') {
+      i18nUtils.setLanguage(lang);
+    }
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker

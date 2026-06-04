@@ -38,10 +38,9 @@ async function loadTranslations(languageCode) {
   }
 }
 
-// Svelte writable store for the current language code
-export const currentLanguage = writable(
-  typeof window === 'undefined' ? 'en' : getInitialLanguage()
-);
+// Always start with 'en' so server and client initial renders match.
+// ClientLayout's useEffect applies the stored/preferred language after mount.
+export const currentLanguage = writable('en');
 
 // Svelte writable store holding all loaded translation objects keyed by language code
 export const _translations = writable({ en: enTranslations });
