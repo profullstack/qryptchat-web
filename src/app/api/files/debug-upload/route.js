@@ -7,7 +7,7 @@ export async function POST(request, { params } = {}) {
 		console.log('📁 [DEBUG-UPLOAD] Starting debug upload test...');
 		
 		// Test 1: Supabase client creation
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		console.log('📁 [DEBUG-UPLOAD] ✅ Supabase client created');
 		
 		// Test 2: Authentication

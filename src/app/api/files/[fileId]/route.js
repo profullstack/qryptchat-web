@@ -6,7 +6,7 @@ import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 export async function GET(request, { params } = {}) {
 	try {
 		// Create Supabase server client
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		// Check authentication
 		const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -149,7 +149,7 @@ export async function GET(request, { params } = {}) {
 export async function HEAD(event) {
 	try {
 		// Create Supabase server client
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		// Check authentication
 		const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -203,7 +203,7 @@ export async function HEAD(event) {
 export async function POST(request, { params } = {}) {
 	try {
 		// Create Supabase server client
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		// Check authentication
 		const { data: { user }, error: authError } = await supabase.auth.getUser();

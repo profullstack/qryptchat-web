@@ -7,7 +7,7 @@ import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 export async function POST(request, { params } = {}) {
 	try {
 		// Create Supabase server client
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		// Check authentication
 		const { data: { user }, error: authError } = await supabase.auth.getUser();

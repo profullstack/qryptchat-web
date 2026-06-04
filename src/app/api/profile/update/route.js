@@ -13,7 +13,7 @@ export async function POST(request, { params } = {}) {
 		}
 
 		// Create Supabase client and set session
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		const token = authHeader.replace('Bearer ', '');
 
 		// Set the session to ensure auth.uid() is available for RLS

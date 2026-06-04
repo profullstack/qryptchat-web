@@ -9,7 +9,7 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 export async function POST(request, { params } = {}) {
   try {
     // Authentication check
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -56,7 +56,7 @@ export async function POST(request, { params } = {}) {
 export async function GET(request, { params } = {}) {
   try {
     // Authentication check
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -18,7 +18,7 @@ function isDevelopment() {
  * Verify the request is authenticated (defense in depth alongside NODE_ENV check)
  */
 async function verifyAuth(event) {
-	const supabase = createSupabaseServerClient();
+	const supabase = await createSupabaseServerClient();
 	const { data: { user }, error } = await supabase.auth.getUser();
 	return !error && !!user;
 }

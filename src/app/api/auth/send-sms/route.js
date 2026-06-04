@@ -72,7 +72,7 @@ export async function POST(request, { params } = {}) {
 		}
 
 		// Create Supabase client
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		logger.info('Attempting to send SMS via Supabase Auth');
 		logger.info('Supabase project URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);

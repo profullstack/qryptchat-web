@@ -8,7 +8,7 @@ import { validateUniqueIdentifier } from '@/lib/utils/unique-identifier.js';
 export async function GET(request, { params } = {}) {
 	try {
 		// Use session-based client instead of service role
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 
 		// Authentication check
 		const { data: { user }, error: authError } = await supabase.auth.getUser();

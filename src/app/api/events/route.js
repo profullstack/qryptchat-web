@@ -15,7 +15,7 @@ export async function GET(request, { params } = {}) {
 
 	try {
 		// Authenticate the user using getUser() for security
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		const { data: { user }, error: authError } = await supabase.auth.getUser();
 
 		if (authError || !user) {

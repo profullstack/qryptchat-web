@@ -92,7 +92,7 @@ export async function POST(request, { params } = {}) {
 		}
 
 		// Create Supabase client
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		let verifyData;
 		let verifyError;

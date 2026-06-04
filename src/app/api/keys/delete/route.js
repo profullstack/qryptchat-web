@@ -10,7 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(request, { params } = {}) {
 	try {
 		// Create Supabase client using the server client helper (handles auth automatically)
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 
 		// Get the current user from the session
 		const { data: { user }, error: authError } = await supabase.auth.getUser();

@@ -111,7 +111,7 @@ export async function POST(request, { params } = {}) {
 
 		// If configuration is valid, test sending SMS
 		const { createSupabaseServerClient } = await import('@/lib/supabase.js');
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		console.log(`Testing SMS send to: ${testPhoneNumber}`);
 		console.log(`Using Twilio config: Account SID: ${config.TWILIO_ACCOUNT_SID?.substring(0, 8)}***`);

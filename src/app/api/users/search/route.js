@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function GET(request, { params } = {}) {
 	try {
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		const url = new URL(request.url);
 		const query = url.searchParams.get('q');
 		

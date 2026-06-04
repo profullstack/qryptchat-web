@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
  */
 export async function POST(request, { params } = {}) {
 	try {
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		const conversationId = params.id;
 		
 		// Get user from session

@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 export async function GET(request, { params } = {}) {
 	try {
 		// Create Supabase server client
-		const supabase = createSupabaseServerClient();
+		const supabase = await createSupabaseServerClient();
 		
 		// Check authentication
 		const { data: { user }, error: authError } = await supabase.auth.getUser();
