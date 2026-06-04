@@ -32,6 +32,12 @@ export function withAuth(handler) {
       return NextResponse.json({ error: auth.error }, { status: 401 });
     }
 
-    return handler(request, context, auth);
+    // Handlers are written as ({ request, locals }) => ... (SvelteKit-style event object).
+    // Pass a single event object so destructuring works correctly.
+    return handler({
+      request,
+      locals: { supabase: auth.supabase, user: auth.user },
+      context,
+    });
   };
 }
