@@ -1,0 +1,5 @@
+[allowlist]
+description = "Ignore Next.js build artifacts — these paths contain auto-generated preview keys and bundled public anon keys, not committed secrets"
+paths = [
+    '''\.next/''',
+]

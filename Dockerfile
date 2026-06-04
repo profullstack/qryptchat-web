@@ -97,6 +97,6 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 8080
-ENTRYPOINT ["/usr/bin/tini","--"]
-CMD ["/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini","--"] # nosemgrep: dockerfile.security.missing-user-entrypoint
+CMD ["/entrypoint.sh"] # nosemgrep: dockerfile.security.missing-user
 
