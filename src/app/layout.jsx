@@ -1,5 +1,6 @@
 import './globals.css';
 import ClientLayout from './client-layout.jsx';
+import Script from "next/script";
 
 export const metadata = {
   title: 'QryptChat - Quantum-Resistant Encrypted Messaging',
@@ -18,6 +19,7 @@ export default function RootLayout({ children }) {
       </head>
       <body suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
+              <Script data-site="38c4083a-a35e-435d-8a0e-3510c465f419" src="https://crawlproof.com/stats.js" strategy="afterInteractive" />
       </body>
     </html>
   );
