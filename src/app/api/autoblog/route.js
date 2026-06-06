@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
+import { revalidatePath } from 'next/cache';
 import { verifyAndParse } from '@profullstack/autoblog';
 import { gatePost } from '@profullstack/autoblog/quality';
 import { getServiceRoleClient } from '@/lib/supabase/service-role';
@@ -91,6 +92,10 @@ export async function POST(req) {
   try {
     await svc.rpc('bump_autoblog_integration', { integration_id: integration.id });
   } catch { /* best-effort counter */ }
+
+  // Revalidate blog listing and the new post page immediately
+  revalidatePath('/blog');
+  revalidatePath(`/blog/${post.slug}`);
 
   return NextResponse.json({ message: 'ok', slug: post.slug });
 }
