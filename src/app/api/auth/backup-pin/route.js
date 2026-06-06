@@ -110,7 +110,7 @@ export async function GET(request) {
 		const { data, error } = await getServiceRoleClient()
 			.from('users')
 			.select('backup_pin_hash')
-			.eq('id', user.id)
+			.eq('auth_user_id', user.id)
 			.single();
 
 		if (error) {
@@ -151,7 +151,7 @@ export async function POST(request) {
 		const { error } = await getServiceRoleClient()
 			.from('users')
 			.update({ backup_pin_hash: pinHash })
-			.eq('id', user.id);
+			.eq('auth_user_id', user.id);
 
 		if (error) {
 			console.error('Error setting backup PIN:', error);
