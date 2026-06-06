@@ -93,9 +93,9 @@ body {
 
 /* Global Link Styles - Theme Aware */
 a {
-	color: var(--color-text-primary);
+	color: var(--color-brand-secondary);
 	text-decoration: underline;
-	text-decoration-color: var(--color-text-tertiary);
+	text-decoration-color: color-mix(in srgb, var(--color-brand-secondary) 40%, transparent);
 	text-underline-offset: 2px;
 	transition: color 0.2s ease, text-decoration-color 0.2s ease;
 }
@@ -111,9 +111,9 @@ a:focus {
 	border-radius: var(--radius-sm);
 }
 
-/* Visited links - slightly muted but still theme-aware */
+/* Visited links */
 a:visited {
-	color: var(--color-text-secondary);
+	color: var(--color-brand-secondary);
 }
 
 a:visited:hover {
