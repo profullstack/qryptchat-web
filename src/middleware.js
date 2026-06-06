@@ -7,9 +7,23 @@ const apiRateLimiter = new RateLimiter({ maxRequests: 60, windowMs: 60 * 1000 })
 const keyBackupRateLimiter = new RateLimiter({ maxRequests: 5, windowMs: 60 * 60 * 1000 });
 
 function getClientIp(request) {
+  // See the detailed note in src/lib/server/rate-limiter.js.
+  // X-Forwarded-For is user-controllable unless a trusted proxy strips/rewrites it.
+  // Honour TRUSTED_PROXY_COUNT when set; otherwise fall back to X-Real-IP only.
+  const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT ?? '0', 10);
+
+  if (trustedProxyCount > 0) {
+    const xff = request.headers.get('x-forwarded-for');
+    if (xff) {
+      const parts = xff.split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length >= trustedProxyCount) {
+        return parts[parts.length - trustedProxyCount];
+      }
+    }
+  }
+
   return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
+    request.headers.get('x-real-ip') ??
     'unknown'
   );
 }

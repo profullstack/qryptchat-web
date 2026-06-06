@@ -70,14 +70,50 @@ export const authRateLimiter = new RateLimiter({ maxRequests: 5, windowMs: 60 * 
 export const apiRateLimiter = new RateLimiter({ maxRequests: 30, windowMs: 60 * 1000 }); // 30 req/min
 
 /**
- * Extract client IP from a Next.js Request object
+ * Extract client IP from a Next.js Request object.
+ *
+ * SECURITY NOTE: X-Forwarded-For and X-Real-IP headers can be forged by the
+ * client unless the application sits behind a trusted reverse proxy that strips
+ * or overwrites these headers before forwarding.  When no trusted proxy is in
+ * place, an attacker can trivially rotate the header value to bypass IP-based
+ * rate limiting.
+ *
+ * The function honours these headers (necessary when deployed behind a load
+ * balancer / CDN), but callers should be aware that in a direct-to-internet
+ * deployment the returned value cannot be fully trusted.  Production deployments
+ * SHOULD:
+ *   1. Deploy behind a reverse proxy (nginx, Cloudflare, AWS ALB, …) that is
+ *      configured to strip / overwrite X-Forwarded-For before it reaches this
+ *      server, OR
+ *   2. Configure TRUSTED_PROXY_COUNT in the environment and only read that many
+ *      hops from the right-hand side of the X-Forwarded-For list (the rightmost
+ *      entry is appended by the last trusted proxy and cannot be spoofed).
+ *
  * @param {Request} request
  * @returns {string}
  */
 export function getClientIp(request) {
+	const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT ?? '0', 10);
+
+	if (trustedProxyCount > 0) {
+		// Take the Nth-from-right entry in X-Forwarded-For where N = trustedProxyCount.
+		// Each trusted hop appends one IP; the rightmost `trustedProxyCount` entries
+		// are injected by infrastructure we control and are reliable.
+		const xff = request.headers.get('x-forwarded-for');
+		if (xff) {
+			const parts = xff.split(',').map(s => s.trim()).filter(Boolean);
+			if (parts.length >= trustedProxyCount) {
+				return parts[parts.length - trustedProxyCount];
+			}
+		}
+	}
+
+	// Fallback: use X-Real-IP (set by nginx real_ip module after trusted proxy
+	// processing) or fall through to 'unknown'.  When TRUSTED_PROXY_COUNT is 0
+	// (default / direct internet deployment) we deliberately skip the potentially
+	// spoofed X-Forwarded-For header and rely on X-Real-IP only.
 	return (
-		request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-		request.headers.get('x-real-ip') ||
+		request.headers.get('x-real-ip') ??
 		'unknown'
 	);
 }
