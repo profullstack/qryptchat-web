@@ -81,6 +81,7 @@ export default function Navbar() {
 
           <div className="navbar-nav desktop-nav">
             <Link href="/" className={`nav-link${pathname === '/' ? ' active' : ''}`}>{t('nav.home')}</Link>
+            <Link href="/blog" className={`nav-link${pathname.startsWith('/blog') ? ' active' : ''}`}>Blog</Link>
             {isAuthenticated && (
               <Link href="/chat" className={`nav-link${pathname === '/chat' ? ' active' : ''}`}>{t('nav.chat')}</Link>
             )}
@@ -164,6 +165,7 @@ export default function Navbar() {
           <div className="mobile-menu fade-in">
             <div className="mobile-nav">
               <Link href="/" className="mobile-nav-link" onClick={closeMobileMenu}>{t('nav.home')}</Link>
+              <Link href="/blog" className="mobile-nav-link" onClick={closeMobileMenu}>Blog</Link>
               {isAuthenticated && (
                 <>
                   <Link href="/chat" className="mobile-nav-link" onClick={closeMobileMenu}>{t('nav.chat')}</Link>

@@ -49,6 +49,7 @@ export default function Footer() {
           <div className="link-section">
             <h4>Company</h4>
             <a href="/about">About</a>
+            <a href="/blog">Blog</a>
             <a href="/contact">Contact</a>
             <a href="/warrant-canary">Warrant Canary</a>
           </div>
