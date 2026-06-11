@@ -15,6 +15,11 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
 		}
 
+		const normalizedLimit = normalizeMessageLimit(limit);
+		if (normalizedLimit === null) {
+			return NextResponse.json({ error: 'limit must be an integer between 1 and 100' }, { status: 400 });
+		}
+
 		const { supabase, user: authUser } = locals;
 
 		// Get internal user ID from auth user ID
@@ -35,7 +40,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			conversationId,
 			authUserId: authUser.id,
 			internalUserId: userId,
-			limit,
+			limit: normalizedLimit,
 			before
 		});
 
@@ -64,7 +69,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			.eq('message_recipients.recipient_user_id', userId)
 			.is('deleted_at', null)
 			.order('created_at', { ascending: true })
-			.limit(limit);
+			.limit(normalizedLimit);
 
 		if (before) {
 			query = query.lt('created_at', before);
@@ -132,10 +137,14 @@ export const POST = withAuth(async ({ request, locals }) => {
 		return NextResponse.json({
 			success: true,
 			messages: processedMessages,
-			hasMore: processedMessages.length === limit
+			hasMore: processedMessages.length === normalizedLimit
 		});
 	} catch (error) {
 		console.error('📨 [SSE-LOAD] Exception:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 	}
 });
+
+function normalizeMessageLimit(limit) {
+	return Number.isInteger(limit) && limit >= 1 && limit <= 100 ? limit : null;
+}
