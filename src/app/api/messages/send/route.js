@@ -11,15 +11,34 @@ import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { conversationId, encryptedContents, messageType = 'text', replyToId, metadata } = await request.json();
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+		}
+
+		if (!body || typeof body !== 'object' || Array.isArray(body)) {
+			return NextResponse.json({ error: 'Request body must be a JSON object' }, { status: 400 });
+		}
+
+		const { conversationId, encryptedContents, messageType = 'text', replyToId, metadata } = body;
 
 		if (!conversationId || !encryptedContents) {
 			return NextResponse.json({ error: 'Conversation ID and encrypted contents are required' }, { status: 400 });
 		}
 
 		// Validate encryptedContents is an object with user_id -> encrypted_content mappings
-		if (typeof encryptedContents !== 'object' || Object.keys(encryptedContents).length === 0) {
+		if (
+			typeof encryptedContents !== 'object' ||
+			Array.isArray(encryptedContents) ||
+			Object.keys(encryptedContents).length === 0
+		) {
 			return NextResponse.json({ error: 'encryptedContents must be an object with user_id -> encrypted_content mappings' }, { status: 400 });
+		}
+
+		if (Object.values(encryptedContents).some((content) => typeof content !== 'string')) {
+			return NextResponse.json({ error: 'encryptedContents values must be encrypted content strings' }, { status: 400 });
 		}
 
 		const { supabase, user: authUser } = locals;
