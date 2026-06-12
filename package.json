@@ -11,6 +11,8 @@
   },
   "packageManager": "pnpm@10.32.1",
   "scripts": {
+    "lint:oxlint": "oxlint",
+    "lint:oxlint:fix": "oxlint --fix",
     "cli": "node bin/qryptchat-cli.js",
     "dev": "next dev",
     "build": "next build",
@@ -39,6 +41,7 @@
     "jsdom": "^26.1.0",
     "mocha": "^11.7.5",
     "msw": "^2.10.5",
+    "oxlint": "^1.69.0",
     "prettier": "^3.6.2",
     "sharp": "^0.34.4",
     "sinon": "^21.0.0",
