@@ -6,11 +6,16 @@ const webhookRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60 * 10
 const apiRateLimiter = new RateLimiter({ maxRequests: 60, windowMs: 60 * 1000 });
 const keyBackupRateLimiter = new RateLimiter({ maxRequests: 5, windowMs: 60 * 60 * 1000 });
 
-function getClientIp(request) {
+export function readTrustedProxyCount(value = process.env.TRUSTED_PROXY_COUNT) {
+  const parsed = Number(value ?? 0);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export function getClientIp(request) {
   // See the detailed note in src/lib/server/rate-limiter.js.
   // X-Forwarded-For is user-controllable unless a trusted proxy strips/rewrites it.
   // Honour TRUSTED_PROXY_COUNT when set; otherwise fall back to X-Real-IP only.
-  const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT ?? '0', 10);
+  const trustedProxyCount = readTrustedProxyCount();
 
   if (trustedProxyCount > 0) {
     const xff = request.headers.get('x-forwarded-for');
