@@ -1,47 +1,40 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+
+/**
+ * Validate a Bearer token by verifying its signature via Supabase Auth,
+ * not just decoding the payload.
+ */
+async function getAuthenticatedUser(request) {
+	const authHeader = request.headers.get('authorization');
+	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		return { user: null, error: 'Authentication required' };
+	}
+
+	const token = authHeader.replace('Bearer ', '');
+
+	// Use a Supabase client with the anon key to verify the JWT signature
+	const authClient = createClient(
+		process.env.NEXT_PUBLIC_SUPABASE_URL,
+		process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+	);
+	const { data: { user }, error } = await authClient.auth.getUser(token);
+
+	if (error || !user) {
+		return { user: null, error: 'Invalid authentication token' };
+	}
+
+	return { user, error: null };
+}
+
 export async function POST(request) {
 	try {
-		// Get the authorization header
-		const authHeader = request.headers.get('authorization');
-		if (!authHeader || !authHeader.startsWith('Bearer ')) {
-			return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+		const { user, error: authError } = await getAuthenticatedUser(request);
+		if (authError) {
+			return NextResponse.json({ error: authError }, { status: 401 });
 		}
 
-		const token = authHeader.replace('Bearer ', '');
-
-		// Decode JWT token to get user ID (simple validation)
-		let user;
-		try {
-			// JWT tokens have 3 parts separated by dots: header.payload.signature
-			const tokenParts = token.split('.');
-			if (tokenParts.length !== 3) {
-				throw new Error('Invalid token format');
-			}
-			
-			// Decode the payload (second part)
-			const payload = JSON.parse(atob(tokenParts[1]));
-			
-			// Check if token is expired
-			if (payload.exp && payload.exp < Date.now() / 1000) {
-				throw new Error('Token expired');
-			}
-			
-			// Extract user info from payload
-			user = {
-				id: payload.sub,
-				email: payload.email
-			};
-			
-			if (!user.id) {
-				throw new Error('Invalid token payload');
-			}
-		} catch (error) {
-			console.error('Token validation error:', error);
-			return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
-		}
-
-		// Create service role client for database operations
+		// Create service role client for storage and database operations
 		const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 		const formData = await request.formData();
@@ -54,15 +47,15 @@ export async function POST(request) {
 		// Validate file type
 		const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 		if (!allowedTypes.includes(file.type)) {
-			return NextResponse.json({ 
-				error: 'Invalid file type. Please upload JPEG, PNG, WebP, or GIF images only.' 
+			return NextResponse.json({
+				error: 'Invalid file type. Please upload JPEG, PNG, WebP, or GIF images only.'
 			}, { status: 400 });
 		}
 
 		// Validate file size (5MB limit)
 		if (file.size > 5 * 1024 * 1024) {
-			return NextResponse.json({ 
-				error: 'File size too large. Please upload files smaller than 5MB.' 
+			return NextResponse.json({
+				error: 'File size too large. Please upload files smaller than 5MB.'
 			}, { status: 400 });
 		}
 
@@ -92,7 +85,7 @@ export async function POST(request) {
 			.from('avatars')
 			.getPublicUrl(fileName);
 
-		// Update user's avatar_url in database using authenticated client
+		// Update user's avatar_url in database
 		const { error: updateError } = await supabase
 			.from('users')
 			.update({ avatar_url: publicUrl })
@@ -105,8 +98,8 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Failed to update user profile' }, { status: 500 });
 		}
 
-		return NextResponse.json({ 
-			success: true, 
+		return NextResponse.json({
+			success: true,
 			avatarUrl: publicUrl,
 			message: 'Avatar uploaded successfully'
 		});
@@ -119,49 +112,15 @@ export async function POST(request) {
 
 export async function DELETE(request) {
 	try {
-		// Get the authorization header
-		const authHeader = request.headers.get('authorization');
-		if (!authHeader || !authHeader.startsWith('Bearer ')) {
-			return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+		const { user, error: authError } = await getAuthenticatedUser(request);
+		if (authError) {
+			return NextResponse.json({ error: authError }, { status: 401 });
 		}
 
-		const token = authHeader.replace('Bearer ', '');
-
-		// Decode JWT token to get user ID (simple validation)
-		let user;
-		try {
-			// JWT tokens have 3 parts separated by dots: header.payload.signature
-			const tokenParts = token.split('.');
-			if (tokenParts.length !== 3) {
-				throw new Error('Invalid token format');
-			}
-			
-			// Decode the payload (second part)
-			const payload = JSON.parse(atob(tokenParts[1]));
-			
-			// Check if token is expired
-			if (payload.exp && payload.exp < Date.now() / 1000) {
-				throw new Error('Token expired');
-			}
-			
-			// Extract user info from payload
-			user = {
-				id: payload.sub,
-				email: payload.email
-			};
-			
-			if (!user.id) {
-				throw new Error('Invalid token payload');
-			}
-		} catch (error) {
-			console.error('Token validation error:', error);
-			return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
-		}
-
-		// Create service role client for storage and database operations
+		// Create service role client for database operations
 		const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-		// Update user's avatar_url to null in database using authenticated client
+		// Update user's avatar_url to null in database
 		const { error: updateError } = await supabase
 			.from('users')
 			.update({ avatar_url: null })
@@ -175,7 +134,7 @@ export async function DELETE(request) {
 		// Note: We're not deleting the file from storage to avoid issues with caching
 		// The file will remain in storage but won't be referenced by the user
 
-		return NextResponse.json({ 
+		return NextResponse.json({
 			success: true,
 			message: 'Avatar removed successfully'
 		});
