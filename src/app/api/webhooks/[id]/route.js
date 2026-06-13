@@ -4,7 +4,7 @@ import { withAuth } from '@/lib/api/middleware/auth.js';
 /** Delete a webhook by ID */
 export const DELETE = withAuth(async (event) => {
 	const { supabase, user } = event.locals;
-	const { id } = params;
+	const { id } = event.context.params;
 
 	const { error } = await supabase
 		.from('webhooks')

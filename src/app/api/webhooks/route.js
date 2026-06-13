@@ -25,7 +25,7 @@ export const POST = withAuth(async (event) => {
 
 	let body;
 	try {
-		body = await request.json();
+		body = await event.request.json();
 	} catch {
 		return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
 	}
