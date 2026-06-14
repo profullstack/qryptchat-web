@@ -197,6 +197,10 @@ export default function AuthPage() {
                 {loading ? <><span className="loading-spinner" /> Sending...</> : 'Send Code'}
               </button>
             </form>
+            <div className="auth-divider"><span>or</span></div>
+            <a href="/api/auth/coinpay/login" className="coinpay-button">
+              <span className="coinpay-icon">🪙</span> Log in with CoinPay
+            </a>
           </div>
         )}
 
@@ -334,6 +338,12 @@ export default function AuthPage() {
         .password-input { position: relative; display: flex; align-items: center; }
         .password-input input { padding-right: 3rem; }
         .toggle-password { position: absolute; right: .75rem; background: none; border: none; cursor: pointer; font-size: 1rem; }
+        .auth-divider { display: flex; align-items: center; text-align: center; margin: 1.25rem 0; color: var(--color-text-secondary); font-size: .75rem; }
+        .auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--color-border-primary); }
+        .auth-divider span { padding: 0 .75rem; }
+        .coinpay-button { width: 100%; box-sizing: border-box; padding: .75rem; background: var(--color-bg-secondary); color: var(--color-text-primary); border: 1px solid var(--color-border-primary); border-radius: .5rem; font-size: 1rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: .5rem; text-decoration: none; }
+        .coinpay-button:hover { background: var(--color-bg-tertiary); }
+        .coinpay-icon { font-size: 1.1rem; }
       `}</style>
     </div>
   );
