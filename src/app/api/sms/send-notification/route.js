@@ -4,14 +4,13 @@
  */
 
 import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/api/middleware/auth.js';
 import { TwilioSMSProvider } from '@/lib/services/twilio-sms-provider.js';
 
 /**
- * Send SMS notification
- * @param {Object} params - SvelteKit request parameters
- * @param {Request} params.request - The request object
+ * Send SMS notification (requires authentication)
  */
-export async function POST(request) {
+export const POST = withAuth(async ({ request }) => {
   try {
     const { phoneNumber, message } = await request.json();
 
@@ -30,18 +29,18 @@ export async function POST(request) {
 
     // Initialize Twilio SMS provider
     const twilioProvider = new TwilioSMSProvider();
-    
+
     // Send SMS via Twilio
     const result = await twilioProvider.sendSMS(phoneNumber, message);
-    
+
     const messageId = (result && typeof result === 'object' && 'messageId' in result) ? result.messageId : 'unknown';
     const status = (result && typeof result === 'object' && 'status' in result) ? result.status : 'sent';
-    
+
     console.log('📱 [SMS-API] SMS sent successfully:', {
       messageId,
       status
     });
-    
+
     return NextResponse.json({
       success: true,
       messageId,
@@ -56,4 +55,4 @@ export async function POST(request) {
       { status: 500 }
     );
   }
-}
+});
