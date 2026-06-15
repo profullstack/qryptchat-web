@@ -1,44 +1,29 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+
+const supabaseAuth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+async function authenticateBearerToken(request) {
+	const authHeader = request.headers.get('authorization');
+	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		return { error: 'Authentication required' };
+	}
+
+	const token = authHeader.substring(7);
+	const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
+
+	if (error || !user?.id) {
+		return { error: 'Invalid authentication token' };
+	}
+
+	return { user };
+}
+
 export async function POST(request) {
 	try {
-		// Get the authorization header
-		const authHeader = request.headers.get('authorization');
-		if (!authHeader || !authHeader.startsWith('Bearer ')) {
-			return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-		}
-
-		const token = authHeader.replace('Bearer ', '');
-
-		// Decode JWT token to get user ID (simple validation)
-		let user;
-		try {
-			// JWT tokens have 3 parts separated by dots: header.payload.signature
-			const tokenParts = token.split('.');
-			if (tokenParts.length !== 3) {
-				throw new Error('Invalid token format');
-			}
-			
-			// Decode the payload (second part)
-			const payload = JSON.parse(atob(tokenParts[1]));
-			
-			// Check if token is expired
-			if (payload.exp && payload.exp < Date.now() / 1000) {
-				throw new Error('Token expired');
-			}
-			
-			// Extract user info from payload
-			user = {
-				id: payload.sub,
-				email: payload.email
-			};
-			
-			if (!user.id) {
-				throw new Error('Invalid token payload');
-			}
-		} catch (error) {
-			console.error('Token validation error:', error);
-			return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+		const { user, error: authError } = await authenticateBearerToken(request);
+		if (authError || !user) {
+			return NextResponse.json({ error: authError }, { status: 401 });
 		}
 
 		// Create service role client for database operations
@@ -74,7 +59,7 @@ export async function POST(request) {
 		const fileBuffer = await file.arrayBuffer();
 
 		// Upload to Supabase Storage
-		const { data: uploadData, error: uploadError } = await supabase.storage
+		const { error: uploadError } = await supabase.storage
 			.from('avatars')
 			.upload(fileName, fileBuffer, {
 				contentType: file.type,
@@ -119,43 +104,9 @@ export async function POST(request) {
 
 export async function DELETE(request) {
 	try {
-		// Get the authorization header
-		const authHeader = request.headers.get('authorization');
-		if (!authHeader || !authHeader.startsWith('Bearer ')) {
-			return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-		}
-
-		const token = authHeader.replace('Bearer ', '');
-
-		// Decode JWT token to get user ID (simple validation)
-		let user;
-		try {
-			// JWT tokens have 3 parts separated by dots: header.payload.signature
-			const tokenParts = token.split('.');
-			if (tokenParts.length !== 3) {
-				throw new Error('Invalid token format');
-			}
-			
-			// Decode the payload (second part)
-			const payload = JSON.parse(atob(tokenParts[1]));
-			
-			// Check if token is expired
-			if (payload.exp && payload.exp < Date.now() / 1000) {
-				throw new Error('Token expired');
-			}
-			
-			// Extract user info from payload
-			user = {
-				id: payload.sub,
-				email: payload.email
-			};
-			
-			if (!user.id) {
-				throw new Error('Invalid token payload');
-			}
-		} catch (error) {
-			console.error('Token validation error:', error);
-			return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+		const { user, error: authError } = await authenticateBearerToken(request);
+		if (authError || !user) {
+			return NextResponse.json({ error: authError }, { status: 401 });
 		}
 
 		// Create service role client for storage and database operations
