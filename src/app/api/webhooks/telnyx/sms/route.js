@@ -218,7 +218,7 @@ async function sendTelnyxResponse(fromPhone, toPhone, message) {
 		});
 
 		if (!response.ok) {
-			const errorData = await response.NextResponse.json();
+			const errorData = await response.json();
 			console.error('[TELNYX-WEBHOOK] Failed to send response SMS:', errorData);
 		} else {
 			console.log('[TELNYX-WEBHOOK] Response SMS sent successfully');
