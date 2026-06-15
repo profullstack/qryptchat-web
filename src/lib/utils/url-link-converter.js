@@ -64,7 +64,8 @@ export function convertUrlsToLinks(text) {
 
 		// Add the URL as a clickable link
 		const url = match[0];
-		result += `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+		const escapedUrl = escapeHtml(url);
+		result += `<a href="${escapedUrl}" target="_blank" rel="noopener noreferrer">${escapedUrl}</a>`;
 
 		lastIndex = httpsUrlRegex.lastIndex;
 	}
