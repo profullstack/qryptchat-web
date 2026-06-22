@@ -13,6 +13,13 @@ import {
 
 describe('Twilio Validator', () => {
 	describe('validateTwilioCredentials', () => {
+		it('should return validation errors for missing credential objects', () => {
+			const result = validateTwilioCredentials(null);
+
+			assert.strictEqual(result.valid, false);
+			assert.ok(result.errors.some(e => e.includes('Credentials object')));
+		});
+
 		it('should validate correct credentials', () => {
 			const result = validateTwilioCredentials({
 				accountSid: 'AC' + '1'.repeat(32),

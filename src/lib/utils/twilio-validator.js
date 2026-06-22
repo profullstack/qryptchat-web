@@ -14,6 +14,13 @@
 export function validateTwilioCredentials(credentials) {
 	const errors = [];
 
+	if (!credentials || typeof credentials !== 'object' || Array.isArray(credentials)) {
+		return {
+			valid: false,
+			errors: ['Credentials object is required']
+		};
+	}
+
 	// Validate Account SID
 	if (!credentials.accountSid) {
 		errors.push('Account SID is required');
