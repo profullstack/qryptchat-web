@@ -6,7 +6,9 @@ import {
     generateUniqueIdentifier, 
     validateUniqueIdentifier, 
     formatUniqueIdentifier,
-    parseUniqueIdentifier 
+    parseUniqueIdentifier,
+    generateShareableProfileUrl,
+    extractIdentifierFromUrl
 } from '../src/lib/utils/unique-identifier.js';
 
 describe('Unique Identifier Utils', () => {
@@ -128,6 +130,22 @@ describe('Unique Identifier Utils', () => {
                 const parsed = parseUniqueIdentifier(formatted);
                 expect(parsed).to.equal(id);
             });
+        });
+
+        it('should round-trip generated profile URLs back to the identifier', () => {
+            const identifier = 'qryptchatA1B2C3D4';
+            const url = generateShareableProfileUrl(identifier, 'https://qrypt.chat/');
+
+            expect(url).to.equal('https://qrypt.chat/id/qryptchatA1B2C3D4');
+            expect(extractIdentifierFromUrl(url)).to.equal(identifier);
+        });
+
+        it('should extract identifiers from profile URLs with trailing delimiters', () => {
+            const identifier = 'qryptchatA1B2C3D4';
+
+            expect(extractIdentifierFromUrl(`https://qrypt.chat/id/${identifier}/`)).to.equal(identifier);
+            expect(extractIdentifierFromUrl(`https://qrypt.chat/id/${identifier}?action=chat`)).to.equal(identifier);
+            expect(extractIdentifierFromUrl(`https://qrypt.chat/id/${identifier}#profile`)).to.equal(identifier);
         });
     });
 });

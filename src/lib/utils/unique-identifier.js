@@ -138,13 +138,13 @@ export function extractIdentifierFromUrl(url) {
         return null;
     }
     
-    // Match pattern /id/QCXXXXXXXX
-    const match = url.match(/\/id\/([A-Z0-9]{10})$/i);
+    // Match current profile IDs, with optional trailing slash, query, or hash.
+    const match = url.match(/\/id\/(qryptchat[0-9A-Z]{8})(?:[/?#]|$)/i);
     if (!match) {
         return null;
     }
     
-    const identifier = match[1].toUpperCase();
+    const identifier = parseUniqueIdentifier(match[1]);
     return validateUniqueIdentifier(identifier) ? identifier : null;
 }
 
