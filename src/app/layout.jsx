@@ -20,7 +20,7 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
               <Script data-site="38c4083a-a35e-435d-8a0e-3510c465f419" src="https://crawlproof.com/stats.js" strategy="afterInteractive" />
-      </body>
+      <script async src="https://feedback.profullstack.com/embed/profullstack-feedback.js" data-property="qrypt.chat"></script></body>
     </html>
   );
 }
