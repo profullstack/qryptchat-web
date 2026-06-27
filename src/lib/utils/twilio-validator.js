@@ -12,6 +12,10 @@
  * @returns {{valid: boolean, errors: string[]}}
  */
 export function validateTwilioCredentials(credentials) {
+	if (!credentials || typeof credentials !== 'object') {
+		return { valid: false, errors: ['Credentials must be a non-null object'] };
+	}
+
 	const errors = [];
 
 	// Validate Account SID
