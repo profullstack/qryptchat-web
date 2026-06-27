@@ -67,6 +67,24 @@ describe('Twilio Validator', () => {
 			assert.strictEqual(result.valid, true);
 			assert.strictEqual(result.errors.length, 0);
 		});
+
+		it('should return validation failure for null input', () => {
+			const result = validateTwilioCredentials(null);
+			assert.strictEqual(result.valid, false);
+			assert.ok(result.errors.length > 0);
+		});
+
+		it('should return validation failure for undefined input', () => {
+			const result = validateTwilioCredentials(undefined);
+			assert.strictEqual(result.valid, false);
+			assert.ok(result.errors.length > 0);
+		});
+
+		it('should return validation failure for non-object input', () => {
+			const result = validateTwilioCredentials('not-an-object');
+			assert.strictEqual(result.valid, false);
+			assert.ok(result.errors.length > 0);
+		});
 	});
 
 	describe('parseTwilioError', () => {
