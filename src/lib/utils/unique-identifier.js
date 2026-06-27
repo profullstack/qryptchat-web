@@ -138,8 +138,8 @@ export function extractIdentifierFromUrl(url) {
         return null;
     }
     
-    // Match pattern /id/QCXXXXXXXX
-    const match = url.match(/\/id\/([A-Z0-9]{10})$/i);
+    // Match pattern /id/qryptchatXXXXXXXX (qryptchat prefix + 8 alphanumeric chars)
+    const match = url.match(/\/id\/(qryptchat[A-Z0-9]{8})$/i);
     if (!match) {
         return null;
     }
