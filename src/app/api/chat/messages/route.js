@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 import { createClient } from '@supabase/supabase-js';
+import { normalizeMessagePagination } from './pagination.js';
 // Lazy service role client creation
 let supabaseServiceRole = null;
 function getServiceRoleClient() {
@@ -277,8 +278,7 @@ export async function GET(request) {
     console.log('🔐 [API] ✅ Internal user ID:', userId);
 
     const conversationId = url.searchParams.get('conversation_id');
-    const limit = parseInt(url.searchParams.get('limit') || '50');
-    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const { limit, offset } = normalizeMessagePagination(url.searchParams);
 
     if (!conversationId) {
       return NextResponse.json({ error: 'Missing conversation_id parameter' }, { status: 400 });
