@@ -30,8 +30,26 @@ const WS_MAX_CONNECTIONS_PER_IP = 10;
 const WS_RATE_WINDOW_MS = 60 * 1000; // 1 minute
 
 function getClientIp(request) {
-	return request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-		request.socket?.remoteAddress || 'unknown';
+	// SECURITY: never trust the leftmost X-Forwarded-For entry — it is client
+	// supplied and lets an attacker forge a new "IP" per connection to bypass the
+	// per-IP WebSocket rate limit below. Mirror the trusted-proxy logic in
+	// src/lib/server/rate-limiter.js: only the rightmost `TRUSTED_PROXY_COUNT`
+	// hops are appended by infrastructure we control and cannot be spoofed.
+	const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT ?? '0', 10);
+
+	if (trustedProxyCount > 0) {
+		const xff = request.headers['x-forwarded-for'];
+		if (xff) {
+			const parts = xff.split(',').map((s) => s.trim()).filter(Boolean);
+			if (parts.length >= trustedProxyCount) {
+				return parts[parts.length - trustedProxyCount];
+			}
+		}
+	}
+
+	// Default / direct-internet deployment: rely on X-Real-IP (set by a trusted
+	// proxy) then the raw TCP peer address, which cannot be spoofed via headers.
+	return request.headers['x-real-ip'] || request.socket?.remoteAddress || 'unknown';
 }
 
 // Clean up stale entries every 5 minutes
