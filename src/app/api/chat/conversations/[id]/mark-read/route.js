@@ -8,7 +8,11 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 export async function POST(request, { params } = {}) {
 	try {
 		const supabase = await createSupabaseServerClient();
-		const conversationId = params.id;
+		const { id: conversationId } = (await params) || {};
+
+		if (!conversationId) {
+			return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
+		}
 		
 		// Get user from session
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
