@@ -165,8 +165,27 @@ export const useAuthStore = create((set, get) => ({
       const supabase = createSupabaseClient();
       await supabase.auth.signOut();
     } catch {}
-    localStorage.removeItem('qrypt_user');
-    localStorage.removeItem('qrypt_session');
+
+    // Clear ALL local E2EE key material so the next user in this same browser
+    // starts from a clean slate (otherwise the previous user's private keys
+    // linger in IndexedDB and collide — two-users-one-browser bug). This is
+    // LOCAL ONLY: the server-side key backup is untouched, so logging back in
+    // restores your keys exactly like signing in on a new device. (The
+    // "Complete Key Reset" in settings is the nuclear option that ALSO deletes
+    // the server backup — logout must never do that.)
+    try {
+      await keyManager.clearAllKeys();
+    } catch {}
+    try {
+      const { indexedDBManager } = await import('@/lib/crypto/indexed-db-manager.js');
+      await indexedDBManager.delete('qryptchat_pq_keypair');
+    } catch {}
+    try {
+      ['qrypt_user', 'qrypt_session', 'supabase.auth.token',
+       'qryptchat_keys', 'qryptchat_storage_enc_key', 'qryptchat_user_keys']
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {}
+
     set({ user: null, loading: false });
   },
 
