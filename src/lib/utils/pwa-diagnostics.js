@@ -18,7 +18,7 @@ export class PWADiagnostics {
 			session: {},
 			websocket: {},
 			pwa: {},
-			(typeof window !== 'undefined'): {},
+			browser: {},
 			errors: []
 		};
 	}
@@ -249,13 +249,13 @@ export class PWADiagnostics {
 	}
 
 	/**
-	 * Collect (typeof window !== 'undefined')-specific information
+	 * Collect browser-specific information
 	 */
 	async collectBrowserInfo() {
 		if (typeof window === 'undefined') return;
 
 		try {
-			this.diagnosticData.(typeof window !== 'undefined') = {
+			this.diagnosticData.browser = {
 				localStorage: {
 					available: typeof Storage !== 'undefined',
 					quota: null,
@@ -278,10 +278,10 @@ export class PWADiagnostics {
 			if ('storage' in navigator && 'estimate' in navigator.storage) {
 				try {
 					const estimate = await navigator.storage.estimate();
-					this.diagnosticData.(typeof window !== 'undefined').localStorage.quota = estimate.quota;
-					this.diagnosticData.(typeof window !== 'undefined').localStorage.usage = estimate.usage;
+					this.diagnosticData.browser.localStorage.quota = estimate.quota;
+					this.diagnosticData.browser.localStorage.usage = estimate.usage;
 				} catch (error) {
-					this.diagnosticData.(typeof window !== 'undefined').localStorage.quotaError = error.message;
+					this.diagnosticData.browser.localStorage.quotaError = error.message;
 				}
 			}
 
@@ -410,21 +410,21 @@ export class PWADiagnostics {
 		}
 
 		// Browser compatibility issues
-		if (!this.diagnosticData.(typeof window !== 'undefined').visibilityAPI.available) {
+		if (!this.diagnosticData.browser.visibilityAPI.available) {
 			issues.push({
 				type: 'no_visibility_api',
 				severity: 'warning',
 				message: 'Visibility API not available - PWA state detection limited',
-				category: '(typeof window !== 'undefined')'
+				category: 'browser'
 			});
 		}
 
-		if (!this.diagnosticData.(typeof window !== 'undefined').webSocket.available) {
+		if (!this.diagnosticData.browser.webSocket.available) {
 			issues.push({
 				type: 'no_websocket_support',
 				severity: 'critical',
-				message: 'WebSocket not supported in this (typeof window !== 'undefined')',
-				category: '(typeof window !== 'undefined')'
+				message: 'WebSocket not supported in this browser',
+				category: 'browser'
 			});
 		}
 
@@ -463,7 +463,7 @@ export class PWADiagnostics {
 			recommendations.push({
 				type: 'linux_pwa_workaround',
 				priority: 'medium',
-				message: 'Consider keeping PWA visible or use (typeof window !== 'undefined') version for better stability',
+				message: 'Consider keeping PWA visible or use browser version for better stability',
 				actions: ['avoid_minimize', 'use_browser']
 			});
 		}
