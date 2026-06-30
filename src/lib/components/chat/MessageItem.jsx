@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { convertUrlsToLinks } from '@/lib/utils/url-link-converter.js';
 import { detectTextFormat } from '@profullstack/text-type-detection';
+import MessageAttachments from './MessageAttachments.jsx';
 
 export default function MessageItem({ message, showAvatar = true, showTimestamp = true }) {
   const user = useAuthStore((s) => s.user);
-  const [files, setFiles] = useState([]);
 
   const isOwn = message.sender_id === user?.id;
+  const hasAttachments = message.message_type === 'file' || message.has_attachments === true;
   const content = message.content || '';
+  // Hide the placeholder caption that the upload flow stores on file messages.
+  const showText = content.trim().length > 0 && !(hasAttachments && content.trim() === '[File attachment]');
   const detectedFormat = detectTextFormat(content);
   const isAsciiArt = message.metadata?.isAsciiArt === true || detectedFormat.type === 'ascii-art';
   const isCodeBlock = detectedFormat.type === 'code' || detectedFormat.language !== null;
@@ -47,13 +49,17 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
       <div className="message-content-wrapper">
         {!isOwn && <div className="message-sender">{displayName}</div>}
 
-        <div className={`message-bubble${isOwn ? ' own' : ''}${isAsciiArt ? ' ascii-art' : ''}${isCodeBlock ? ' code-block' : ''}`}>
-          {isAsciiArt || isCodeBlock ? (
-            <pre className="message-pre">{content}</pre>
-          ) : (
-            <span dangerouslySetInnerHTML={{ __html: contentWithLinks }} />
-          )}
-        </div>
+        {showText && (
+          <div className={`message-bubble${isOwn ? ' own' : ''}${isAsciiArt ? ' ascii-art' : ''}${isCodeBlock ? ' code-block' : ''}`}>
+            {isAsciiArt || isCodeBlock ? (
+              <pre className="message-pre">{content}</pre>
+            ) : (
+              <span dangerouslySetInnerHTML={{ __html: contentWithLinks }} />
+            )}
+          </div>
+        )}
+
+        {hasAttachments && <MessageAttachments messageId={message.id} />}
 
         {showTimestamp && (
           <div className={`message-time${isOwn ? ' own' : ''}`}>

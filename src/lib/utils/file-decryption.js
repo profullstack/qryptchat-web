@@ -22,18 +22,16 @@ export async function decryptFileContent(fileId) {
 	const encryptedData = await response.json();
 
 	// Import encryption services
-	const { postQuantumEncryption } = await import('$lib/crypto/post-quantum-encryption.js');
+	const { postQuantumEncryption } = await import('@/lib/crypto/post-quantum-encryption.js');
 	await postQuantumEncryption.initialize();
 
 	// Parse encrypted contents
 	const encryptedContents = JSON.parse(encryptedData.file.encryptedContents);
 
-	// Get current user from auth store
-	const { user: authUser } = await import('$lib/stores/auth.js');
-	let user = null;
-	const unsubscribe = authUser.subscribe((u) => user = u);
-	unsubscribe();
-	
+	// Get current user from auth store (zustand)
+	const { useAuthStore } = await import('@/lib/stores/auth.js');
+	const user = useAuthStore.getState().user;
+
 	if (!user?.id) {
 		throw new Error('User not authenticated');
 	}
