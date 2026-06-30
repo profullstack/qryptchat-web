@@ -5,6 +5,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+async function resolveRouteParams(params) {
+	return (await params) || {};
+}
+
 /**
  * Authenticate user from request cookies
  * @param {Request} request - The request object
@@ -50,7 +54,7 @@ async function authenticateUser(request) {
  */
 export async function GET(request, { params } = {}) {
 	try {
-		const messageId = params.id;
+		const { id: messageId } = await resolveRouteParams(params);
 		
 		if (!messageId) {
 			return NextResponse.json({ error: 'Message ID is required' }, { status: 400 });
