@@ -148,11 +148,19 @@ export class KeySyncService {
 				return false;
 			}
 
-			// Check if our key exists in the database
-			const hasKeyInDb = data.public_keys && data.public_keys[currentUserId];
-			
-			if (!hasKeyInDb) {
+			// Check if our key exists in the database AND matches the local key.
+			// Presence alone isn't enough: after switching browsers / rotating keys
+			// the DB still holds the OLD public key, so a presence-only check would
+			// skip the sync and leave everyone encrypting to a dead key.
+			const dbKey = data.public_keys && data.public_keys[currentUserId];
+
+			if (!dbKey) {
 				console.log('🔑 Public key not found in database, sync needed');
+				return true;
+			}
+
+			if (dbKey !== publicKey) {
+				console.log('🔑 Database public key differs from local key (rotated/new device), sync needed');
 				return true;
 			}
 
