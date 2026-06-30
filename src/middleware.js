@@ -4,7 +4,7 @@ import { RateLimiter } from '@/lib/server/rate-limiter.js';
 const authRateLimiter = new RateLimiter({ maxRequests: 10, windowMs: 60 * 1000 });
 const webhookRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60 * 1000 });
 const apiRateLimiter = new RateLimiter({ maxRequests: 60, windowMs: 60 * 1000 });
-const keyBackupRateLimiter = new RateLimiter({ maxRequests: 5, windowMs: 60 * 60 * 1000 });
+const keyBackupRateLimiter = new RateLimiter({ maxRequests: 10, windowMs: 15 * 60 * 1000 });
 
 function getClientIp(request) {
   // See the detailed note in src/lib/server/rate-limiter.js.
