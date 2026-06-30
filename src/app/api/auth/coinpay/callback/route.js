@@ -66,6 +66,12 @@ function popupSession(appOrigin, session, user) {
 		type: 'coinpay-session',
 		access_token: session.access_token,
 		refresh_token: session.refresh_token,
+		// expires_at is REQUIRED: the auth store's init() discards any stored
+		// session (and qrypt_user) that lacks it, which logged CoinPay users
+		// straight back out to /auth on the next load.
+		expires_at: session.expires_at,
+		expires_in: session.expires_in,
+		token_type: session.token_type,
 		user: user || null
 	}).replace(/</g, '\\u003c');
 	const target = JSON.stringify(appOrigin);

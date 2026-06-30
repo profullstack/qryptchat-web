@@ -52,7 +52,15 @@ export default function AuthPage() {
       if (e.origin !== window.location.origin) return;
       const d = e.data;
       if (!d || d.type !== 'coinpay-session' || !d.access_token) return;
-      const session = { access_token: d.access_token, refresh_token: d.refresh_token };
+      // Keep the FULL session (incl. expires_at) — the auth store's init()
+      // drops any stored session without it, bouncing the user back to /auth.
+      const session = {
+        access_token: d.access_token,
+        refresh_token: d.refresh_token,
+        expires_at: d.expires_at,
+        expires_in: d.expires_in,
+        token_type: d.token_type,
+      };
       (async () => {
         try {
           if (d.user) {
@@ -62,6 +70,26 @@ export default function AuthPage() {
           localStorage.setItem('qrypt_session', JSON.stringify(session));
           localStorage.setItem('supabase.auth.token', JSON.stringify(session));
           await createSupabaseClient().auth.setSession(session);
+
+          // E2EE key lifecycle — identical to the phone flow, so a CoinPay
+          // account actually gets usable keys instead of landing in /chat with
+          // nothing to decrypt with.
+          const authHeaders = { Authorization: `Bearer ${session.access_token}` };
+          const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
+          let hasBackup = false;
+          try { hasBackup = (await fetch('/api/auth/key-backup', { headers: authHeaders })).ok; } catch {}
+          if (hasBackup && !hasLocalKeys) { setVerifiedSession(session); setStep('restore'); return; }
+          if (!hasLocalKeys && !hasBackup) {
+            // Brand-new account: generate keys, then prompt to set a backup PIN.
+            try { await keyManager.generateUserKeys(); } catch {}
+            setVerifiedSession(session); setStep('backup'); return;
+          }
+          let hasPin = false;
+          try {
+            const r = await fetch('/api/auth/backup-pin', { headers: authHeaders });
+            hasPin = r.ok ? (await r.json()).hasPin : false;
+          } catch {}
+          if (!hasPin && hasLocalKeys) { setVerifiedSession(session); setStep('backup'); return; }
           router.push('/chat');
         } catch {
           msgStore.error?.('CoinPay login failed — please try again.');
