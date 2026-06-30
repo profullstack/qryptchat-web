@@ -69,6 +69,34 @@ class RateLimiter {
 export const authRateLimiter = new RateLimiter({ maxRequests: 5, windowMs: 60 * 1000 }); // 5 req/min
 export const apiRateLimiter = new RateLimiter({ maxRequests: 30, windowMs: 60 * 1000 }); // 30 req/min
 
+// --- SMS abuse / cost-protection limiters (defence against SMS pumping) ---
+// Each outbound SMS bills a real message via the Supabase Auth phone provider,
+// so these limit by phone number and by a global circuit-breaker rather than by
+// IP (which is forgeable / shared behind NAT and useless against distributed
+// bots). Limits are tunable via env so they can be tightened without a deploy.
+const num = (v, fallback) => {
+	const n = Number(v);
+	return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+/** Max verification codes a single phone number may request per hour. */
+export const smsPerPhoneLimiter = new RateLimiter({
+	maxRequests: num(process.env.SMS_PER_PHONE_HOURLY_LIMIT, 3),
+	windowMs: 60 * 60 * 1000
+});
+
+/** Global circuit breaker: total codes sent across ALL clients per hour. */
+export const smsGlobalHourlyLimiter = new RateLimiter({
+	maxRequests: num(process.env.SMS_GLOBAL_HOURLY_LIMIT, 30),
+	windowMs: 60 * 60 * 1000
+});
+
+/** Global circuit breaker: total codes sent across ALL clients per day. */
+export const smsGlobalDailyLimiter = new RateLimiter({
+	maxRequests: num(process.env.SMS_GLOBAL_DAILY_LIMIT, 150),
+	windowMs: 24 * 60 * 60 * 1000
+});
+
 /**
  * Extract client IP from a Next.js Request object.
  *
@@ -127,7 +155,19 @@ export function getClientIp(request) {
  */
 export function applyRateLimit(request, limiter = authRateLimiter) {
 	const ip = getClientIp(request);
-	const { allowed, remaining, resetAt } = limiter.check(ip);
+	return applyRateLimitForKey(limiter, ip);
+}
+
+/**
+ * Apply rate limiting against an arbitrary key (e.g. a phone number or a fixed
+ * global key) rather than the client IP. Returns a 429 Response if limited, or
+ * null if allowed.
+ * @param {RateLimiter} limiter
+ * @param {string} key
+ * @returns {Response|null}
+ */
+export function applyRateLimitForKey(limiter, key) {
+	const { allowed, resetAt } = limiter.check(key);
 
 	if (!allowed) {
 		const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);

@@ -108,8 +108,15 @@ export async function POST(request, { params } = {}) {
 				
 				if (userError || !user) {
 					logger.error( 'Invalid or expired session token', { error: userError });
+					// Always surface to stdout (prod hides debug) so a real signup
+					// regression in the username-completion step is never silent.
+					console.error('verify-sms: session validation (getUser) failed', {
+						status: userError?.status,
+						message: userError?.message,
+						hasToken: !!token
+					});
 					return NextResponse.json(
-						{ error: 'Session expired. Please verify your phone number again.' },
+						{ error: 'Session expired. Please verify your phone number again.', code: 'SESSION_VALIDATION_FAILED' },
 						{ status: 401 }
 					);
 				}
@@ -344,7 +351,17 @@ export async function POST(request, { params } = {}) {
 				});
 				
 				logger.error( 'User creation failed', errorInfo);
-				
+
+				// Always log the raw Postgres error (code/message/details/hint) to
+				// stdout — prod hides the debug payload, and this insert failing
+				// silently is exactly what masked the signup investigation.
+				console.error( 'verify-sms: public.users insert failed', {
+					pgCode: createError.code,
+					message: createError.message,
+					details: createError.details,
+					hint: createError.hint,
+					authUserId: verifyData.user.id
+				});
 				console.error( 'User creation error:', {
 					...errorInfo,
 					logs: logger.getLogsAsString()

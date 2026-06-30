@@ -7,7 +7,14 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 import { SMSDebugLogger, formatSMSError } from '@/lib/utils/sms-debug.js';
 import { getSMSErrorDetails } from '@/lib/utils/twilio-validator.js';
-import { applyRateLimit, authRateLimiter } from '@/lib/server/rate-limiter.js';
+import {
+	applyRateLimit,
+	applyRateLimitForKey,
+	authRateLimiter,
+	smsPerPhoneLimiter,
+	smsGlobalHourlyLimiter,
+	smsGlobalDailyLimiter
+} from '@/lib/server/rate-limiter.js';
 
 /**
  * Validate phone number format
@@ -71,9 +78,28 @@ export async function POST(request, { params } = {}) {
 			);
 		}
 
+		// --- SMS abuse / cost protection (defence against SMS pumping) ---
+		// Every send bills a real SMS, so cap per-phone volume and trip a global
+		// circuit breaker before handing off to the (paid) Supabase Auth provider.
+		const perPhoneLimited = applyRateLimitForKey(smsPerPhoneLimiter, `sms:phone:${phoneNumber}`);
+		if (perPhoneLimited) {
+			logger.error('SMS per-phone rate limit hit', { phoneNumber });
+			return perPhoneLimited;
+		}
+		const hourlyLimited = applyRateLimitForKey(smsGlobalHourlyLimiter, 'sms:global:hour');
+		if (hourlyLimited) {
+			console.error('send-sms: GLOBAL hourly SMS limit hit — possible SMS pumping');
+			return hourlyLimited;
+		}
+		const dailyLimited = applyRateLimitForKey(smsGlobalDailyLimiter, 'sms:global:day');
+		if (dailyLimited) {
+			console.error('send-sms: GLOBAL daily SMS limit hit — possible SMS pumping');
+			return dailyLimited;
+		}
+
 		// Create Supabase client
 		const supabase = await createSupabaseServerClient();
-		
+
 		logger.info('Attempting to send SMS via Supabase Auth');
 		logger.info('Supabase project URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
 
