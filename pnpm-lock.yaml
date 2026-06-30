@@ -104,6 +104,9 @@ importers:
       eslint-config-next:
         specifier: ^15.0.0
         version: 15.5.19(eslint@9.39.2)(typescript@5.9.3)
+      globals:
+        specifier: ^17.7.0
+        version: 17.7.0
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
@@ -1972,6 +1975,10 @@ packages:
 
   globals@14.0.0:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
+    engines: {node: '>=18'}
+
+  globals@17.7.0:
+    resolution: {integrity: sha512-Czmyns5dUsq4seFBR/Kdydhmo8y9kC79hiSkPn0YcGtNnYWnrgt0vjrSjx9tspoDGWm2CMarffRuLjM4xUz8xg==}
     engines: {node: '>=18'}
 
   globalthis@1.0.4:
@@ -5006,6 +5013,8 @@ snapshots:
       path-scurry: 2.0.1
 
   globals@14.0.0: {}
+
+  globals@17.7.0: {}
 
   globalthis@1.0.4:
     dependencies:
