@@ -4,6 +4,11 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function GET(request, { params } = {}) {
 	try {
+		const { fileId } = (await params) || {};
+		if (!fileId) {
+			return NextResponse.json({ error: 'File ID is required' }, { status: 400 });
+		}
+
 		// Create Supabase server client
 		const supabase = await createSupabaseServerClient();
 		
@@ -13,7 +18,6 @@ export async function GET(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const fileId = params.fileId;
 		console.log(`📁 [ENCRYPTED-FILE] Request from auth user: ${user.id} for file: ${fileId}`);
 
 		// Get the internal user ID from the users table using auth_user_id
