@@ -61,11 +61,12 @@ function redirectError(appOrigin, code) {
  * @param {{access_token:string, refresh_token:string}} session
  * @returns {NextResponse}
  */
-function popupSession(appOrigin, session) {
+function popupSession(appOrigin, session, user) {
 	const payload = JSON.stringify({
 		type: 'coinpay-session',
 		access_token: session.access_token,
-		refresh_token: session.refresh_token
+		refresh_token: session.refresh_token,
+		user: user || null
 	}).replace(/</g, '\\u003c');
 	const target = JSON.stringify(appOrigin);
 	const html = `<!doctype html><meta charset="utf-8"><title>Signed in</title>` +
@@ -206,7 +207,8 @@ export async function GET(request) {
 			console.error('coinpay/callback: users lookup error', lookupError);
 		}
 
-		if (!existingUser) {
+		let userRow = existingUser || null;
+		if (!userRow) {
 			const username = await deriveUniqueUsername(
 				{ name: claims.name, email },
 				async (candidate) => {
@@ -220,7 +222,7 @@ export async function GET(request) {
 			);
 			const displayName = (typeof claims.name === 'string' && claims.name.trim()) || email.split('@')[0];
 
-			const { error: insertError } = await serviceSupabase.from('users').insert({
+			const { data: inserted, error: insertError } = await serviceSupabase.from('users').insert({
 				auth_user_id: authUser.id,
 				phone_number: null,
 				account_type: 'verified',
@@ -228,10 +230,17 @@ export async function GET(request) {
 				display_name: displayName,
 				created_at: new Date().toISOString(),
 				updated_at: new Date().toISOString()
-			});
+			}).select('*').single();
 			if (insertError && insertError.code !== PG_UNIQUE_VIOLATION) {
 				console.error('coinpay/callback: user row insert failed', insertError);
 				return redirectError(appOrigin, 'coinpay_provision_failed');
+			}
+			userRow = inserted || null;
+			if (!userRow) {
+				// Unique-violation race (another request created it) → re-fetch.
+				const { data: refetched } = await serviceSupabase
+					.from('users').select('*').eq('auth_user_id', authUser.id).single();
+				userRow = refetched || null;
 			}
 		}
 
@@ -256,9 +265,9 @@ export async function GET(request) {
 			return redirectError(appOrigin, 'coinpay_session_failed');
 		}
 
-		// Popup (embed) flow: postMessage the session back to the opener + close.
+		// Popup (embed) flow: postMessage the session + user back to the opener.
 		if (popup) {
-			return popupSession(appOrigin, sessionData.session);
+			return popupSession(appOrigin, sessionData.session, userRow);
 		}
 
 		// Build the redirect, then mirror the session cookies set by the server

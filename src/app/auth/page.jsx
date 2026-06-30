@@ -43,17 +43,30 @@ export default function AuthPage() {
     if (authenticated) router.replace('/chat');
   }, [authenticated]);
 
-  // CoinPay popup flow: the popup completes OAuth and postMessages the session
-  // back; set it client-side (like the phone flow) so it works inside the embed.
+  // CoinPay popup flow: the popup completes OAuth and postMessages the session +
+  // user back. Establish the session the SAME way the phone flow does — set the
+  // store user + localStorage (the app keys "signed in" off qrypt_user, not the
+  // Supabase session) — so it works inside the TronBrowser embed.
   useEffect(() => {
     function onCoinpayMessage(e) {
       if (e.origin !== window.location.origin) return;
       const d = e.data;
       if (!d || d.type !== 'coinpay-session' || !d.access_token) return;
-      createSupabaseClient()
-        .auth.setSession({ access_token: d.access_token, refresh_token: d.refresh_token })
-        .then(() => router.push('/chat'))
-        .catch(() => msgStore.error?.('CoinPay login failed — please try again.'));
+      const session = { access_token: d.access_token, refresh_token: d.refresh_token };
+      (async () => {
+        try {
+          if (d.user) {
+            localStorage.setItem('qrypt_user', JSON.stringify(d.user));
+            useAuthStore.setState({ user: d.user, loading: false });
+          }
+          localStorage.setItem('qrypt_session', JSON.stringify(session));
+          localStorage.setItem('supabase.auth.token', JSON.stringify(session));
+          await createSupabaseClient().auth.setSession(session);
+          router.push('/chat');
+        } catch {
+          msgStore.error?.('CoinPay login failed — please try again.');
+        }
+      })();
     }
     window.addEventListener('message', onCoinpayMessage);
     return () => window.removeEventListener('message', onCoinpayMessage);
