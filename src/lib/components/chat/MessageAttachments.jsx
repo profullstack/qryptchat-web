@@ -35,6 +35,19 @@ export default function MessageAttachments({ messageId }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Bumped to force a re-fetch when an upload for this message completes after
+  // the component already mounted (the carrier 'file' message renders — and
+  // fetches — before its attachments finish uploading).
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!messageId) return undefined;
+    const onUpdated = (e) => {
+      if (e.detail?.messageId === messageId) setReloadKey((k) => k + 1);
+    };
+    window.addEventListener('attachments:updated', onUpdated);
+    return () => window.removeEventListener('attachments:updated', onUpdated);
+  }, [messageId]);
 
   useEffect(() => {
     if (!messageId) return undefined;
@@ -71,7 +84,7 @@ export default function MessageAttachments({ messageId }) {
       cancelled = true;
       createdUrls.forEach((u) => URL.revokeObjectURL(u));
     };
-  }, [messageId]);
+  }, [messageId, reloadKey]);
 
   if (loading) {
     return <div className="att-loading"><span className="att-spinner" /> Decrypting attachment…</div>;

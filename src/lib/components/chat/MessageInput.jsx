@@ -203,6 +203,13 @@ export default function MessageInput({ conversationId, disabled = false }) {
         } catch {
           // non-fatal: realtime will reconcile
         }
+
+        // The carrier 'file' message mounted (and fetched its attachments)
+        // before these uploads finished, so tell it to re-fetch now that the
+        // files exist — otherwise it stays empty until a full page refresh.
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('attachments:updated', { detail: { messageId } }));
+        }
         trackMessageSent({ conversationId, type: 'file', hasAttachments: true });
         setSelectedFiles([]);
         setMessageText('');
