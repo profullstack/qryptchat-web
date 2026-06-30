@@ -7,6 +7,7 @@ import EncryptionSettings from '@/lib/components/settings/EncryptionSettings.jsx
 import PrivateKeyManager from '@/lib/components/settings/PrivateKeyManager.jsx';
 import SMSNotificationSettings from '@/lib/components/settings/SMSNotificationSettings.jsx';
 import WebhookSettings from '@/lib/components/settings/WebhookSettings.jsx';
+import InviteAnon from '@/lib/components/settings/InviteAnon.jsx';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -38,6 +39,10 @@ export default function SettingsPage() {
           <section className="settings-section-card">
             <h2>Webhooks</h2>
             <WebhookSettings />
+          </section>
+          <section className="settings-section-card">
+            <h2>Invite Anonymously</h2>
+            <InviteAnon />
           </section>
         </div>
       </div>
