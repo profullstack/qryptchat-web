@@ -17,6 +17,10 @@ function getServiceRoleClient() {
 // Create regular client for JWT validation
 const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+async function resolveRouteParams(params) {
+	return (await params) || {};
+}
+
 /**
  * Authenticate user from request cookies
  * @param {Request} request
@@ -119,7 +123,7 @@ export async function GET(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const conversationId = params.id;
+		const { id: conversationId } = await resolveRouteParams(params);
 		if (!conversationId) {
 			return NextResponse.json({ error: 'Missing conversation ID' }, { status: 400 });
 		}
