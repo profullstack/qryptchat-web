@@ -39,6 +39,11 @@ export async function GET(request) {
 		const appOrigin = getAppOrigin(new URL(request.url).origin);
 		const redirectUri = getRedirectUri(appOrigin);
 
+		// popup=1 → callback returns a window that postMessages the session back to
+		// the opener (used by the in-iframe TronBrowser embed, where a top-level
+		// redirect to the OAuth provider can't render).
+		const popup = new URL(request.url).searchParams.get('popup') === '1';
+
 		const state = generateState();
 		const { codeVerifier, codeChallenge } = generatePkcePair();
 
@@ -52,8 +57,8 @@ export async function GET(request) {
 
 		const response = NextResponse.redirect(authorizeUrl);
 
-		// Persist state + PKCE verifier for the callback to validate/consume.
-		response.cookies.set(COINPAY_STATE_COOKIE, JSON.stringify({ state, codeVerifier }), {
+		// Persist state + PKCE verifier (+ popup flag) for the callback.
+		response.cookies.set(COINPAY_STATE_COOKIE, JSON.stringify({ state, codeVerifier, popup }), {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === 'production',
 			sameSite: 'lax',

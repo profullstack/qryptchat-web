@@ -52,6 +52,35 @@ function redirectError(appOrigin, code) {
 }
 
 /**
+ * Popup-mode result: hand the Supabase session back to the opener via postMessage
+ * (the opener sets it client-side with supabase.auth.setSession, exactly like the
+ * phone flow), then close. This is what makes CoinPay work inside the in-iframe
+ * embed, where session cookies set on a first-party popup don't reach the
+ * partitioned iframe.
+ * @param {string} appOrigin
+ * @param {{access_token:string, refresh_token:string}} session
+ * @returns {NextResponse}
+ */
+function popupSession(appOrigin, session) {
+	const payload = JSON.stringify({
+		type: 'coinpay-session',
+		access_token: session.access_token,
+		refresh_token: session.refresh_token
+	}).replace(/</g, '\\u003c');
+	const target = JSON.stringify(appOrigin);
+	const html = `<!doctype html><meta charset="utf-8"><title>Signed in</title>` +
+		`<body style="background:#0b1020;color:#cfe8ff;font:15px system-ui;display:grid;place-items:center;height:100vh;margin:0">` +
+		`<p>✓ Signed in — you can close this window.</p>` +
+		`<script>try{(window.opener||window.parent).postMessage(${payload},${target});}catch(e){}` +
+		`setTimeout(function(){try{window.close();}catch(e){}},250);</script></body>`;
+	const res = new NextResponse(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+	res.cookies.set(COINPAY_STATE_COOKIE, '', {
+		httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0
+	});
+	return res;
+}
+
+/**
  * Find an existing Supabase auth user by email (paged scan of admin.listUsers).
  * @param {import('@supabase/supabase-js').SupabaseClient} serviceSupabase
  * @param {string} email
@@ -102,11 +131,13 @@ export async function GET(request) {
 		const stateCookie = request.cookies.get(COINPAY_STATE_COOKIE)?.value;
 		let storedState = null;
 		let codeVerifier;
+		let popup = false;
 		if (stateCookie) {
 			try {
 				const parsed = JSON.parse(stateCookie);
 				storedState = parsed.state;
 				codeVerifier = parsed.codeVerifier;
+				popup = !!parsed.popup;
 			} catch {
 				storedState = null;
 			}
@@ -223,6 +254,11 @@ export async function GET(request) {
 		if (verifyError || !sessionData?.session) {
 			console.error('coinpay/callback: verifyOtp failed', verifyError);
 			return redirectError(appOrigin, 'coinpay_session_failed');
+		}
+
+		// Popup (embed) flow: postMessage the session back to the opener + close.
+		if (popup) {
+			return popupSession(appOrigin, sessionData.session);
 		}
 
 		// Build the redirect, then mirror the session cookies set by the server

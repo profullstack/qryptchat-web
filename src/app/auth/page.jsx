@@ -43,6 +43,23 @@ export default function AuthPage() {
     if (authenticated) router.replace('/chat');
   }, [authenticated]);
 
+  // CoinPay popup flow: the popup completes OAuth and postMessages the session
+  // back; set it client-side (like the phone flow) so it works inside the embed.
+  useEffect(() => {
+    function onCoinpayMessage(e) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (!d || d.type !== 'coinpay-session' || !d.access_token) return;
+      createSupabaseClient()
+        .auth.setSession({ access_token: d.access_token, refresh_token: d.refresh_token })
+        .then(() => router.push('/chat'))
+        .catch(() => msgStore.error?.('CoinPay login failed — please try again.'));
+    }
+    window.addEventListener('message', onCoinpayMessage);
+    return () => window.removeEventListener('message', onCoinpayMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
   function formatPhoneNumber(value) {
     const clean = value.replace(/[^\d+]/g, '');
     if (clean.length > 0 && !clean.startsWith('+')) return '+' + clean;
@@ -198,9 +215,17 @@ export default function AuthPage() {
               </button>
             </form>
             <div className="auth-divider"><span>or</span></div>
-            <a href="/api/auth/coinpay/login" className="coinpay-button">
+            <button
+              type="button"
+              className="coinpay-button"
+              onClick={() => {
+                // Popup keeps the OAuth provider out of any embedding iframe.
+                const w = window.open('/api/auth/coinpay/login?popup=1', 'coinpay-login', 'width=480,height=720');
+                if (!w) window.location.href = '/api/auth/coinpay/login'; // popups blocked → top-level
+              }}
+            >
               <span className="coinpay-icon">🪙</span> Log in with CoinPay
-            </a>
+            </button>
           </div>
         )}
 
