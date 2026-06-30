@@ -88,8 +88,9 @@ export default function InviteAnon() {
 	return (
 		<div className="invite-anon">
 			<p className="invite-desc">
-				Invite someone to join anonymously — no phone or email required. Each link works once and
-				expires in 7 days. It does not reveal that you invited them.
+				Anyone with an account can invite someone to join anonymously — no phone or email required
+				for them. Each link works once and expires in 7 days, and it does not reveal that you invited
+				them.
 			</p>
 
 			{loading ? (
