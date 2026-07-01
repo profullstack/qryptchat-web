@@ -16,6 +16,10 @@ function getServiceRoleClient() {
 // Create regular Supabase client for authentication
 const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+async function resolveRouteParams(params) {
+  return (await params) || {};
+}
+
 /**
  * Authenticate user from request cookies
  * @param {Request} request - The request object
@@ -100,7 +104,7 @@ export async function GET(request, { params } = {}) {
     const userId = userData.id;
     console.log('🔐 [API] ✅ Internal user ID:', userId);
 
-    const conversationId = params.id;
+    const { id: conversationId } = await resolveRouteParams(params);
     if (!conversationId) {
       return NextResponse.json({ error: 'Missing conversation ID' }, { status: 400 });
     }
@@ -169,7 +173,7 @@ export async function PUT(request, { params } = {}) {
     const userId = userData.id;
     console.log('🔐 [API] ✅ Internal user ID:', userId);
 
-    const conversationId = params.id;
+    const { id: conversationId } = await resolveRouteParams(params);
     if (!conversationId) {
       return NextResponse.json({ error: 'Missing conversation ID' }, { status: 400 });
     }
