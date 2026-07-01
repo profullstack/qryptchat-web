@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 import { createClient } from '@supabase/supabase-js';
 
-export async function POST(request, { params } = {}) {
+export async function POST() {
 	try {
 		// Create Supabase client using the server client helper (handles auth automatically)
 		const supabase = await createSupabaseServerClient();
@@ -33,15 +33,6 @@ export async function POST(request, { params } = {}) {
 		const { error: deleteError } = await serviceSupabase
 			.from('user_public_keys')
 			.delete()
-			.eq('user_id', user.id);
-
-		// Also clear from users table if needed
-		const { error: updateError } = await serviceSupabase
-			.from('users')
-			.update({
-				ml_kem_public_key: null,
-				updated_at: new Date().toISOString()
-			})
 			.eq('user_id', user.id);
 
 		if (deleteError) {
