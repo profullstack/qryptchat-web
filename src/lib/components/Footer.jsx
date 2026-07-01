@@ -50,6 +50,7 @@ export default function Footer() {
             <h4>Company</h4>
             <a href="/about">About</a>
             <a href="/blog">Blog</a>
+            <a href="/faq">FAQ</a>
             <a href="/contact">Contact</a>
             <a href="/warrant-canary">Warrant Canary</a>
           </div>

@@ -1,3 +1,10 @@
+export const metadata = {
+  title: 'Warrant Canary',
+  description: 'QryptChat warrant canary — our transparency statement regarding government data requests and gag orders.',
+  alternates: { canonical: '/warrant-canary' },
+  openGraph: { url: '/warrant-canary', title: 'QryptChat Warrant Canary' },
+};
+
 export default function WarrantCanaryPage() {
   return (
     <div className="container" style={{padding: '4rem 0', maxWidth: '720px'}}>

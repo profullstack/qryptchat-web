@@ -1,3 +1,10 @@
+export const metadata = {
+  title: 'Privacy Policy',
+  description: 'QryptChat privacy policy: data minimization, GDPR rights, and no ads or third-party advertising trackers.',
+  alternates: { canonical: '/privacy' },
+  openGraph: { url: '/privacy', title: 'QryptChat Privacy Policy' },
+};
+
 export default function PrivacyPage() {
   return (
     <div className="container" style={{padding: '4rem 0', maxWidth: '720px'}}>
