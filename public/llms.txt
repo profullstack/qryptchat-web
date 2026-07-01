@@ -9,6 +9,8 @@ QryptChat uses NIST-approved post-quantum algorithms (ML-KEM-1024 / CRYSTALS-Kyb
 - [Home](https://qrypt.chat/) — Product overview and feature highlights
 - [About](https://qrypt.chat/about) — Mission, team, and differentiators
 - [Security](https://qrypt.chat/security) — Encryption algorithms, zero-knowledge architecture, audit status
+- [FAQ](https://qrypt.chat/faq) — Common questions about pricing, platforms, and post-quantum encryption
+- [Pricing & Premium](https://qrypt.chat/premium) — Free vs. Premium tiers (free and open source)
 - [Encryption Test](https://qrypt.chat/encryption-test) — Live ML-KEM-1024 demo in the browser
 - [Contact](https://qrypt.chat/contact) — Support, security, and business contact emails
 - [Privacy Policy](https://qrypt.chat/privacy) — Data minimization, GDPR rights, no ads or tracking
