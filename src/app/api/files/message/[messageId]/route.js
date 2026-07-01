@@ -4,6 +4,11 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 export async function GET(request, { params } = {}) {
 	try {
+		const { messageId } = (await params) || {};
+		if (!messageId) {
+			return NextResponse.json({ error: 'Message ID is required' }, { status: 400 });
+		}
+
 		// Create Supabase server client
 		const supabase = await createSupabaseServerClient();
 		
@@ -13,7 +18,6 @@ export async function GET(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const messageId = params.messageId;
 		console.log(`📁 [FILES-BY-MESSAGE] Request from auth user: ${user.id} for message: ${messageId}`);
 
 		// Get the internal user ID from the users table using auth_user_id
@@ -87,10 +91,3 @@ export async function GET(request, { params } = {}) {
 	}
 }
 
-function formatFileSize(bytes) {
-	if (bytes === 0) return '0 Bytes';
-	const k = 1024;
-	const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
