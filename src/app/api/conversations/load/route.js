@@ -10,18 +10,29 @@ export const POST = withAuth(async ({ locals }) => {
 	try {
 		const { supabase, user } = locals;
 
+		const { data: userData, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !userData) {
+			console.error('Failed to resolve internal user:', userError);
+			return NextResponse.json({ error: 'User not found' }, { status: 404 });
+		}
+
 		// Load user's conversations with participants and last message
 		const { data: participations, error: partError } = await supabase
 			.from('conversation_participants')
 			.select('conversation_id')
-			.eq('user_id', user.id);
+			.eq('user_id', userData.id);
 
 		if (partError) {
 			console.error('Failed to load participations:', partError);
 			return NextResponse.json({ error: 'Failed to load conversations' }, { status: 500 });
 		}
 
-		const conversationIds = participations.map(p => p.conversation_id);
+		const conversationIds = (participations || []).map(p => p.conversation_id);
 
 		if (conversationIds.length === 0) {
 			return NextResponse.json({ success: true, conversations: [] });
