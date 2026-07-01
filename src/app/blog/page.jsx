@@ -30,7 +30,7 @@ export default async function BlogPage() {
               <Link href={`/blog/${p.slug}`} style={{ display: 'flex', gap: '1rem', padding: '1rem', textDecoration: 'none', color: 'inherit' }}>
                 {p.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.image_url} alt="" loading="lazy" width={80} height={80}
+                  <img src={p.image_url} alt={p.title} loading="lazy" width={80} height={80}
                     style={{ width: '5rem', height: '5rem', objectFit: 'cover', borderRadius: '0.375rem', flexShrink: 0 }} />
                 ) : (
                   <div style={{ width: '5rem', height: '5rem', borderRadius: '0.375rem', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-secondary)', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-accent)' }}>

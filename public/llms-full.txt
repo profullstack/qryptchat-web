@@ -1,0 +1,91 @@
+# QryptChat — Full Content
+
+> Quantum-resistant, end-to-end encrypted messaging by Profullstack, Inc.
+> Concatenated Markdown of the key public pages for LLM/RAG ingestion.
+
+## Home
+
+QryptChat is quantum-resistant, end-to-end encrypted messaging. It uses NIST-approved
+post-quantum algorithms — ML-KEM-1024 (CRYSTALS-Kyber) for key encapsulation and
+CRYSTALS-Dilithium for digital signatures — to protect messages, files, and calls against
+both current attackers and future quantum computers. It is free, open source (MIT),
+self-hostable, and accessible over Tor.
+
+How it works:
+
+1. Register with a phone number. A one-time SMS code verifies you — no email and no password.
+2. Keys are generated on your device. Your ML-KEM-1024 key pair never leaves your device, so
+   QryptChat cannot read your messages (zero-knowledge architecture).
+3. Every message is encrypted end-to-end — text, files, and voice & video calls.
+4. Stay private everywhere: use the web app or the Tor onion service, and self-host from the
+   open-source repository.
+
+Built for privacy-conscious individuals, journalists, activists, and security-minded teams.
+
+## About
+
+QryptChat is built by Profullstack, Inc. (founded 2024). Team: Anthony Ettinger
+(Founder & Developer) and mrpthedev (Developer). Mission: make communication that stays
+private for decades using cryptography already standardized by NIST, kept open source so it
+can be independently verified and self-hosted.
+
+## Security
+
+- Key encapsulation: ML-KEM-1024 (CRYSTALS-Kyber), NIST FIPS 203.
+- Digital signatures: CRYSTALS-Dilithium (ML-DSA), NIST FIPS 204.
+- Coverage: text messages, file transfers, and 1:1 and group voice & video calls are end-to-end encrypted.
+- Key custody: private keys are created and stored on-device; the server only ever sees ciphertext.
+- Why post-quantum: defends against "harvest now, decrypt later" attacks.
+- Privacy & resilience: phone-number auth (no email/password), no ads or trackers, Tor access,
+  a public warrant canary, and MIT-licensed self-hostable source.
+- Responsible disclosure: security@qrypt.chat and /.well-known/security.txt.
+
+## Pricing & Premium
+
+QryptChat is free and open source (MIT). All core messaging, calling, and encryption features
+are free, and you can self-host. An optional paid Premium tier is in development.
+
+| Feature | Free | Premium (coming soon) |
+| --- | --- | --- |
+| Post-quantum end-to-end encryption | yes | yes |
+| Encrypted voice & video calls | yes | yes |
+| Disappearing messages & file sharing | yes | yes |
+| Tor access & self-hosting | yes | yes |
+| Price | $0 forever | TBA |
+
+## FAQ
+
+Q: Is QryptChat free?
+A: Yes — free and open source (MIT). Optional Premium tier is in development.
+
+Q: What platforms does QryptChat run on?
+A: Any modern web browser, plus installable as a PWA on Android, iOS, and desktop, and reachable over Tor.
+
+Q: What makes QryptChat quantum-resistant?
+A: It encrypts with ML-KEM-1024 (CRYSTALS-Kyber) and CRYSTALS-Dilithium, protecting against
+"harvest now, decrypt later" attacks.
+
+Q: How is QryptChat different from Signal?
+A: It uses post-quantum cryptography by design, is MIT-licensed and self-hostable, and is accessible over Tor.
+
+Q: Does QryptChat require an email or password?
+A: No — sign up with a phone number and an SMS code.
+
+Q: Can I self-host QryptChat?
+A: Yes — https://github.com/profullstack/qryptchat-web
+
+Q: Can QryptChat read my messages?
+A: No — keys are generated on your device and the server only handles ciphertext.
+
+## Company
+
+- Name: Profullstack, Inc.
+- Product: QryptChat
+- Founded: 2024
+- Team: Anthony Ettinger (Founder & Developer), mrpthedev (Developer)
+- Support: support@qrypt.chat
+- Security: security@qrypt.chat
+- Business: business@qrypt.chat
+- GitHub: https://github.com/profullstack/qryptchat-web
+- License: MIT
+- Pricing: Free / open source

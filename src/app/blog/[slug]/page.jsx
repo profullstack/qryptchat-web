@@ -41,7 +41,14 @@ export default async function BlogPostPage({ params }) {
             '@type': 'BlogPosting',
             headline: post.title,
             datePublished: post.date,
+            dateModified: post.date,
+            ...(post.excerpt ? { description: post.excerpt } : {}),
             author: { '@type': 'Organization', name: 'QryptChat' },
+            publisher: {
+              '@type': 'Organization',
+              name: 'Profullstack, Inc.',
+              logo: { '@type': 'ImageObject', url: `${siteUrl}/logo.svg` },
+            },
             mainEntityOfPage: `${siteUrl}/blog/${post.slug}`,
             ...(post.image_url ? { image: [post.image_url] } : {}),
           }),
@@ -51,7 +58,7 @@ export default async function BlogPostPage({ params }) {
       <h1 style={{ fontSize: '2.25rem', fontWeight: 700, marginTop: '0.5rem', lineHeight: 1.2 }}>{post.title}</h1>
       {post.image_url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={post.image_url} alt="" style={{ width: '100%', borderRadius: '0.5rem', marginTop: '1.5rem', border: '1px solid var(--color-border)' }} />
+        <img src={post.image_url} alt={post.title} style={{ width: '100%', borderRadius: '0.5rem', marginTop: '1.5rem', border: '1px solid var(--color-border)' }} />
       )}
       {post.html ? (
         <article
