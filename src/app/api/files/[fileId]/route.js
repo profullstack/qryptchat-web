@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 
+async function resolveRouteParams(params) {
+	return (await params) || {};
+}
+
 export async function GET(request, { params } = {}) {
 	try {
 		// Create Supabase server client
@@ -14,7 +18,7 @@ export async function GET(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const fileId = params.fileId;
+		const { fileId } = await resolveRouteParams(params);
 		console.log(`📁 [FILE-DOWNLOAD] Download request from auth user: ${user.id} for file: ${fileId}`);
 
 		// Get the internal user ID from the users table using auth_user_id
@@ -117,7 +121,7 @@ export async function GET(request, { params } = {}) {
 				const metadataObj = JSON.parse(decryptedMetadata);
 				mimeType = metadataObj.mimeType || 'application/octet-stream';
 			}
-		} catch (metaError) {
+		} catch {
 			console.warn('📁 [FILE-DOWNLOAD] Could not decrypt metadata for mimeType');
 		}
 
@@ -146,7 +150,7 @@ export async function GET(request, { params } = {}) {
 }
 
 // Get file info without downloading the actual file content
-export async function HEAD(event) {
+export async function HEAD(request, { params } = {}) {
 	try {
 		// Create Supabase server client
 		const supabase = await createSupabaseServerClient();
@@ -158,7 +162,7 @@ export async function HEAD(event) {
 		}
 
 		const userId = user.id;
-		const fileId = params.fileId;
+		const { fileId } = await resolveRouteParams(params);
 
 		// Get file metadata from database
 		const { data: fileData, error: fileError } = await supabase
@@ -212,7 +216,7 @@ export async function POST(request, { params } = {}) {
 		}
 
 		const userId = user.id;
-		const fileId = params.fileId;
+		const { fileId } = await resolveRouteParams(params);
 
 		console.log(`📁 [FILE-INFO] Info request from user: ${userId} for file: ${fileId}`);
 
@@ -259,10 +263,3 @@ export async function POST(request, { params } = {}) {
 	}
 }
 
-function formatFileSize(bytes) {
-	if (bytes === 0) return '0 Bytes';
-	const k = 1024;
-	const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
