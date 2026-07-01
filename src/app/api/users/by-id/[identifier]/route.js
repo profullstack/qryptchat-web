@@ -16,7 +16,7 @@ export async function GET(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { identifier } = params;
+		const { identifier } = (await params) || {};
 
 		// Validate the identifier format
 		if (!validateUniqueIdentifier(identifier)) {
