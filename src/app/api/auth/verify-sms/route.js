@@ -125,7 +125,25 @@ export async function POST(request, { params } = {}) {
 					userId: user.id,
 					userPhone: user.phone
 				});
-				
+
+				// Bind the requested phone number to the JWT-verified phone.
+				// The session branch skips OTP, so without this a caller holding
+				// ANY valid session (their own verified number, or an anonymous
+				// session) could complete signup claiming a phone they never
+				// verified — that value is persisted as `phone_number` below.
+				// Compare bare digits so a leading '+' difference doesn't matter.
+				const verifiedPhone = (user.phone || '').replace(/\D/g, '');
+				const requestedPhone = phoneNumber.replace(/\D/g, '');
+				if (!verifiedPhone || verifiedPhone !== requestedPhone) {
+					logger.error('Session phone does not match verified phone', {
+						hasVerifiedPhone: !!user.phone
+					});
+					return NextResponse.json(
+						{ error: 'Phone number does not match verified session', code: 'PHONE_SESSION_MISMATCH' },
+						{ status: 403 }
+					);
+				}
+
 				// Use the authenticated user data
 				verifyData = {
 					user,
