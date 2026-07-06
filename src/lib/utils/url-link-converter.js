@@ -42,7 +42,7 @@ export function convertUrlsToLinks(text) {
 
 	// Extract code blocks and replace with placeholders
 	while ((codeMatch = codeBlockRegex.exec(text)) !== null) {
-		const placeholder = `<[CODE_BLOCK_${codeIndex}]>`;
+		const placeholder = `__QRYPTCHAT_CODE_BLOCK_${codeIndex}__`;
 		const codeContent = codeMatch[1];
 		codeBlocks.push(`<pre><code>${escapeHtml(codeContent)}</code></pre>`);
 		textWithPlaceholders = textWithPlaceholders.replace(codeMatch[0], placeholder);
@@ -87,7 +87,7 @@ export function convertUrlsToLinks(text) {
 
 	// Restore code blocks from placeholders
 	codeBlocks.forEach((codeBlock, index) => {
-		const placeholder = `<[CODE_BLOCK_${index}]>`;
+		const placeholder = `__QRYPTCHAT_CODE_BLOCK_${index}__`;
 		result = result.replace(placeholder, codeBlock);
 	});
 
