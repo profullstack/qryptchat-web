@@ -99,9 +99,7 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
               <Script data-site="38c4083a-a35e-435d-8a0e-3510c465f419" src="https://crawlproof.com/stats.js" strategy="afterInteractive" />
-      <FeedbackWidget />        <div data-cp-ad="" data-slot="4a5b5f93-ebd9-4d02-b927-05544fdeb81e" data-format="banner_300x250" />
-      <Script src="https://crawlproof.com/ad.js" strategy="afterInteractive" />
-      </body>
+      <FeedbackWidget /></body>
     </html>
   );
 }
