@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api/middleware/auth.js';
+import { validateWebhookUrl } from '@/lib/webhooks/url-validation.js';
 
 /** List webhooks for the authenticated user */
 export const GET = withAuth(async (event) => {
@@ -36,10 +37,9 @@ export const POST = withAuth(async (event) => {
 		return NextResponse.json({ error: 'url is required' }, { status: 400 });
 	}
 
-	try {
-		new URL(url);
-	} catch {
-		return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+	const webhookUrl = validateWebhookUrl(url);
+	if (!webhookUrl.ok) {
+		return NextResponse.json({ error: webhookUrl.error }, { status: 400 });
 	}
 
 	if (!Array.isArray(events) || events.length === 0) {
@@ -48,7 +48,7 @@ export const POST = withAuth(async (event) => {
 
 	const { data, error } = await supabase
 		.from('webhooks')
-		.insert({ user_id: user.id, url, events })
+		.insert({ user_id: user.id, url: webhookUrl.url, events })
 		.select('id, url, events, created_at')
 		.single();
 
