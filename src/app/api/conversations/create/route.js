@@ -10,7 +10,18 @@ import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { participantIds, name, isGroup } = await request.json();
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+		}
+
+		if (!body || typeof body !== 'object' || Array.isArray(body)) {
+			return NextResponse.json({ error: 'Request body must be a JSON object' }, { status: 400 });
+		}
+
+		const { participantIds, name, isGroup } = body;
 
 		if (!participantIds || !Array.isArray(participantIds)) {
 			return NextResponse.json({ error: 'Missing or invalid participantIds' }, { status: 400 });

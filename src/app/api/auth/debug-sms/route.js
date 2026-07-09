@@ -33,7 +33,7 @@ export async function POST(request, { params } = {}) {
 	if (!isDevelopment()) {
 		return NextResponse.json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
 	}
-	if (!(await verifyAuth(event))) {
+	if (!(await verifyAuth(request))) {
 		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -48,7 +48,7 @@ export async function POST(request, { params } = {}) {
 			);
 		}
 
-		const diagnostics = new SMSAuthDiagnostics(event);
+		const diagnostics = new SMSAuthDiagnostics(request);
 
 		switch (action) {
 			case 'diagnose':
@@ -109,12 +109,12 @@ export async function GET(request, { params } = {}) {
 	if (!isDevelopment()) {
 		return NextResponse.json({ error: 'Debug endpoints are disabled in production' }, { status: 403 });
 	}
-	if (!(await verifyAuth(event))) {
+	if (!(await verifyAuth(request))) {
 		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	try {
-		const diagnostics = new SMSAuthDiagnostics(event);
+		const diagnostics = new SMSAuthDiagnostics(request);
 		
 		// Run basic system checks without phone number
 		const result = await diagnostics.runDiagnostics('+1234567890'); // Dummy number for format check
