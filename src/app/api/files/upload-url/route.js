@@ -2,6 +2,21 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 
+async function parseJsonObject(request) {
+	let body;
+	try {
+		body = await request.json();
+	} catch {
+		return { error: NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) };
+	}
+
+	if (!body || typeof body !== 'object' || Array.isArray(body)) {
+		return { error: NextResponse.json({ error: 'Request body must be a JSON object' }, { status: 400 }) };
+	}
+
+	return { body };
+}
+
 export async function POST(request, { params } = {}) {
 	try {
 		// Create Supabase server client
@@ -14,6 +29,17 @@ export async function POST(request, { params } = {}) {
 		}
 
 		console.log(`📁 [UPLOAD-URL] Signed URL request from auth user: ${user.id}`);
+
+		const parsedBody = await parseJsonObject(request);
+		if (parsedBody.error) {
+			return parsedBody.error;
+		}
+
+		const {
+			conversationId,
+			messageId,
+			encryptedMetadata
+		} = parsedBody.body;
 
 		// Get the internal user ID from the users table using auth_user_id
 		const { data: internalUser, error: userError } = await supabase
@@ -29,13 +55,6 @@ export async function POST(request, { params } = {}) {
 
 		const userId = internalUser.id;
 		console.log(`📁 [UPLOAD-URL] Using internal user ID: ${userId}`);
-
-		// Parse the JSON request body (should be small - just encrypted metadata)
-		const {
-			conversationId,
-			messageId,
-			encryptedMetadata
-		} = await request.json();
 
 		// Validate inputs
 		if (!conversationId || !messageId || !encryptedMetadata) {

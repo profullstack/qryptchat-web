@@ -4,6 +4,21 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 import { sseManager } from '@/lib/api/sse-manager.js';
 import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 
+async function parseJsonObject(request) {
+	let body;
+	try {
+		body = await request.json();
+	} catch {
+		return { error: NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) };
+	}
+
+	if (!body || typeof body !== 'object' || Array.isArray(body)) {
+		return { error: NextResponse.json({ error: 'Request body must be a JSON object' }, { status: 400 }) };
+	}
+
+	return { body };
+}
+
 export async function POST(request, { params } = {}) {
 	try {
 		// Create Supabase server client
@@ -17,12 +32,16 @@ export async function POST(request, { params } = {}) {
 
 		console.log(`📁 [UPLOAD-COMPLETE] Upload completion from auth user: ${user.id}`);
 
-		// Parse the JSON request body
+		const parsedBody = await parseJsonObject(request);
+		if (parsedBody.error) {
+			return parsedBody.error;
+		}
+
 		const {
 			storagePath,
 			fileId,
 			metadata
-		} = await request.json();
+		} = parsedBody.body;
 
 		// Validate inputs
 		if (!storagePath || !fileId || !metadata) {
