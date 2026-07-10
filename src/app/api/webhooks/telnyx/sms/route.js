@@ -77,7 +77,13 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
 		}
 
-		const body = JSON.parse(rawBody);
+		let body;
+		try {
+			body = JSON.parse(rawBody);
+		} catch (parseError) {
+			console.error('[TELNYX-WEBHOOK] Invalid JSON payload:', parseError.message);
+			return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+		}
 		
 		// Log the incoming webhook for debugging
 		console.log('[TELNYX-WEBHOOK] Received webhook:', {
