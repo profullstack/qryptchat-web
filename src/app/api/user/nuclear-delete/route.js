@@ -29,7 +29,7 @@ async function authenticateUser(request) {
 
 			// Extract access token from cookies
 			const cookies = Object.fromEntries(
-				cookieHeader.split('; ').map(cookie => {
+				cookieHeader.split(/;\s*/).map(cookie => {
 					const [name, ...rest] = cookie.split('=');
 					return [name, rest.join('=')];
 				})
