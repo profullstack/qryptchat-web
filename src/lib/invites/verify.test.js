@@ -91,10 +91,29 @@ describe('verifyInviteToken', () => {
 	});
 
 	it('rejects an expired token', async () => {
-		const token = mintToken(privateKey, basePayload({ exp: nowSec() - 60 }));
+		const token = mintToken(privateKey, basePayload({ iat: nowSec() - 3600, exp: nowSec() - 60 }));
 		await expect(verifyInviteToken(token, getIssuerPublicKey)).rejects.toMatchObject({
 			code: 'expired',
 		});
+	});
+
+	it('rejects signed tokens with invalid payload shape', async () => {
+		const cases = [
+			{ jti: 'not-hex' },
+			{ tier: '' },
+			{ iat: undefined },
+			{ iat: nowSec() + 10, exp: nowSec() },
+			{ exp: `${nowSec() + 3600}` },
+			{ uses: 0 },
+			{ uses: 2 },
+		];
+
+		for (const overrides of cases) {
+			const token = mintToken(privateKey, basePayload(overrides));
+			await expect(verifyInviteToken(token, getIssuerPublicKey)).rejects.toMatchObject({
+				code: 'bad_format',
+			});
+		}
 	});
 
 	it('rejects a token signed by the wrong issuer key', async () => {

@@ -46,6 +46,14 @@ function b64urlDecode(value) {
 }
 
 /**
+ * @param {number} value
+ * @returns {boolean}
+ */
+function isUnixSecond(value) {
+	return Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
  * Wrap a raw 32-byte Ed25519 public key (base64) into a Node KeyObject by
  * prepending the SPKI DER header and importing as DER/SPKI.
  * @param {string} base64 base64-encoded raw 32-byte public key
@@ -114,8 +122,23 @@ export async function verifyInviteToken(token, getIssuerPublicKey) {
 	if (typeof payload.jti !== 'string' || !payload.jti) {
 		throw new InviteVerificationError('bad_format', 'invite payload missing jti');
 	}
-	if (typeof payload.exp !== 'number') {
+	if (!/^[0-9a-f]{32}$/u.test(payload.jti)) {
+		throw new InviteVerificationError('bad_format', 'invite payload has invalid jti');
+	}
+	if (typeof payload.tier !== 'string' || !payload.tier) {
+		throw new InviteVerificationError('bad_format', 'invite payload missing tier');
+	}
+	if (!isUnixSecond(payload.iat)) {
+		throw new InviteVerificationError('bad_format', 'invite payload missing iat');
+	}
+	if (!isUnixSecond(payload.exp)) {
 		throw new InviteVerificationError('bad_format', 'invite payload missing exp');
+	}
+	if (payload.exp <= payload.iat) {
+		throw new InviteVerificationError('bad_format', 'invite payload expiry must be after iat');
+	}
+	if (!Number.isSafeInteger(payload.uses) || payload.uses !== 1) {
+		throw new InviteVerificationError('bad_format', 'invite payload uses must be 1');
 	}
 
 	const issuerPublicKey = await getIssuerPublicKey(payload.iss);
