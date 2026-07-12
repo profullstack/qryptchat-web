@@ -16,6 +16,19 @@ import { verifyInviteToken, InviteVerificationError } from '@/lib/invites/verify
 const PG_UNIQUE_VIOLATION = '23505';
 
 /**
+ * @param {string | null} authHeader
+ * @returns {string | null}
+ */
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
+
+/**
  * Build a service-role Supabase client (bypasses RLS).
  * Mirrors the pattern used by the phone/SMS verify-sms route.
  * @returns {import('@supabase/supabase-js').SupabaseClient}
@@ -62,10 +75,10 @@ export async function POST(request) {
 
 		// --- Validate anonymous Bearer session ---
 		const authHeader = request.headers.get('authorization');
-		if (!authHeader) {
+		const token = getBearerToken(authHeader);
+		if (!token) {
 			return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
 		}
-		const token = authHeader.replace('Bearer ', '');
 
 		const supabase = await createSupabaseServerClient();
 		const { data: { user: authUser }, error: userError } = await supabase.auth.getUser(token);
