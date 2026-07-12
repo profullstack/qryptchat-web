@@ -28,7 +28,7 @@ async function authenticateUser(request) {
 		// Fall back to cookies
 		const cookieHeader = request.headers.get('cookie') ?? '';
 		const cookies = Object.fromEntries(
-			cookieHeader.split('; ').map(c => {
+			cookieHeader.split(/;\s*/).map(c => {
 				const [name, ...rest] = c.split('=');
 				return [name, rest.join('=')];
 			})
