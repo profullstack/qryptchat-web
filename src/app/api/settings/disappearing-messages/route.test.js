@@ -12,11 +12,11 @@ vi.mock('@/lib/supabase/service-role.js', () => ({
 	createServiceRoleClient: mocks.createServiceRoleClient
 }));
 
-function request(method, body) {
+function request(method, body, authorization = 'Bearer valid-token') {
 	return new Request('https://qrypt.chat/api/settings/disappearing-messages', {
 		method,
 		headers: {
-			authorization: 'Bearer valid-token',
+			authorization,
 			...(body ? { 'content-type': 'application/json' } : {})
 		},
 		body: body ? JSON.stringify(body) : undefined
@@ -76,6 +76,27 @@ describe('settings disappearing messages authentication', () => {
 		expect(mocks.profileEq).toHaveBeenCalledWith('auth_user_id', 'auth-user-id');
 	});
 
+	it('normalizes bearer scheme casing and extra spaces for GET requests', async () => {
+		const { GET } = await import('./route.js');
+
+		const response = await GET(request('GET', undefined, 'bearer   valid-token  '));
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('valid-token');
+	});
+
+	it('rejects an empty GET bearer header before creating the service client', async () => {
+		const { GET } = await import('./route.js');
+
+		const response = await GET(request('GET', undefined, 'Bearer   '));
+		const body = await response.json();
+
+		expect(response.status).toBe(401);
+		expect(body.error).toBe('Missing or invalid authorization header');
+		expect(mocks.createServiceRoleClient).not.toHaveBeenCalled();
+		expect(mocks.authGetUser).not.toHaveBeenCalled();
+	});
+
 	it('initializes the service client before authenticating PUT requests', async () => {
 		mocks.from.mockImplementation((table) => {
 			if (table !== 'users') throw new Error(`Unexpected table: ${table}`);
@@ -88,6 +109,24 @@ describe('settings disappearing messages authentication', () => {
 
 		expect(response.status).toBe(200);
 		expect(body.success).toBe(true);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('valid-token');
+		expect(mocks.updateEq).toHaveBeenCalledWith('auth_user_id', 'auth-user-id');
+	});
+
+	it('normalizes bearer scheme casing and extra spaces for PUT requests', async () => {
+		mocks.from.mockImplementation((table) => {
+			if (table !== 'users') throw new Error(`Unexpected table: ${table}`);
+			return updateQuery();
+		});
+		const { PUT } = await import('./route.js');
+
+		const response = await PUT(request(
+			'PUT',
+			{ default_message_retention_days: 3 },
+			'bearer   valid-token  '
+		));
+
+		expect(response.status).toBe(200);
 		expect(mocks.authGetUser).toHaveBeenCalledWith('valid-token');
 		expect(mocks.updateEq).toHaveBeenCalledWith('auth_user_id', 'auth-user-id');
 	});
