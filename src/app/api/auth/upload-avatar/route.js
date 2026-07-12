@@ -3,13 +3,23 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseAuth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
+
 async function authenticateBearerToken(request) {
 	const authHeader = request.headers.get('authorization');
-	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+	const token = getBearerToken(authHeader);
+
+	if (!token) {
 		return { error: 'Authentication required' };
 	}
 
-	const token = authHeader.substring(7);
 	const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
 
 	if (error || !user?.id) {
