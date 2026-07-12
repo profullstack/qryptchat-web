@@ -16,11 +16,11 @@ vi.mock('@supabase/supabase-js', () => ({
 	createClient: mocks.createClient
 }));
 
-function sessionRequest(body) {
+function sessionRequest(body, authorization = 'Bearer test-session-token') {
 	return new Request('https://example.com/api/auth/verify-sms', {
 		method: 'POST',
 		headers: {
-			authorization: 'Bearer test-session-token',
+			authorization,
 			'content-type': 'application/json'
 		},
 		body: JSON.stringify(body)
@@ -57,6 +57,37 @@ describe('verify-sms session phone binding', () => {
 		expect(res.status).toBe(403);
 		expect(body.code).toBe('PHONE_SESSION_MISMATCH');
 		expect(mocks.getUser).toHaveBeenCalledWith('test-session-token');
+	});
+
+	it('normalizes bearer scheme casing and extra spaces for session signup', async () => {
+		mocks.getUser.mockResolvedValue({
+			data: { user: { id: 'user-1', phone: '+15559999999' } },
+			error: null
+		});
+
+		const { POST } = await import('./route.js');
+		const res = await POST(sessionRequest({
+			useSession: true,
+			phoneNumber: '+15559999999',
+			username: 'alice'
+		}, 'bearer   test-session-token  '));
+
+		expect(mocks.getUser).toHaveBeenCalledWith('test-session-token');
+		expect(res.status).not.toBe(401);
+	});
+
+	it('rejects an empty session bearer header before session validation', async () => {
+		const { POST } = await import('./route.js');
+		const res = await POST(sessionRequest({
+			useSession: true,
+			phoneNumber: '+15559999999',
+			username: 'alice'
+		}, 'Bearer   '));
+		const body = await res.json();
+
+		expect(res.status).toBe(401);
+		expect(body.code).toBe('SESSION_AUTH_REQUIRED');
+		expect(mocks.getUser).not.toHaveBeenCalled();
 	});
 
 	it('rejects anonymous / phoneless sessions', async () => {
