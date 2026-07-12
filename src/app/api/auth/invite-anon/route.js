@@ -29,6 +29,15 @@ function createServiceClient() {
 	});
 }
 
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
+
 /**
  * GET /api/auth/invite-anon — report remaining quota for the caller.
  * @param {import('next/server').NextRequest} request
@@ -134,10 +143,11 @@ export async function POST(request) {
  */
 async function authenticate(request) {
 	const authHeader = request.headers.get('authorization');
-	if (!authHeader) {
+	const token = getBearerToken(authHeader);
+
+	if (!token) {
 		return { error: NextResponse.json({ error: 'Missing authorization header' }, { status: 401 }) };
 	}
-	const token = authHeader.replace('Bearer ', '');
 	const supabase = await createSupabaseServerClient();
 	const {
 		data: { user: authUser },
