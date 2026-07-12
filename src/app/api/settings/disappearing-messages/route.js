@@ -19,15 +19,16 @@ export async function GET(request) {
 		}
 
 		const token = authHeader.split(' ')[1];
+		const client = getServiceRoleClient();
 		
 		// Verify the JWT token and get user
-		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+		const { data: { user }, error: authError } = await client.auth.getUser(token);
 		if (authError || !user) {
 			return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 		}
 
 		// Get user's current disappearing messages setting
-		const { data: profile, error: profileError } = await supabase
+		const { data: profile, error: profileError } = await client
 			.from('users')
 			.select('default_message_retention_days')
 			.eq('auth_user_id', user.id)
@@ -58,9 +59,10 @@ export async function PUT(request) {
 		}
 
 		const token = authHeader.split(' ')[1];
+		const client = getServiceRoleClient();
 		
 		// Verify the JWT token and get user
-		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+		const { data: { user }, error: authError } = await client.auth.getUser(token);
 		if (authError || !user) {
 			return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 		}
@@ -73,7 +75,7 @@ export async function PUT(request) {
 		}
 
 		// Update user's disappearing messages setting
-		const { error: updateError } = await getServiceRoleClient()
+		const { error: updateError } = await client
 			.from('users')
 			.update({
 				default_message_retention_days,
