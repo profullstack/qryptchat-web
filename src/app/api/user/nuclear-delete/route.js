@@ -4,6 +4,15 @@ import { createClient } from '@supabase/supabase-js';
 // Create regular Supabase client for authentication
 const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
+
 /**
  * Authenticate user from request cookies
  * @param {Request} request - The request object
@@ -15,8 +24,9 @@ async function authenticateUser(request) {
 		
 		// First, check for Authorization header (priority)
 		const authHeader = request.headers.get('authorization');
-		if (authHeader?.startsWith('Bearer ')) {
-			accessToken = authHeader.replace('Bearer ', '');
+		const bearerToken = getBearerToken(authHeader);
+		if (bearerToken) {
+			accessToken = bearerToken;
 			console.log('🔐 [API] ✅ Using JWT from Authorization header');
 			console.log('🔐 [API] JWT segments count:', accessToken.split('.').length);
 			console.log('🔐 [API] JWT preview:', accessToken.substring(0, 50) + '...');
