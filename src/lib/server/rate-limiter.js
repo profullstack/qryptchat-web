@@ -97,6 +97,13 @@ export const smsGlobalDailyLimiter = new RateLimiter({
 	windowMs: 24 * 60 * 60 * 1000
 });
 
+export function parseTrustedProxyCount(value = process.env.TRUSTED_PROXY_COUNT) {
+	const raw = String(value ?? '0').trim();
+	if (!/^\d+$/.test(raw)) return 0;
+	const count = Number(raw);
+	return Number.isSafeInteger(count) ? count : 0;
+}
+
 /**
  * Extract client IP from a Next.js Request object.
  *
@@ -121,7 +128,7 @@ export const smsGlobalDailyLimiter = new RateLimiter({
  * @returns {string}
  */
 export function getClientIp(request) {
-	const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT ?? '0', 10);
+	const trustedProxyCount = parseTrustedProxyCount();
 
 	if (trustedProxyCount > 0) {
 		// Take the Nth-from-right entry in X-Forwarded-For where N = trustedProxyCount.
