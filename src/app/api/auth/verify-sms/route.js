@@ -20,6 +20,19 @@ function isValidPhoneNumber(phoneNumber) {
 }
 
 /**
+ * @param {string | null} authHeader
+ * @returns {string | null}
+ */
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
+
+/**
  * POST /api/auth/verify-sms
  * Verify SMS code and create/login user
  * @param {import('next/server').NextRequest} event
@@ -59,7 +72,16 @@ export async function POST(request, { params } = {}) {
 		});
 
 		// Validate input based on request type
-		if (useSession && authHeader) {
+		const token = getBearerToken(authHeader);
+		if (useSession) {
+			if (!token) {
+				logger.error('Missing session authorization header');
+				return NextResponse.json(
+					{ error: 'Missing or invalid authorization header', code: 'SESSION_AUTH_REQUIRED' },
+					{ status: 401 }
+				);
+			}
+
 			// Session-based request - username required
 			if (!phoneNumber || !username) {
 				logger.error( 'Missing required fields for session-based request', { phoneNumber: !!phoneNumber, username: !!username });
@@ -97,11 +119,9 @@ export async function POST(request, { params } = {}) {
 		let verifyData;
 		let verifyError;
 
-		if (useSession && authHeader) {
+		if (useSession) {
 			logger.info('Processing session-based profile completion');
-			
-			const token = authHeader.replace('Bearer ', '');
-			
+
 			try {
 				// Validate the JWT token by getting user info
 				const { data: { user }, error: userError } = await supabase.auth.getUser(token);
