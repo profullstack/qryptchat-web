@@ -77,6 +77,8 @@ export const useAuthStore = create((set, get) => ({
       }
       return { error: 'Session expired' };
     } catch {
+      localStorage.removeItem('qrypt_session');
+      localStorage.removeItem('supabase.auth.token');
       return { error: 'Failed to get session' };
     }
   },

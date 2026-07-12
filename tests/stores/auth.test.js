@@ -47,6 +47,19 @@ describe('Auth Store (Zustand)', () => {
     expect(result.success).toBe(false);
   });
 
+  it('clears corrupted stored session data', async () => {
+    window.localStorage.getItem.mockImplementation((key) => {
+      if (key === 'qrypt_session') return 'not-json';
+      return null;
+    });
+
+    const result = await useAuthStore.getState().getCurrentSession();
+
+    expect(result.error).toBe('Failed to get session');
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith('qrypt_session');
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith('supabase.auth.token');
+  });
+
   it('logs out and clears user state', async () => {
     useAuthStore.setState({ user: { id: '123', username: 'test' } });
     await useAuthStore.getState().logout();
