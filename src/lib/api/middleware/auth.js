@@ -1,11 +1,20 @@
 import { createSupabaseServerClient, createSupabaseServerClientWithToken } from '@/lib/supabase.js';
 import { NextResponse } from 'next/server';
 
+export function getBearerToken(authHeader) {
+  if (typeof authHeader !== 'string') return null;
+
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1]?.trim();
+
+  return token || null;
+}
+
 export async function authenticateRequest(request) {
   try {
     // Check Authorization header first (Bearer token), then fall back to cookies
     const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const token = getBearerToken(authHeader);
 
     const supabase = token
       ? await createSupabaseServerClientWithToken(token)
