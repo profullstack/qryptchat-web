@@ -24,6 +24,15 @@ function avatarRequest(method) {
 	});
 }
 
+function avatarRequestWithAuthorization(method, authorization) {
+	return new Request('https://example.com/api/auth/upload-avatar', {
+		method,
+		headers: {
+			authorization
+		}
+	});
+}
+
 describe('upload-avatar authentication', () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -59,6 +68,32 @@ describe('upload-avatar authentication', () => {
 		expect(response.status).toBe(401);
 		expect(body.error).toBe('Invalid authentication token');
 		expect(mocks.authGetUser).toHaveBeenCalledWith(forgedToken);
+		expect(mocks.createClient).toHaveBeenCalledTimes(1);
+		expect(mocks.createClient).toHaveBeenCalledWith('https://example.supabase.co', 'anon-key');
+	});
+
+	it('normalizes bearer scheme casing and extra spaces before validating the token', async () => {
+		const { DELETE } = await import('./route.js');
+
+		const response = await DELETE(avatarRequestWithAuthorization('DELETE', `bearer   ${forgedToken}  `));
+		const body = await response.json();
+
+		expect(response.status).toBe(401);
+		expect(body.error).toBe('Invalid authentication token');
+		expect(mocks.authGetUser).toHaveBeenCalledWith(forgedToken);
+		expect(mocks.createClient).toHaveBeenCalledTimes(1);
+		expect(mocks.createClient).toHaveBeenCalledWith('https://example.supabase.co', 'anon-key');
+	});
+
+	it('does not validate an empty bearer header', async () => {
+		const { DELETE } = await import('./route.js');
+
+		const response = await DELETE(avatarRequestWithAuthorization('DELETE', 'Bearer   '));
+		const body = await response.json();
+
+		expect(response.status).toBe(401);
+		expect(body.error).toBe('Authentication required');
+		expect(mocks.authGetUser).not.toHaveBeenCalled();
 		expect(mocks.createClient).toHaveBeenCalledTimes(1);
 		expect(mocks.createClient).toHaveBeenCalledWith('https://example.supabase.co', 'anon-key');
 	});
