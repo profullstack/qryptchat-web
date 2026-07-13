@@ -69,4 +69,35 @@ describe('backup PIN cookie authentication', () => {
 		expect(body).toEqual({ hasPin: true });
 		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
 	});
+
+	it('normalizes bearer scheme casing and extra spaces', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/auth/backup-pin', {
+				headers: {
+					authorization: 'bearer   access-token  '
+				}
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(body).toEqual({ hasPin: true });
+		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
+	});
+
+	it('ignores an empty bearer header and falls back to cookies', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/auth/backup-pin', {
+				headers: {
+					authorization: 'Bearer   ',
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('cookie-token')}`
+				}
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('cookie-token');
+	});
 });
