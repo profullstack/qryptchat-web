@@ -12,6 +12,15 @@ const supabaseClient = createClient(
 	process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
+
 /**
  * Authenticate caller and return their auth user.
  * Accepts either a Bearer token (Authorization header) or Supabase cookies.
@@ -19,8 +28,8 @@ const supabaseClient = createClient(
 async function authenticateUser(request) {
 	try {
 		const authHeader = request.headers.get('authorization');
-		if (authHeader?.startsWith('Bearer ')) {
-			const token = authHeader.substring(7);
+		const token = getBearerToken(authHeader);
+		if (token) {
 			const { data: { user }, error } = await supabaseClient.auth.getUser(token);
 			if (!error && user) return { user };
 		}
