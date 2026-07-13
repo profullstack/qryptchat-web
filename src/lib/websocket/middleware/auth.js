@@ -5,6 +5,15 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
+
 /**
  * Extract JWT token from WebSocket request
  * @param {Object} request - WebSocket upgrade request
@@ -13,8 +22,9 @@ import { createClient } from '@supabase/supabase-js';
 function extractToken(request) {
 	// Try to get token from Authorization header
 	const authHeader = request.headers.authorization;
-	if (authHeader && authHeader.startsWith('Bearer ')) {
-		return authHeader.substring(7);
+	const bearerToken = getBearerToken(authHeader);
+	if (bearerToken) {
+		return bearerToken;
 	}
 
 	// Try to get token from query parameters
