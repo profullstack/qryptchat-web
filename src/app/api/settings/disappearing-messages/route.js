@@ -10,15 +10,23 @@ function getServiceRoleClient() {
 	return supabase;
 }
 
+function getBearerToken(authHeader) {
+	if (typeof authHeader !== 'string') return null;
+
+	const match = authHeader.match(/^Bearer\s+(.+)$/i);
+	const token = match?.[1]?.trim();
+
+	return token || null;
+}
 
 export async function GET(request) {
 	try {
 		const authHeader = request.headers.get('authorization');
-		if (!authHeader?.startsWith('Bearer ')) {
+		const token = getBearerToken(authHeader);
+		if (!token) {
 			return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
 		}
 
-		const token = authHeader.split(' ')[1];
 		const client = getServiceRoleClient();
 		
 		// Verify the JWT token and get user
@@ -54,11 +62,11 @@ export async function GET(request) {
 export async function PUT(request) {
 	try {
 		const authHeader = request.headers.get('authorization');
-		if (!authHeader?.startsWith('Bearer ')) {
+		const token = getBearerToken(authHeader);
+		if (!token) {
 			return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
 		}
 
-		const token = authHeader.split(' ')[1];
 		const client = getServiceRoleClient();
 		
 		// Verify the JWT token and get user
