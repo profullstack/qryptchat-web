@@ -79,4 +79,33 @@ describe('key backup cookie authentication', () => {
 		});
 		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
 	});
+
+	it('normalizes bearer scheme casing and extra spaces', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/auth/key-backup', {
+				headers: {
+					authorization: 'bearer   access-token  '
+				}
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
+	});
+
+	it('ignores an empty bearer header and falls back to cookies', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/auth/key-backup', {
+				headers: {
+					authorization: 'Bearer   ',
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('cookie-token')}`
+				}
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('cookie-token');
+	});
 });
