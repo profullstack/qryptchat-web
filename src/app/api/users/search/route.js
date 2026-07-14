@@ -36,7 +36,7 @@ export async function GET(request, { params } = {}) {
 			.from('users')
 			.select('id, username, display_name, avatar_url, phone_number, unique_identifier')
 			.or(`username.ilike.%${sanitizedQuery}%,display_name.ilike.%${sanitizedQuery}%,phone_number.ilike.%${sanitizedQuery}%,unique_identifier.ilike.%${sanitizedQuery}%`)
-			.neq('id', user.id) // Exclude current user
+			.neq('auth_user_id', user.id) // Exclude current user by the auth UUID
 			.limit(50); // Get more results for better sorting
 	
 		if (error) {
