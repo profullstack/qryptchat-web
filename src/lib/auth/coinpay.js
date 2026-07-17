@@ -1,28 +1,24 @@
 /**
- * @fileoverview App-specific helpers for the "Log in with CoinPay" OAuth2/OIDC
- * flow: environment/config resolution and username derivation/uniqueness.
+ * @fileoverview QryptChat-specific helpers for the "Log in with CoinPay"
+ * OAuth2/OIDC flow: config resolution and username derivation/uniqueness.
  *
  * The generic OAuth pieces (state/PKCE generation, state validation,
- * authorize-URL building, token/userinfo exchanges, and the login/callback
- * route handlers) come from `@profullstack/stack/coinpay` — see the routes
- * under `src/app/api/auth/coinpay/`.
+ * authorize-URL building, token/userinfo exchange, COINPAY_STATE_COOKIE)
+ * come from `@profullstack/stack/coinpay` — import them from there.
  *
  * Kept side-effect free so they can be unit-tested without Next.js.
- *
  * Additive only: does NOT touch the phone/SMS or anon-invite flows.
  */
 
 import crypto from 'node:crypto';
-
-/** Default CoinPay OIDC issuer base URL. */
-export const DEFAULT_COINPAY_ISSUER = 'https://coinpayportal.com';
+import { COINPAY_DEFAULT_ISSUER } from '@profullstack/stack/coinpay';
 
 /**
  * Resolve the CoinPay OAuth client configuration from environment variables.
  * @returns {{ issuer: string, clientId: string|undefined, clientSecret: string|undefined }}
  */
 export function getCoinpayConfig() {
-	const issuer = (process.env.COINPAY_OAUTH_ISSUER || DEFAULT_COINPAY_ISSUER).replace(/\/+$/, '');
+	const issuer = (process.env.COINPAY_OAUTH_ISSUER || COINPAY_DEFAULT_ISSUER).replace(/\/+$/, '');
 	return {
 		issuer,
 		clientId: process.env.COINPAY_OAUTH_CLIENT_ID,

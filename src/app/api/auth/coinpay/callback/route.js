@@ -1,21 +1,23 @@
 /**
  * @fileoverview "Log in with CoinPay" — OAuth2/OIDC callback.
  *
- * Delegates the OAuth plumbing (state-cookie validation, code exchange,
- * userinfo fetch) to the shared `createCoinPayCallbackHandler` from
- * `@profullstack/stack/coinpay`. The `onSuccess` hook below keeps the
- * qrypt-specific provisioning: find-or-create (via SERVICE ROLE) a Supabase
- * auth user and a public `users` row (account_type 'verified', phone_number
- * NULL), then establish a real Supabase session server-side using the admin
- * magic-link bridge (generateLink -> verifyOtp), which sets the auth cookies
- * on the response.
+ * Validates the `state` cookie, exchanges the authorization code for tokens,
+ * fetches userinfo, then provisions (via SERVICE ROLE) a Supabase auth user and
+ * a public `users` row (account_type 'verified', phone_number NULL). A real
+ * Supabase session is established server-side using the admin magic-link bridge
+ * (generateLink -> verifyOtp), which sets the auth cookies on the response.
  *
  * Open to ANYONE. Additive only — does NOT touch the phone/SMS or anon flows.
  */
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createCoinPayCallbackHandler } from '@profullstack/stack/coinpay';
+import {
+	validateCoinPayState,
+	exchangeCoinPayCode,
+	fetchCoinPayUserinfo,
+	COINPAY_STATE_COOKIE
+} from '@profullstack/stack/coinpay';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 import {
 	getCoinpayConfig,
@@ -57,9 +59,6 @@ function redirectError(appOrigin, code) {
  * phone flow), then close. This is what makes CoinPay work inside the in-iframe
  * embed, where session cookies set on a first-party popup don't reach the
  * partitioned iframe.
- *
- * The one-time state cookie is cleared by the stack callback handler on any
- * Response returned from `onSuccess`.
  * @param {string} appOrigin
  * @param {{access_token:string, refresh_token:string}} session
  * @returns {NextResponse}
@@ -83,7 +82,11 @@ function popupSession(appOrigin, session, user) {
 		`<p>✓ Signed in — you can close this window.</p>` +
 		`<script>try{(window.opener||window.parent).postMessage(${payload},${target});}catch(e){}` +
 		`setTimeout(function(){try{window.close();}catch(e){}},250);</script></body>`;
-	return new NextResponse(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+	const res = new NextResponse(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+	res.cookies.set(COINPAY_STATE_COOKIE, '', {
+		httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0
+	});
+	return res;
 }
 
 /**
@@ -117,149 +120,195 @@ async function findAuthUserByEmail(serviceSupabase, email) {
  * @param {import('next/server').NextRequest} request
  */
 export async function GET(request) {
-	const appOrigin = getAppOrigin(new URL(request.url).origin);
-	const { issuer, clientId, clientSecret } = getCoinpayConfig();
-	if (!clientId || !clientSecret) {
-		console.error('coinpay/callback: client credentials not configured');
-		return redirectError(appOrigin, 'coinpay_unavailable');
-	}
+	const url = new URL(request.url);
+	const appOrigin = getAppOrigin(url.origin);
 
-	return createCoinPayCallbackHandler({
-		clientId,
-		clientSecret,
-		issuer,
-		redirectUri: getRedirectUri(appOrigin),
-		appOrigin,
-		onSuccess: async ({ claims, cookie }) => {
-			// popup flag stashed by the login route's extraState.
-			const popup = !!cookie.popup;
-
-			const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
-			const coinpaySub = claims.sub;
-			if (!email) {
-				console.error('coinpay/callback: userinfo did not include an email');
-				return `${appOrigin}/auth?error=coinpay_no_email`;
-			}
-
-			const serviceSupabase = createServiceClient();
-
-			// --- a) Find-or-create Supabase auth user by email ---
-			let authUser = await findAuthUserByEmail(serviceSupabase, email);
-			if (!authUser) {
-				const { data: created, error: createAuthError } =
-					await serviceSupabase.auth.admin.createUser({
-						email,
-						email_confirm: true,
-						user_metadata: { coinpay_sub: coinpaySub, provider: 'coinpay' }
-					});
-				if (createAuthError || !created?.user) {
-					// Possible race: another request created it. Re-fetch once.
-					authUser = await findAuthUserByEmail(serviceSupabase, email);
-					if (!authUser) {
-						console.error('coinpay/callback: failed to create auth user', createAuthError);
-						return `${appOrigin}/auth?error=coinpay_provision_failed`;
-					}
-				} else {
-					authUser = created.user;
-				}
-			}
-
-			// --- b) Find-or-create the public users row ---
-			const { data: existingUser, error: lookupError } = await serviceSupabase
-				.from('users')
-				.select('*')
-				.eq('auth_user_id', authUser.id)
-				.single();
-			if (lookupError && lookupError.code !== PG_NO_ROWS) {
-				console.error('coinpay/callback: users lookup error', lookupError);
-			}
-
-			let userRow = existingUser || null;
-			if (!userRow) {
-				const username = await deriveUniqueUsername(
-					{ name: claims.name, email },
-					async (candidate) => {
-						const { data } = await serviceSupabase
-							.from('users')
-							.select('id')
-							.ilike('username', candidate)
-							.single();
-						return !!data;
-					}
-				);
-				const displayName = (typeof claims.name === 'string' && claims.name.trim()) || email.split('@')[0];
-
-				const { data: inserted, error: insertError } = await serviceSupabase.from('users').insert({
-					auth_user_id: authUser.id,
-					phone_number: null,
-					account_type: 'verified',
-					username,
-					display_name: displayName,
-					created_at: new Date().toISOString(),
-					updated_at: new Date().toISOString()
-				}).select('*').single();
-				if (insertError && insertError.code !== PG_UNIQUE_VIOLATION) {
-					console.error('coinpay/callback: user row insert failed', insertError);
-					return `${appOrigin}/auth?error=coinpay_provision_failed`;
-				}
-				userRow = inserted || null;
-				if (!userRow) {
-					// Unique-violation race (another request created it) → re-fetch.
-					const { data: refetched } = await serviceSupabase
-						.from('users').select('*').eq('auth_user_id', authUser.id).single();
-					userRow = refetched || null;
-				}
-			}
-
-			// --- c) Establish a real Supabase session via admin magic-link bridge ---
-			const { data: linkData, error: linkError } = await serviceSupabase.auth.admin.generateLink({
-				type: 'magiclink',
-				email
-			});
-			if (linkError || !linkData?.properties?.hashed_token) {
-				console.error('coinpay/callback: generateLink failed', linkError);
-				return `${appOrigin}/auth?error=coinpay_session_failed`;
-			}
-
-			// Use the cookie-wired server client so verifyOtp persists session cookies.
-			const supabase = await createSupabaseServerClient();
-			const { data: sessionData, error: verifyError } = await supabase.auth.verifyOtp({
-				type: 'magiclink',
-				token_hash: linkData.properties.hashed_token
-			});
-			if (verifyError || !sessionData?.session) {
-				console.error('coinpay/callback: verifyOtp failed', verifyError);
-				return `${appOrigin}/auth?error=coinpay_session_failed`;
-			}
-
-			// Popup (embed) flow: postMessage the session + user back to the opener.
-			if (popup) {
-				return popupSession(appOrigin, sessionData.session, userRow);
-			}
-
-			// Build the redirect, then mirror the session cookies set by the server
-			// client onto the outgoing response. The stack handler clears the
-			// one-time state cookie on it.
-			const response = NextResponse.redirect(`${appOrigin}/chat`);
-
-			try {
-				const { cookies } = await import('next/headers');
-				const cookieStore = await cookies();
-				for (const c of cookieStore.getAll()) {
-					if (c.name.startsWith('sb-')) {
-						response.cookies.set(c.name, c.value, {
-							httpOnly: true,
-							secure: process.env.NODE_ENV === 'production',
-							sameSite: 'lax',
-							path: '/'
-						});
-					}
-				}
-			} catch (e) {
-				console.error('coinpay/callback: copying session cookies failed', e);
-			}
-
-			return response;
+	try {
+		const oauthError = url.searchParams.get('error');
+		if (oauthError) {
+			console.error('coinpay/callback: provider returned error', oauthError);
+			return redirectError(appOrigin, 'coinpay_denied');
 		}
-	})(request);
+
+		const code = url.searchParams.get('code');
+		const returnedState = url.searchParams.get('state');
+		if (!code) {
+			return redirectError(appOrigin, 'coinpay_missing_code');
+		}
+
+		// --- Validate state against the cookie, then consume it ---
+		const stateCookie = request.cookies.get(COINPAY_STATE_COOKIE)?.value;
+		let storedState = null;
+		let codeVerifier;
+		let popup = false;
+		if (stateCookie) {
+			try {
+				const parsed = JSON.parse(stateCookie);
+				storedState = parsed.state;
+				codeVerifier = parsed.codeVerifier;
+				popup = !!parsed.popup;
+			} catch {
+				storedState = null;
+			}
+		}
+		if (!validateCoinPayState(returnedState, storedState)) {
+			return redirectError(appOrigin, 'coinpay_state_mismatch');
+		}
+
+		const { issuer, clientId, clientSecret } = getCoinpayConfig();
+		if (!clientId || !clientSecret) {
+			console.error('coinpay/callback: client credentials not configured');
+			return redirectError(appOrigin, 'coinpay_unavailable');
+		}
+
+		const redirectUri = getRedirectUri(appOrigin);
+
+		// --- Exchange code for tokens ---
+		const tokens = await exchangeCoinPayCode({
+			issuer,
+			code,
+			redirectUri,
+			clientId,
+			clientSecret,
+			codeVerifier
+		});
+
+		// --- Fetch userinfo claims ---
+		const claims = await fetchCoinPayUserinfo({ issuer, accessToken: tokens.access_token });
+		const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
+		const coinpaySub = claims.sub;
+		if (!email) {
+			console.error('coinpay/callback: userinfo did not include an email');
+			return redirectError(appOrigin, 'coinpay_no_email');
+		}
+
+		const serviceSupabase = createServiceClient();
+
+		// --- a) Find-or-create Supabase auth user by email ---
+		let authUser = await findAuthUserByEmail(serviceSupabase, email);
+		if (!authUser) {
+			const { data: created, error: createAuthError } =
+				await serviceSupabase.auth.admin.createUser({
+					email,
+					email_confirm: true,
+					user_metadata: { coinpay_sub: coinpaySub, provider: 'coinpay' }
+				});
+			if (createAuthError || !created?.user) {
+				// Possible race: another request created it. Re-fetch once.
+				authUser = await findAuthUserByEmail(serviceSupabase, email);
+				if (!authUser) {
+					console.error('coinpay/callback: failed to create auth user', createAuthError);
+					return redirectError(appOrigin, 'coinpay_provision_failed');
+				}
+			} else {
+				authUser = created.user;
+			}
+		}
+
+		// --- b) Find-or-create the public users row ---
+		const { data: existingUser, error: lookupError } = await serviceSupabase
+			.from('users')
+			.select('*')
+			.eq('auth_user_id', authUser.id)
+			.single();
+		if (lookupError && lookupError.code !== PG_NO_ROWS) {
+			console.error('coinpay/callback: users lookup error', lookupError);
+		}
+
+		let userRow = existingUser || null;
+		if (!userRow) {
+			const username = await deriveUniqueUsername(
+				{ name: claims.name, email },
+				async (candidate) => {
+					const { data } = await serviceSupabase
+						.from('users')
+						.select('id')
+						.ilike('username', candidate)
+						.single();
+					return !!data;
+				}
+			);
+			const displayName = (typeof claims.name === 'string' && claims.name.trim()) || email.split('@')[0];
+
+			const { data: inserted, error: insertError } = await serviceSupabase.from('users').insert({
+				auth_user_id: authUser.id,
+				phone_number: null,
+				account_type: 'verified',
+				username,
+				display_name: displayName,
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString()
+			}).select('*').single();
+			if (insertError && insertError.code !== PG_UNIQUE_VIOLATION) {
+				console.error('coinpay/callback: user row insert failed', insertError);
+				return redirectError(appOrigin, 'coinpay_provision_failed');
+			}
+			userRow = inserted || null;
+			if (!userRow) {
+				// Unique-violation race (another request created it) → re-fetch.
+				const { data: refetched } = await serviceSupabase
+					.from('users').select('*').eq('auth_user_id', authUser.id).single();
+				userRow = refetched || null;
+			}
+		}
+
+		// --- c) Establish a real Supabase session via admin magic-link bridge ---
+		const { data: linkData, error: linkError } = await serviceSupabase.auth.admin.generateLink({
+			type: 'magiclink',
+			email
+		});
+		if (linkError || !linkData?.properties?.hashed_token) {
+			console.error('coinpay/callback: generateLink failed', linkError);
+			return redirectError(appOrigin, 'coinpay_session_failed');
+		}
+
+		// Use the cookie-wired server client so verifyOtp persists session cookies.
+		const supabase = await createSupabaseServerClient();
+		const { data: sessionData, error: verifyError } = await supabase.auth.verifyOtp({
+			type: 'magiclink',
+			token_hash: linkData.properties.hashed_token
+		});
+		if (verifyError || !sessionData?.session) {
+			console.error('coinpay/callback: verifyOtp failed', verifyError);
+			return redirectError(appOrigin, 'coinpay_session_failed');
+		}
+
+		// Popup (embed) flow: postMessage the session + user back to the opener.
+		if (popup) {
+			return popupSession(appOrigin, sessionData.session, userRow);
+		}
+
+		// Build the redirect, then mirror the session cookies set by the server
+		// client onto the outgoing response and clear the one-time state cookie.
+		const response = NextResponse.redirect(`${appOrigin}/chat`);
+		response.cookies.set(COINPAY_STATE_COOKIE, '', {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === 'production',
+			sameSite: 'lax',
+			path: '/',
+			maxAge: 0
+		});
+
+		try {
+			const { cookies } = await import('next/headers');
+			const cookieStore = await cookies();
+			for (const c of cookieStore.getAll()) {
+				if (c.name.startsWith('sb-')) {
+					response.cookies.set(c.name, c.value, {
+						httpOnly: true,
+						secure: process.env.NODE_ENV === 'production',
+						sameSite: 'lax',
+						path: '/'
+					});
+				}
+			}
+		} catch (e) {
+			console.error('coinpay/callback: copying session cookies failed', e);
+		}
+
+		return response;
+	} catch (error) {
+		console.error('coinpay/callback error:', error);
+		return redirectError(appOrigin, 'coinpay_login_failed');
+	}
 }
