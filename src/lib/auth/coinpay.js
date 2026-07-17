@@ -1,10 +1,13 @@
 /**
- * @fileoverview Shared helpers for the "Log in with CoinPay" OAuth2/OIDC flow.
+ * @fileoverview App-specific helpers for the "Log in with CoinPay" OAuth2/OIDC
+ * flow: environment/config resolution and username derivation/uniqueness.
  *
- * CoinPay (coinpayportal.com) is an OAuth2/OIDC identity provider. These pure
- * helpers handle config resolution, PKCE/state generation, username derivation
- * and uniqueness, and the (mockable) token/userinfo HTTP exchanges. They are
- * kept side-effect free so they can be unit-tested without Next.js.
+ * The generic OAuth pieces (state/PKCE generation, state validation,
+ * authorize-URL building, token/userinfo exchanges, and the login/callback
+ * route handlers) come from `@profullstack/stack/coinpay` — see the routes
+ * under `src/app/api/auth/coinpay/`.
+ *
+ * Kept side-effect free so they can be unit-tested without Next.js.
  *
  * Additive only: does NOT touch the phone/SMS or anon-invite flows.
  */
@@ -13,12 +16,6 @@ import crypto from 'node:crypto';
 
 /** Default CoinPay OIDC issuer base URL. */
 export const DEFAULT_COINPAY_ISSUER = 'https://coinpayportal.com';
-
-/** Short-lived cookie that carries the OAuth `state` + PKCE verifier. */
-export const COINPAY_STATE_COOKIE = 'coinpay_oauth_state';
-
-/** Requested OIDC scopes. */
-export const COINPAY_SCOPES = 'openid profile email';
 
 /**
  * Resolve the CoinPay OAuth client configuration from environment variables.
@@ -57,64 +54,6 @@ export function getRedirectUri(appOrigin) {
 /** Base64url-encode a Buffer (no padding). */
 function base64url(buf) {
 	return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/**
- * Generate a random opaque `state` value (CSRF protection).
- * @returns {string}
- */
-export function generateState() {
-	return base64url(crypto.randomBytes(32));
-}
-
-/**
- * Generate a PKCE code_verifier and its S256 code_challenge.
- * @returns {{ codeVerifier: string, codeChallenge: string }}
- */
-export function generatePkcePair() {
-	const codeVerifier = base64url(crypto.randomBytes(32));
-	const codeChallenge = base64url(crypto.createHash('sha256').update(codeVerifier).digest());
-	return { codeVerifier, codeChallenge };
-}
-
-/**
- * Constant-time-ish comparison of the returned `state` against the stored value.
- * @param {string|null|undefined} received - State from the callback query.
- * @param {string|null|undefined} expected - State previously stored in the cookie.
- * @returns {boolean} true only if both are present and equal.
- */
-export function validateState(received, expected) {
-	if (!received || !expected || typeof received !== 'string' || typeof expected !== 'string') {
-		return false;
-	}
-	if (received.length !== expected.length) {
-		return false;
-	}
-	return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
-}
-
-/**
- * Build the full CoinPay authorize URL.
- * @param {object} params
- * @param {string} params.issuer
- * @param {string} params.clientId
- * @param {string} params.redirectUri
- * @param {string} params.state
- * @param {string} [params.codeChallenge] - Optional PKCE S256 challenge.
- * @returns {string}
- */
-export function buildAuthorizeUrl({ issuer, clientId, redirectUri, state, codeChallenge }) {
-	const url = new URL(`${issuer}/api/oauth/authorize`);
-	url.searchParams.set('response_type', 'code');
-	url.searchParams.set('client_id', clientId);
-	url.searchParams.set('redirect_uri', redirectUri);
-	url.searchParams.set('scope', COINPAY_SCOPES);
-	url.searchParams.set('state', state);
-	if (codeChallenge) {
-		url.searchParams.set('code_challenge', codeChallenge);
-		url.searchParams.set('code_challenge_method', 'S256');
-	}
-	return url.toString();
 }
 
 /**
@@ -188,77 +127,4 @@ export async function deriveUniqueUsername(claims, isTaken, { maxAttempts = 10 }
 		}
 	}
 	throw new Error('Could not derive a unique username');
-}
-
-/**
- * Exchange an authorization code for tokens at the CoinPay token endpoint.
- * @param {object} params
- * @param {string} params.issuer
- * @param {string} params.code
- * @param {string} params.redirectUri
- * @param {string} params.clientId
- * @param {string} params.clientSecret
- * @param {string} [params.codeVerifier] - PKCE verifier when PKCE was used.
- * @param {typeof fetch} [fetchImpl=fetch] - Injectable fetch (for tests).
- * @returns {Promise<{ access_token: string, refresh_token?: string, id_token?: string, token_type?: string, expires_in?: number }>}
- */
-export async function exchangeCodeForToken(
-	{ issuer, code, redirectUri, clientId, clientSecret, codeVerifier },
-	fetchImpl = fetch
-) {
-	const body = new URLSearchParams({
-		grant_type: 'authorization_code',
-		code,
-		redirect_uri: redirectUri,
-		client_id: clientId,
-		client_secret: clientSecret
-	});
-	if (codeVerifier) {
-		body.set('code_verifier', codeVerifier);
-	}
-
-	const res = await fetchImpl(`${issuer}/api/oauth/token`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/x-www-form-urlencoded',
-			Accept: 'application/json'
-		},
-		body: body.toString()
-	});
-
-	if (!res.ok) {
-		throw new Error(`CoinPay token exchange failed (${res.status})`);
-	}
-	const data = await res.json();
-	if (!data || !data.access_token) {
-		throw new Error('CoinPay token response missing access_token');
-	}
-	return data;
-}
-
-/**
- * Fetch OIDC userinfo claims using a bearer access token.
- * @param {object} params
- * @param {string} params.issuer
- * @param {string} params.accessToken
- * @param {typeof fetch} [fetchImpl=fetch] - Injectable fetch (for tests).
- * @returns {Promise<{ sub: string, email?: string, email_verified?: boolean, name?: string }>}
- */
-export async function fetchUserinfo({ issuer, accessToken }, fetchImpl = fetch) {
-	const res = await fetchImpl(`${issuer}/api/oauth/userinfo`, {
-		method: 'GET',
-		headers: {
-			Authorization: `Bearer ${accessToken}`,
-			Accept: 'application/json'
-		}
-	});
-
-	if (!res.ok) {
-		throw new Error(`CoinPay userinfo request failed (${res.status})`);
-	}
-	const claims = await res.json();
-	if (!claims || (!claims.sub && !claims.email)) {
-		throw new Error('CoinPay userinfo missing sub/email');
-	}
-	return claims;
 }

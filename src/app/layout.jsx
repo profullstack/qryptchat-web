@@ -1,6 +1,6 @@
 import './globals.css';
 import ClientLayout from './client-layout.jsx';
-import FeedbackWidget from './feedback-widget.jsx';
+import { FeedbackWidget } from '@profullstack/stack/feedback';
 import Script from "next/script";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? 'https://qrypt.chat').replace(/\/$/, '');
@@ -99,7 +99,7 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
               <Script data-site="38c4083a-a35e-435d-8a0e-3510c465f419" src="https://crawlproof.com/stats.js" strategy="afterInteractive" />
-      <FeedbackWidget /></body>
+      <FeedbackWidget property="qrypt.chat" hideOnRoutes={['/chat', '/chats', '/u', '/anon']} /></body>
     </html>
   );
 }
