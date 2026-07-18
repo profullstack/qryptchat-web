@@ -31,4 +31,14 @@ describe('convertUrlsToLinks', () => {
 		expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
 		expect(html).not.toContain('<script>');
 	});
+
+	it('preserves text that resembles an internal code block placeholder', () => {
+		const html = convertUrlsToLinks(
+			'Literal __QRYPTCHAT_CODE_BLOCK_0__ then ```const value = 1;```'
+		);
+
+		expect(html).toBe(
+			'Literal __QRYPTCHAT_CODE_BLOCK_0__ then <pre><code>const value = 1;</code></pre>'
+		);
+	});
 });
