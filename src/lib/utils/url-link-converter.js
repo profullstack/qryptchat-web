@@ -36,13 +36,17 @@ export function convertUrlsToLinks(text) {
 	// First, handle code blocks (```...```) to protect them from other processing
 	const codeBlockRegex = /```([\s\S]*?)```/g;
 	const codeBlocks = [];
+	let placeholderPrefix = '__QRYPTCHAT_CODE_BLOCK_';
+	while (text.includes(placeholderPrefix)) {
+		placeholderPrefix = `_${placeholderPrefix}`;
+	}
 	let textWithPlaceholders = text;
 	let codeMatch;
 	let codeIndex = 0;
 
 	// Extract code blocks and replace with placeholders
 	while ((codeMatch = codeBlockRegex.exec(text)) !== null) {
-		const placeholder = `__QRYPTCHAT_CODE_BLOCK_${codeIndex}__`;
+		const placeholder = `${placeholderPrefix}${codeIndex}__`;
 		const codeContent = codeMatch[1];
 		codeBlocks.push(`<pre><code>${escapeHtml(codeContent)}</code></pre>`);
 		textWithPlaceholders = textWithPlaceholders.replace(codeMatch[0], placeholder);
@@ -87,7 +91,7 @@ export function convertUrlsToLinks(text) {
 
 	// Restore code blocks from placeholders
 	codeBlocks.forEach((codeBlock, index) => {
-		const placeholder = `__QRYPTCHAT_CODE_BLOCK_${index}__`;
+		const placeholder = `${placeholderPrefix}${index}__`;
 		result = result.replace(placeholder, codeBlock);
 	});
 
