@@ -23,6 +23,13 @@ describe('normalizeMessagePagination', () => {
     });
   });
 
+  it('rejects non-decimal integer pagination spellings', () => {
+    expect(normalizeMessagePagination(new URLSearchParams('limit=1e2&offset=0x10'))).toEqual({
+      limit: 50,
+      offset: 0
+    });
+  });
+
   it('caps oversized limits before building the database range', () => {
     expect(normalizeMessagePagination(new URLSearchParams('limit=1000&offset=2'))).toEqual({
       limit: 100,
