@@ -18,6 +18,7 @@ export function normalizeMessagePagination(searchParams) {
 
 function readInteger(value, { fallback, min, max }) {
   if (value == null || value === '') return fallback;
+  if (!/^\d+$/.test(value)) return fallback;
 
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < min) return fallback;
