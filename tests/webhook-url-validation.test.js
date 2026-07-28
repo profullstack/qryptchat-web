@@ -29,9 +29,18 @@ describe('validateWebhookUrl', () => {
 			'http://192.168.1.1/hook',
 			'http://[::1]/hook',
 			'http://[fe80::1]/hook',
-			'http://[fd00::1]/hook'
+			'http://[fd00::1]/hook',
+			'http://[::ffff:169.254.169.254]/hook',
+			'http://[::ffff:172.16.0.1]/hook'
 		]) {
 			expect(validateWebhookUrl(url)).toMatchObject({ ok: false });
 		}
+	});
+
+	it('allows public IPv4-mapped IPv6 webhook destinations', () => {
+		expect(validateWebhookUrl('https://[::ffff:93.184.216.34]/hook')).toEqual({
+			ok: true,
+			url: 'https://[::ffff:5db8:d822]/hook'
+		});
 	});
 });
