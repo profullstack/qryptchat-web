@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 export async function GET(request, { params } = {}) {
   try {
@@ -8,7 +8,12 @@ export async function GET(request, { params } = {}) {
       return NextResponse.json({ error: 'Username required' }, { status: 400 });
     }
 
-    const supabase = await createSupabaseServerClient();
+    // Public profile page (/u/[username]) is viewable while logged out, so this
+    // read cannot rely on the caller's session. RLS on `users` is restricted to
+    // the `authenticated` role, so use the service role and keep the explicit
+    // column list below as the boundary — never widen it to `*`, and never add
+    // phone_number / backup_pin_hash / salt.
+    const supabase = getServiceRoleClient();
 
     const { data, error } = await supabase
       .from('users')
