@@ -15,6 +15,7 @@ import {
 	smsGlobalHourlyLimiter,
 	smsGlobalDailyLimiter
 } from '@/lib/server/rate-limiter.js';
+import { checkDestination } from '@/lib/server/sms-geo.js';
 
 /**
  * Validate phone number format
@@ -79,6 +80,24 @@ export async function POST(request, { params } = {}) {
 		}
 
 		// --- SMS abuse / cost protection (defence against SMS pumping) ---
+		// Destination check runs FIRST: rate limits bound how much fraud costs,
+		// but a blocked destination costs nothing at all. A single message to a
+		// premium range bills ~55x a domestic one ($0.4588 vs $0.0083 measured
+		// on this account), so the cheapest send is the one never made.
+		const destination = checkDestination(phoneNumber);
+		if (destination.blocked) {
+			console.error('send-sms: blocked destination country — possible SMS pumping', {
+				callingCode: destination.callingCode
+			});
+			return NextResponse.json(
+				{
+					error: 'This country is not currently supported',
+					code: 'DESTINATION_NOT_SUPPORTED'
+				},
+				{ status: 403 }
+			);
+		}
+
 		// Every send bills a real SMS, so cap per-phone volume and trip a global
 		// circuit breaker before handing off to the (paid) Supabase Auth provider.
 		const perPhoneLimited = applyRateLimitForKey(smsPerPhoneLimiter, `sms:phone:${phoneNumber}`);
