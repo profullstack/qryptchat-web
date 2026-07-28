@@ -82,14 +82,35 @@ function isPrivateIpv4([a, b]) {
 
 function isPrivateIpv6(host) {
 	const normalized = host.toLowerCase();
+	const mappedIpv4 = parseIpv4MappedIpv6(normalized);
+	if (mappedIpv4) return isPrivateIpv4(mappedIpv4);
+
 	return (
 		normalized === '::' ||
 		normalized === '::1' ||
 		normalized.startsWith('fe80:') ||
 		normalized.startsWith('fc') ||
-		normalized.startsWith('fd') ||
-		normalized.startsWith('::ffff:127.') ||
-		normalized.startsWith('::ffff:10.') ||
-		normalized.startsWith('::ffff:192.168.')
+		normalized.startsWith('fd')
 	);
+}
+
+function parseIpv4MappedIpv6(host) {
+	if (!host.startsWith('::ffff:')) return null;
+
+	const mapped = host.slice('::ffff:'.length);
+	const dotted = parseIpv4(mapped);
+	if (dotted) return dotted;
+
+	const parts = mapped.split(':');
+	if (parts.length !== 2) return null;
+
+	const words = parts.map((part) => {
+		if (!/^[0-9a-f]{1,4}$/i.test(part)) return Number.NaN;
+		return Number.parseInt(part, 16);
+	});
+
+	if (!words.every(Number.isInteger)) return null;
+
+	const [high, low] = words;
+	return [high >> 8, high & 255, low >> 8, low & 255];
 }
