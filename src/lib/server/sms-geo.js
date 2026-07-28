@@ -24,13 +24,23 @@
  *
  * @type {readonly string[]}
  */
+/*
+ * These are ITU country calling codes, so they line up 1:1 with the country
+ * list in Twilio Geo Permissions. The incident logs showed prefixes like '959'
+ * and '201', but those are country code + mobile prefix (Myanmar +95 9xx,
+ * Egypt +20 1xx) — blocking the country code covers landlines too, which is
+ * strictly safer and matches what the console actually offers.
+ */
 export const DEFAULT_BLOCKED_CALLING_CODES = Object.freeze([
-	'996', // Kyrgyzstan — 171 fraud numbers, $0.4588/msg
-	'959', // Myanmar
+	'996', // Kyrgyzstan — 171 fraud numbers, $0.4588/msg (55x domestic)
+	'95', // Myanmar — logs showed 959x, i.e. +95 mobile
 	'961', // Lebanon
-	'201', // Egypt
+	'20', // Egypt — logs showed 201x, i.e. +20 mobile
 	'92', // Pakistan
-	'77' // Kazakhstan
+	// Kazakhstan shares +7 with Russia and is reachable as +7 6xx/7xx. Blocking
+	// bare '7' would also cut off the existing +79xx user, so stay narrow.
+	'77',
+	'76'
 ]);
 
 /**
