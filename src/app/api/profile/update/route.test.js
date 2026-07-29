@@ -3,27 +3,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
 	getUser: vi.fn(),
 	setSession: vi.fn(),
+	updateProfile: vi.fn(() => ({
+		eq: vi.fn(() => ({
+			select: vi.fn(() => ({
+				data: [{
+					id: 'row-1',
+					username: 'alice',
+					display_name: 'Alice',
+					avatar_url: null,
+					bio: 'hello',
+					website: null
+				}],
+				error: null
+			}))
+		}))
+	})),
 	createSupabaseServerClient: vi.fn(() => ({
 		auth: {
 			getUser: mocks.getUser,
 			setSession: mocks.setSession
 		},
 		from: vi.fn(() => ({
-			update: vi.fn(() => ({
-				eq: vi.fn(() => ({
-					select: vi.fn(() => ({
-						data: [{
-							id: 'row-1',
-							username: 'alice',
-							display_name: 'Alice',
-							avatar_url: null,
-							bio: 'hello',
-							website: null
-						}],
-						error: null
-					}))
-				}))
-			}))
+			update: mocks.updateProfile
 		}))
 	}))
 }));
@@ -32,11 +33,11 @@ vi.mock('@/lib/supabase.js', () => ({
 	createSupabaseServerClient: mocks.createSupabaseServerClient
 }));
 
-function profileRequest(authorization) {
+function profileRequest(authorization, body = { bio: 'hello' }) {
 	return new Request('https://example.com/api/profile/update', {
 		method: 'POST',
 		headers: authorization ? { authorization } : {},
-		body: JSON.stringify({ bio: 'hello' })
+		body: JSON.stringify(body)
 	});
 }
 
@@ -75,5 +76,19 @@ describe('profile update bearer authentication', () => {
 		expect(body.error).toBe('Missing or invalid authorization header');
 		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
 		expect(mocks.getUser).not.toHaveBeenCalled();
+	});
+
+	it('validates bio length after trimming surrounding whitespace', async () => {
+		const { POST } = await import('./route.js');
+		const bio = `  ${'a'.repeat(500)}  `;
+
+		const response = await POST(profileRequest('Bearer access-token-123', { bio }));
+		const body = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(body.success).toBe(true);
+		expect(mocks.updateProfile).toHaveBeenCalledWith(expect.objectContaining({
+			bio: 'a'.repeat(500)
+		}));
 	});
 });

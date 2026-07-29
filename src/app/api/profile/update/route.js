@@ -54,17 +54,19 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'Website must be a string' }, { status: 400 });
 		}
 
+		const trimmedBio = typeof bio === 'string' ? bio.trim() : undefined;
+		const trimmedWebsite = typeof website === 'string' ? website.trim() : undefined;
+
 		// Validate bio length
-		if (bio && bio.length > 500) {
+		if (trimmedBio && trimmedBio.length > 500) {
 			return NextResponse.json({ error: 'Bio must be 500 characters or less' }, { status: 400 });
 		}
 
 		// Validate website URL format if provided
-		if (website && website.trim()) {
-			const websiteUrl = website.trim();
+		if (trimmedWebsite) {
 			// Basic URL validation - allow with or without protocol
 			const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
-			if (!urlPattern.test(websiteUrl)) {
+			if (!urlPattern.test(trimmedWebsite)) {
 				return NextResponse.json({ error: 'Please enter a valid website URL' }, { status: 400 });
 			}
 		}
@@ -72,8 +74,8 @@ export async function POST(request, { params } = {}) {
 		// Prepare update data
 		const updateData = {
 			updated_at: new Date().toISOString(),
-			...(bio !== undefined && { bio: bio.trim() || null }),
-			...(website !== undefined && { website: website.trim() || null })
+			...(bio !== undefined && { bio: trimmedBio || null }),
+			...(website !== undefined && { website: trimmedWebsite || null })
 		};
 
 		// Update user profile using RLS - the policy ensures only the authenticated user can update their own profile
