@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => ({
 	eq: vi.fn()
 }));
 
-vi.mock('@/lib/supabase.js', () => ({
-	createSupabaseServerClient: vi.fn(async () => ({
+vi.mock('@/lib/supabase/service-role.js', () => ({
+	getServiceRoleClient: vi.fn(() => ({
 		from: mocks.from
 	}))
 }));
@@ -50,10 +50,30 @@ describe('GET /api/users/by-username/[username]', () => {
 		expect(mocks.eq).toHaveBeenCalledWith('username', 'alice');
 	});
 
+	it('trims usernames before database lookup', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/users/by-username/%20Alice%20'), {
+			params: Promise.resolve({ username: ' Alice ' })
+		});
+
+		expect(response.status).toBe(200);
+		expect(mocks.eq).toHaveBeenCalledWith('username', 'alice');
+	});
+
 	it('rejects missing usernames before database work', async () => {
 		const { GET } = await import('./route.js');
 		const response = await GET(new Request('https://qrypt.chat/api/users/by-username/'), {
 			params: Promise.resolve({})
+		});
+
+		expect(response.status).toBe(400);
+		expect(mocks.from).not.toHaveBeenCalled();
+	});
+
+	it('rejects blank usernames before database work', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/users/by-username/%20%20'), {
+			params: Promise.resolve({ username: '  ' })
 		});
 
 		expect(response.status).toBe(400);
