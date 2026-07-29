@@ -36,6 +36,14 @@ function registerRequest(authorization) {
 	});
 }
 
+function registerRequestWithBody(body, authorization = 'Bearer access-token-123') {
+	return new Request('https://example.com/api/auth/register-anon', {
+		method: 'POST',
+		headers: { authorization },
+		body: JSON.stringify(body)
+	});
+}
+
 describe('register-anon bearer authentication', () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -66,6 +74,24 @@ describe('register-anon bearer authentication', () => {
 
 		expect(response.status).toBe(401);
 		expect(body.error).toBe('Missing authorization header');
+		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
+		expect(mocks.serverAuthGetUser).not.toHaveBeenCalled();
+		expect(mocks.verifyInviteToken).not.toHaveBeenCalled();
+	});
+
+	it('rejects non-string display names before session validation', async () => {
+		const { POST } = await import('./route.js');
+
+		const response = await POST(registerRequestWithBody({
+			inviteToken: 'qci1.payload.signature',
+			username: 'anon-user',
+			displayName: ['Alice'],
+			publicKey: 'ml-kem-public-key'
+		}));
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Display name must be a string');
 		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
 		expect(mocks.serverAuthGetUser).not.toHaveBeenCalled();
 		expect(mocks.verifyInviteToken).not.toHaveBeenCalled();

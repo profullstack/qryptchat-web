@@ -72,6 +72,9 @@ export async function POST(request) {
 		if (!publicKey || typeof publicKey !== 'string') {
 			return NextResponse.json({ error: 'Public key is required' }, { status: 400 });
 		}
+		if (displayName !== undefined && displayName !== null && typeof displayName !== 'string') {
+			return NextResponse.json({ error: 'Display name must be a string' }, { status: 400 });
+		}
 
 		// --- Validate anonymous Bearer session ---
 		const authHeader = request.headers.get('authorization');
