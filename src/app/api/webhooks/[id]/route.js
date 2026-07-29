@@ -5,11 +5,16 @@ import { withAuth } from '@/lib/api/middleware/auth.js';
 export const DELETE = withAuth(async (event) => {
 	const { supabase, user } = event.locals;
 	const { id } = (await event.context?.params) || {};
+	const webhookId = typeof id === 'string' ? id.trim() : '';
+
+	if (!webhookId) {
+		return NextResponse.json({ error: 'Webhook id is required' }, { status: 400 });
+	}
 
 	const { error } = await supabase
 		.from('webhooks')
 		.delete()
-		.eq('id', id)
+		.eq('id', webhookId)
 		.eq('user_id', user.id);
 
 	if (error) {
