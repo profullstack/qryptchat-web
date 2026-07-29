@@ -62,7 +62,13 @@ export async function POST(request) {
 		}
 
 		// Generate unique filename
-		const fileExt = file.name.split('.').pop();
+		const fileExtByType = {
+			'image/jpeg': 'jpg',
+			'image/png': 'png',
+			'image/webp': 'webp',
+			'image/gif': 'gif'
+		};
+		const fileExt = fileExtByType[file.type];
 		const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
 		// Convert file to buffer for upload

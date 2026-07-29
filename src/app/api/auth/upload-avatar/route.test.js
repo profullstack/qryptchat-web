@@ -2,7 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
 	authGetUser: vi.fn(),
-	createClient: vi.fn(() => ({
+	upload: vi.fn(),
+	getPublicUrl: vi.fn(),
+	update: vi.fn(),
+	eq: vi.fn(),
+	from: vi.fn(),
+	storageFrom: vi.fn(),
+	createClient: vi.fn((url, key) => key === 'service-role-key' ? ({
+		storage: {
+			from: mocks.storageFrom
+		},
+		from: mocks.from
+	}) : ({
 		auth: {
 			getUser: mocks.authGetUser
 		}
@@ -43,6 +54,17 @@ describe('upload-avatar authentication', () => {
 		mocks.authGetUser.mockResolvedValue({
 			data: { user: null },
 			error: { message: 'invalid signature' }
+		});
+		mocks.upload.mockResolvedValue({ error: null });
+		mocks.getPublicUrl.mockReturnValue({
+			data: { publicUrl: 'https://cdn.example.com/auth-user-id/avatar.png' }
+		});
+		mocks.update.mockReturnValue({ eq: mocks.eq });
+		mocks.eq.mockResolvedValue({ error: null });
+		mocks.from.mockReturnValue({ update: mocks.update });
+		mocks.storageFrom.mockReturnValue({
+			upload: mocks.upload,
+			getPublicUrl: mocks.getPublicUrl
 		});
 	});
 
@@ -96,5 +118,35 @@ describe('upload-avatar authentication', () => {
 		expect(mocks.authGetUser).not.toHaveBeenCalled();
 		expect(mocks.createClient).toHaveBeenCalledTimes(1);
 		expect(mocks.createClient).toHaveBeenCalledWith('https://example.supabase.co', 'anon-key');
+	});
+
+	it('uses the validated content type for the stored avatar extension', async () => {
+		vi.spyOn(Date, 'now').mockReturnValue(123456);
+		mocks.authGetUser.mockResolvedValue({
+			data: { user: { id: 'auth-user-id' } },
+			error: null
+		});
+
+		const { POST } = await import('./route.js');
+		const formData = new FormData();
+		formData.set('avatar', new File(['image-bytes'], 'profile.php', { type: 'image/png' }));
+
+		const response = await POST(new Request('https://example.com/api/auth/upload-avatar', {
+			method: 'POST',
+			headers: {
+				authorization: 'Bearer valid-token'
+			},
+			body: formData
+		}));
+
+		expect(response.status).toBe(200);
+		expect(mocks.upload).toHaveBeenCalledWith(
+			'auth-user-id/123456.png',
+			expect.any(ArrayBuffer),
+			expect.objectContaining({ contentType: 'image/png' })
+		);
+		expect(mocks.update).toHaveBeenCalledWith({
+			avatar_url: 'https://cdn.example.com/auth-user-id/avatar.png'
+		});
 	});
 });
