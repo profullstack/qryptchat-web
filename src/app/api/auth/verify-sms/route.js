@@ -180,10 +180,10 @@ export async function POST(request, { params } = {}) {
 			}
 		} else {
 			// Original OTP verification flow
-			if (!/^\d{6}$/.test(verificationCode)) {
+			if (typeof verificationCode !== 'string' || !/^\d{6}$/.test(verificationCode)) {
 				logger.error( 'Invalid verification code format', {
 					codeLength: verificationCode?.length,
-					codePattern: verificationCode?.replace(/\d/g, 'X')
+					codePattern: typeof verificationCode === 'string' ? verificationCode.replace(/\d/g, 'X') : null
 				});
 				return NextResponse.json(
 					{

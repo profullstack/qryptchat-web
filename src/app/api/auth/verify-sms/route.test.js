@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
 	getUser: vi.fn(),
 	serverClient: vi.fn(),
+	verifyOtp: vi.fn(),
 	createClient: vi.fn(() => ({}))
 }));
 
@@ -104,5 +105,38 @@ describe('verify-sms session phone binding', () => {
 		}));
 
 		expect(res.status).toBe(403);
+	});
+});
+
+describe('verify-sms OTP validation', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		vi.clearAllMocks();
+		process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+		process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+		process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+		mocks.serverClient.mockResolvedValue({
+			auth: {
+				getUser: mocks.getUser,
+				verifyOtp: mocks.verifyOtp
+			}
+		});
+	});
+
+	it('rejects numeric verification codes before OTP verification', async () => {
+		const { POST } = await import('./route.js');
+		const res = await POST(new Request('https://example.com/api/auth/verify-sms', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				phoneNumber: '+15559999999',
+				verificationCode: 123456
+			})
+		}));
+		const body = await res.json();
+
+		expect(res.status).toBe(400);
+		expect(body.error).toBe('Verification code must be 6 digits');
+		expect(mocks.verifyOtp).not.toHaveBeenCalled();
 	});
 });
