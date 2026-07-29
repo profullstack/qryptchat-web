@@ -80,4 +80,24 @@ describe('POST /api/messages/send validation', () => {
 		expect(body.error).toBe('encryptedContents values must be encrypted content strings');
 		expect(mocks.mockSupabase.from).not.toHaveBeenCalled();
 	});
+
+	it('rejects non-object metadata before database work', async () => {
+		const { POST } = await import('./route.js');
+		const request = {
+			json: vi.fn().mockResolvedValue({
+				conversationId: 'conversation-1',
+				encryptedContents: {
+					'user-1': 'encrypted-content'
+				},
+				metadata: 'not-json-object'
+			})
+		};
+
+		const response = await POST(request);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('metadata must be a JSON object');
+		expect(mocks.mockSupabase.from).not.toHaveBeenCalled();
+	});
 });
