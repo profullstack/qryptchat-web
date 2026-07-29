@@ -145,7 +145,14 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { pin } = await request.json();
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+		}
+
+		const { pin } = body;
 
 		if (!pin || typeof pin !== 'string' || pin.length < 6 || pin.length > 12) {
 			return NextResponse.json({ error: 'PIN must be 6-12 digits' }, { status: 400 });
