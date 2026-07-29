@@ -82,4 +82,21 @@ describe('public key cookie authentication', () => {
 		expect(body).toEqual({ public_key: 'public-key', user_id: 'target-user-id' });
 		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
 	});
+
+	it('rejects blank user ids before looking up a target public key', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/crypto/public-keys?user_id=%20%20%20', {
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`
+				}
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Missing user_id parameter' });
+		expect(mocks.serviceFrom).toHaveBeenCalledTimes(1);
+		expect(mocks.rpc).not.toHaveBeenCalled();
+	});
 });

@@ -14,6 +14,10 @@ function getServiceRoleClient() {
 	return supabaseServiceRole;
 }
 
+function normalizeUserId(userId) {
+	return typeof userId === 'string' ? userId.trim() : '';
+}
+
 // Create regular client for JWT validation
 const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -105,7 +109,7 @@ export async function GET(request) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const userId = url.searchParams.get('user_id');
+		const userId = normalizeUserId(url.searchParams.get('user_id'));
 		if (!userId) {
 			return NextResponse.json({ error: 'Missing user_id parameter' }, { status: 400 });
 		}
