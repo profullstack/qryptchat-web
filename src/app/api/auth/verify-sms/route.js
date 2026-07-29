@@ -101,6 +101,14 @@ export async function POST(request, { params } = {}) {
 			}
 		}
 
+		if (username !== null && username !== undefined && typeof username !== 'string') {
+			return NextResponse.json({ error: 'Username must be a string' }, { status: 400 });
+		}
+
+		if (displayName !== null && displayName !== undefined && typeof displayName !== 'string') {
+			return NextResponse.json({ error: 'Display name must be a string' }, { status: 400 });
+		}
+
 		// Validate phone number format for all requests
 		if (!isValidPhoneNumber(phoneNumber)) {
 			logger.error( 'Invalid phone number format', { phoneNumber });

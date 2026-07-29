@@ -90,6 +90,21 @@ describe('verify-sms session phone binding', () => {
 		expect(mocks.getUser).not.toHaveBeenCalled();
 	});
 
+	it('rejects non-string usernames before session validation', async () => {
+		const { POST } = await import('./route.js');
+		const res = await POST(sessionRequest({
+			useSession: true,
+			phoneNumber: '+15559999999',
+			username: 123456
+		}));
+		const body = await res.json();
+
+		expect(res.status).toBe(400);
+		expect(body.error).toBe('Username must be a string');
+		expect(mocks.serverClient).not.toHaveBeenCalled();
+		expect(mocks.getUser).not.toHaveBeenCalled();
+	});
+
 	it('rejects anonymous / phoneless sessions', async () => {
 		mocks.getUser.mockResolvedValue({
 			data: { user: { id: 'anon', phone: null } },
