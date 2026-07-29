@@ -100,4 +100,17 @@ describe('backup PIN cookie authentication', () => {
 		expect(response.status).toBe(200);
 		expect(mocks.authGetUser).toHaveBeenCalledWith('cookie-token');
 	});
+
+	it('returns 400 for malformed JSON instead of a generic 500', async () => {
+		const { POST } = await import('./route.js');
+		const response = await POST({
+			headers: new Headers({ authorization: 'Bearer access-token' }),
+			json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected token'))
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid JSON body');
+		expect(mocks.serviceFrom).not.toHaveBeenCalled();
+	});
 });
