@@ -70,10 +70,30 @@ describe('GET /api/files/message/[messageId]', () => {
 		expect(mocks.filesEq).toHaveBeenCalledWith('message_id', 'message-1');
 	});
 
+	it('trims message ids before filtering files', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/files/message/%20message-1%20'), {
+			params: Promise.resolve({ messageId: ' message-1 ' })
+		});
+
+		expect(response.status).toBe(200);
+		expect(mocks.filesEq).toHaveBeenCalledWith('message_id', 'message-1');
+	});
+
 	it('rejects missing message ids before auth work', async () => {
 		const { GET } = await import('./route.js');
 		const response = await GET(new Request('https://qrypt.chat/api/files/message/'), {
 			params: Promise.resolve({})
+		});
+
+		expect(response.status).toBe(400);
+		expect(mocks.authGetUser).not.toHaveBeenCalled();
+	});
+
+	it('rejects blank message ids before auth work', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/files/message/%20%20'), {
+			params: Promise.resolve({ messageId: '  ' })
 		});
 
 		expect(response.status).toBe(400);
