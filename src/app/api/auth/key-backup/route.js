@@ -147,7 +147,14 @@ export async function PUT(request) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { encrypted_keys } = await request.json();
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+		}
+
+		const { encrypted_keys } = body;
 
 		if (!encrypted_keys || typeof encrypted_keys !== 'string') {
 			return NextResponse.json({ error: 'Missing or invalid encrypted_keys' }, { status: 400 });
