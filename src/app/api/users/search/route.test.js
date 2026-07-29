@@ -42,4 +42,15 @@ describe('user search', () => {
 		expect(response.status).toBe(200);
 		expect(mocks.neq).toHaveBeenCalledWith('auth_user_id', 'auth-user-1');
 	});
+
+	it('does not query users when sanitized search text is empty', async () => {
+		const { GET } = await import('./route.js');
+
+		const response = await GET(new Request('https://example.com/api/users/search?q=...'));
+		const body = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(body).toEqual({ users: [] });
+		expect(mocks.from).not.toHaveBeenCalled();
+	});
 });
