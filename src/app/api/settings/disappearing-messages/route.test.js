@@ -130,4 +130,17 @@ describe('settings disappearing messages authentication', () => {
 		expect(mocks.authGetUser).toHaveBeenCalledWith('valid-token');
 		expect(mocks.updateEq).toHaveBeenCalledWith('auth_user_id', 'auth-user-id');
 	});
+
+	it('returns 400 for malformed PUT JSON instead of a generic 500', async () => {
+		const { PUT } = await import('./route.js');
+		const response = await PUT({
+			headers: new Headers({ authorization: 'Bearer valid-token' }),
+			json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected token'))
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid JSON body');
+		expect(mocks.from).not.toHaveBeenCalled();
+	});
 });

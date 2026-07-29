@@ -75,7 +75,14 @@ export async function PUT(request) {
 			return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 		}
 
-		const { default_message_retention_days } = await request.json();
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+		}
+
+		const { default_message_retention_days } = body;
 
 		// Validate input
 		if (typeof default_message_retention_days !== 'number' || default_message_retention_days < 0) {
