@@ -57,6 +57,19 @@ describe('/api/files/[fileId]', () => {
 		});
 	});
 
+	it('rejects blank file ids before querying file metadata', async () => {
+		const { HEAD } = await import('./route.js');
+		const response = await HEAD(new Request('https://qrypt.chat/api/files/%20'), {
+			params: Promise.resolve({ fileId: '   ' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'File ID is required' });
+		expect(mocks.from).not.toHaveBeenCalled();
+		expect(mocks.eq).not.toHaveBeenCalled();
+	});
+
 	it('resolves async route params for HEAD metadata requests', async () => {
 		const { HEAD } = await import('./route.js');
 		const response = await HEAD(new Request('https://qrypt.chat/api/files/file-1'), {

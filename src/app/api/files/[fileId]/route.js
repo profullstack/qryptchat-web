@@ -7,6 +7,14 @@ async function resolveRouteParams(params) {
 	return (await params) || {};
 }
 
+function normalizeFileId(fileId) {
+	return typeof fileId === 'string' ? fileId.trim() : '';
+}
+
+function missingFileIdResponse() {
+	return NextResponse.json({ error: 'File ID is required' }, { status: 400 });
+}
+
 export async function GET(request, { params } = {}) {
 	try {
 		// Create Supabase server client
@@ -19,6 +27,10 @@ export async function GET(request, { params } = {}) {
 		}
 
 		const { fileId } = await resolveRouteParams(params);
+		const normalizedFileId = normalizeFileId(fileId);
+		if (!normalizedFileId) {
+			return missingFileIdResponse();
+		}
 		console.log(`📁 [FILE-DOWNLOAD] Download request from auth user: ${user.id} for file: ${fileId}`);
 
 		// Get the internal user ID from the users table using auth_user_id
@@ -57,7 +69,7 @@ export async function GET(request, { params } = {}) {
 					)
 				)
 			`)
-			.eq('id', fileId)
+			.eq('id', normalizedFileId)
 			.eq('messages.conversations.conversation_participants.user_id', userId)
 			.single();
 
@@ -163,6 +175,10 @@ export async function HEAD(request, { params } = {}) {
 
 		const userId = user.id;
 		const { fileId } = await resolveRouteParams(params);
+		const normalizedFileId = normalizeFileId(fileId);
+		if (!normalizedFileId) {
+			return missingFileIdResponse();
+		}
 
 		// Get file metadata from database
 		const { data: fileData, error: fileError } = await supabase
@@ -178,7 +194,7 @@ export async function HEAD(request, { params } = {}) {
 					)
 				)
 			`)
-			.eq('id', fileId)
+			.eq('id', normalizedFileId)
 			.eq('messages.conversation_participants.user_id', userId)
 			.single();
 
@@ -217,6 +233,10 @@ export async function POST(request, { params } = {}) {
 
 		const userId = user.id;
 		const { fileId } = await resolveRouteParams(params);
+		const normalizedFileId = normalizeFileId(fileId);
+		if (!normalizedFileId) {
+			return missingFileIdResponse();
+		}
 
 		console.log(`📁 [FILE-INFO] Info request from user: ${userId} for file: ${fileId}`);
 
@@ -237,7 +257,7 @@ export async function POST(request, { params } = {}) {
 					)
 				)
 			`)
-			.eq('id', fileId)
+			.eq('id', normalizedFileId)
 			.eq('messages.conversation_participants.user_id', userId)
 			.single();
 
