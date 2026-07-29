@@ -90,10 +90,30 @@ describe('GET /api/files/[fileId]/encrypted', () => {
 		expect(mocks.download).toHaveBeenCalledWith('encrypted/file-1');
 	});
 
+	it('trims file ids before filtering encrypted files', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/files/%20file-1%20/encrypted'), {
+			params: Promise.resolve({ fileId: ' file-1 ' })
+		});
+
+		expect(response.status).toBe(200);
+		expect(mocks.filesEq).toHaveBeenCalledWith('id', 'file-1');
+	});
+
 	it('rejects missing file ids before auth work', async () => {
 		const { GET } = await import('./route.js');
 		const response = await GET(new Request('https://qrypt.chat/api/files//encrypted'), {
 			params: Promise.resolve({})
+		});
+
+		expect(response.status).toBe(400);
+		expect(mocks.authGetUser).not.toHaveBeenCalled();
+	});
+
+	it('rejects blank file ids before auth work', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/files/%20%20/encrypted'), {
+			params: Promise.resolve({ fileId: '  ' })
 		});
 
 		expect(response.status).toBe(400);

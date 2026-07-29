@@ -5,7 +5,8 @@ import { createSupabaseServerClient } from '@/lib/supabase.js';
 export async function GET(request, { params } = {}) {
 	try {
 		const { fileId } = (await params) || {};
-		if (!fileId) {
+		const normalizedFileId = fileId?.trim();
+		if (!normalizedFileId) {
 			return NextResponse.json({ error: 'File ID is required' }, { status: 400 });
 		}
 
@@ -55,7 +56,7 @@ export async function GET(request, { params } = {}) {
 					)
 				)
 			`)
-			.eq('id', fileId)
+			.eq('id', normalizedFileId)
 			.eq('messages.conversations.conversation_participants.user_id', userId)
 			.single();
 
