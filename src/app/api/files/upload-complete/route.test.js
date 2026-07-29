@@ -66,4 +66,46 @@ describe('POST /api/files/upload-complete validation', () => {
 		expect(mocks.from).not.toHaveBeenCalled();
 		expect(mocks.broadcastToRoom).not.toHaveBeenCalled();
 	});
+
+	it('rejects non-object metadata before database work', async () => {
+		const { POST } = await import('./route.js');
+		const request = {
+			json: vi.fn().mockResolvedValue({
+				storagePath: 'auth-user-id/conversation-1/file-1',
+				fileId: 'file-1',
+				metadata: 'not-metadata'
+			})
+		};
+
+		const response = await POST(request);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid metadata');
+		expect(mocks.from).not.toHaveBeenCalled();
+		expect(mocks.broadcastToRoom).not.toHaveBeenCalled();
+	});
+
+	it('rejects non-object encrypted metadata before database work', async () => {
+		const { POST } = await import('./route.js');
+		const request = {
+			json: vi.fn().mockResolvedValue({
+				storagePath: 'auth-user-id/conversation-1/file-1',
+				fileId: 'file-1',
+				metadata: {
+					messageId: 'message-1',
+					conversationId: 'conversation-1',
+					encryptedMetadata: 'not-a-recipient-map'
+				}
+			})
+		};
+
+		const response = await POST(request);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid encrypted metadata');
+		expect(mocks.from).not.toHaveBeenCalled();
+		expect(mocks.broadcastToRoom).not.toHaveBeenCalled();
+	});
 });

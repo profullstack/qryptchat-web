@@ -49,11 +49,21 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
 		}
 
+		if (typeof metadata !== 'object' || Array.isArray(metadata)) {
+			console.error('UPLOAD-COMPLETE: Invalid metadata');
+			return NextResponse.json({ error: 'Invalid metadata' }, { status: 400 });
+		}
+
 		const { messageId, conversationId, encryptedMetadata } = metadata;
 
 		if (!messageId || !conversationId || !encryptedMetadata) {
 			console.error( '📁 [UPLOAD-COMPLETE] Missing metadata fields');
 			return NextResponse.json({ error: 'Missing metadata fields' }, { status: 400 });
+		}
+
+		if (typeof encryptedMetadata !== 'object' || Array.isArray(encryptedMetadata)) {
+			console.error('UPLOAD-COMPLETE: Invalid encrypted metadata');
+			return NextResponse.json({ error: 'Invalid encrypted metadata' }, { status: 400 });
 		}
 
 		// Get the internal user ID from the users table using auth_user_id
