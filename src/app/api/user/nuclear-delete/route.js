@@ -21,7 +21,7 @@ function getBearerToken(authHeader) {
 async function authenticateUser(request) {
 	try {
 		let accessToken = null;
-		
+
 		// First, check for Authorization header (priority)
 		const authHeader = request.headers.get('authorization');
 		const bearerToken = getBearerToken(authHeader);
@@ -47,7 +47,7 @@ async function authenticateUser(request) {
 
 			// Try standard cookie names first
 			accessToken = cookies['sb-access-token'] || cookies['sb-refresh-token'];
-			
+
 			// If not found, look for the base64 encoded auth token format
 			if (!accessToken) {
 				for (const [cookieName, cookieValue] of Object.entries(cookies)) {
@@ -57,7 +57,7 @@ async function authenticateUser(request) {
 							const base64Data = cookieValue.replace('base64-', '');
 							const decodedData = Buffer.from(base64Data, 'base64').toString('utf8');
 							const authData = JSON.parse(decodedData);
-							
+
 							// Extract the access token from the decoded data
 							if (authData.access_token) {
 								accessToken = authData.access_token;
@@ -71,7 +71,7 @@ async function authenticateUser(request) {
 				}
 			}
 		}
-		
+
 		if (!accessToken) {
 			return { user: null, error: 'No authentication tokens found' };
 		}
@@ -110,35 +110,35 @@ export async function DELETE(request) {
 		}
 
 		console.log('🔐 [API] ✅ User authenticated:', user.id);
-		
-		// Get internal user ID from auth_user_id
-		const { data: userData, error: userError } = await createServiceRoleClient()
-			.from('users')
-			.select('id, phone_number, username')
-			.eq('auth_user_id', user.id)
-			.single();
-		
-		if (userError || !userData) {
-			console.log('🔐 [API] ❌ Failed to get internal user ID:', userError?.message);
-			return NextResponse.json({ error: 'User not found' }, { status: 404 });
-		}
-		
-		const userId = userData.id;
-		console.log('🔐 [API] ✅ Internal user ID:', userId);
-		
+
 		// Additional confirmation check - require confirmation in request body
 		const body = await request.json().catch(() => ({}));
 		const { confirmation } = body;
-		
+
 		if (confirmation !== 'DELETE_ALL_MY_DATA') {
 			return NextResponse.json({
 				error: 'Nuclear delete requires explicit confirmation',
 				required_confirmation: 'DELETE_ALL_MY_DATA'
 			}, { status: 400 });
 		}
-		
+
+		// Get internal user ID from auth_user_id
+		const { data: userData, error: userError } = await createServiceRoleClient()
+			.from('users')
+			.select('id, phone_number, username')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !userData) {
+			console.log('🔐 [API] ❌ Failed to get internal user ID:', userError?.message);
+			return NextResponse.json({ error: 'User not found' }, { status: 404 });
+		}
+
+		const userId = userData.id;
+		console.log('🔐 [API] ✅ Internal user ID:', userId);
+
 		console.log(`🔐 [API] Encrypted data delete initiated for user ${userId} (${userData.phone_number})`);
-		
+
 		// Call the encrypted data delete function (preserves account)
 		// Pass both authenticated and target user IDs for security validation
 		const { data: result, error: deleteError } = await createServiceRoleClient()
@@ -146,10 +146,10 @@ export async function DELETE(request) {
 				authenticated_user_id: userId,  // Who is requesting the deletion
 				target_user_id: userId          // Whose data to delete (must match for security)
 			});
-		
+
 		if (deleteError) {
 			console.error('Encrypted data delete error:', deleteError);
-			
+
 			// Handle specific error cases
 			if (deleteError.message?.includes('Users can only delete their own data')) {
 				return NextResponse.json({ error: 'Unauthorized: Can only delete own data' }, { status: 403 });
@@ -160,19 +160,19 @@ export async function DELETE(request) {
 			if (deleteError.message?.includes('User not found')) {
 				return NextResponse.json({ error: 'User not found' }, { status: 404 });
 			}
-			
+
 			return NextResponse.json({
 				error: 'Encrypted data delete failed',
 				details: deleteError.message
 			}, { status: 500 });
 		}
-		
+
 		if (!result) {
 			return NextResponse.json({ error: 'Encrypted data delete returned no result' }, { status: 500 });
 		}
-		
+
 		console.log(`Encrypted data delete completed for user ${userId}:`, result);
-		
+
 		// Return success with deletion summary
 		return NextResponse.json({
 			success: true,
@@ -183,10 +183,10 @@ export async function DELETE(request) {
 			},
 			deletion_summary: result
 		}, { status: 200 });
-		
+
 	} catch (error) {
 		console.error('Nuclear delete API error:', error);
-		return NextResponse.json({ 
+		return NextResponse.json({
 			error: 'Internal server error',
 			message: 'An unexpected error occurred during nuclear delete'
 		}, { status: 500 });

@@ -33,6 +33,14 @@ function deleteRequest(headers) {
 	});
 }
 
+function deleteRequestWithBody(headers, body) {
+	return new Request('https://qrypt.chat/api/user/nuclear-delete', {
+		method: 'DELETE',
+		headers,
+		body: JSON.stringify(body)
+	});
+}
+
 function createUserQuery() {
 	const query = {
 		select: vi.fn(() => query),
@@ -101,5 +109,22 @@ describe('DELETE /api/user/nuclear-delete bearer authentication', () => {
 
 		expect(response.status).toBe(200);
 		expect(mocks.authGetUser).toHaveBeenCalledWith('cookie-token');
+	});
+
+	it('requires explicit confirmation before service-role user lookup', async () => {
+		const { DELETE } = await import('./route.js');
+		const response = await DELETE(
+			deleteRequestWithBody({
+				authorization: 'Bearer access-token',
+				'content-type': 'application/json'
+			}, {})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.required_confirmation).toBe('DELETE_ALL_MY_DATA');
+		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
+		expect(mocks.serviceFrom).not.toHaveBeenCalled();
+		expect(mocks.serviceRpc).not.toHaveBeenCalled();
 	});
 });
