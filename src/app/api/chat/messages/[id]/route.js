@@ -105,6 +105,11 @@ export async function GET(request, { params } = {}) {
 		
 		// Handle encrypted content - could be base64 string or serialized Buffer object
 		const rawContent = message.message_recipients[0].encrypted_content;
+		if (typeof rawContent !== 'string') {
+			console.error('[API GET] Invalid encrypted content type for message:', message.id, typeof rawContent);
+			return NextResponse.json({ error: 'Invalid encrypted content' }, { status: 500 });
+		}
+
 		try {
 			// Check if it's a serialized Buffer object (JSON string containing {"type":"Buffer","data":[...]})
 			if (typeof rawContent === 'string' && rawContent.includes('"type":"Buffer"')) {

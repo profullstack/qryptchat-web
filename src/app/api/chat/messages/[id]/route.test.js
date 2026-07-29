@@ -49,6 +49,26 @@ function createMessagesQuery() {
 	return query;
 }
 
+function createMessagesQueryWithEncryptedContent(encryptedContent) {
+	const query = {
+		select: vi.fn(() => query),
+		eq: mocks.messageEq,
+		single: vi.fn().mockResolvedValue({
+			data: {
+				id: 'message-1',
+				message_recipients: [
+					{
+						encrypted_content: encryptedContent
+					}
+				]
+			},
+			error: null
+		})
+	};
+	mocks.messageEq.mockReturnValue(query);
+	return query;
+}
+
 describe('GET /api/chat/messages/[id]', () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -92,5 +112,26 @@ describe('GET /api/chat/messages/[id]', () => {
 		expect(response.status).toBe(400);
 		expect(body).toEqual({ error: 'Message ID is required' });
 		expect(mocks.authGetUser).not.toHaveBeenCalled();
+	});
+
+	it('returns a controlled error for non-string encrypted content', async () => {
+		mocks.from.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'messages') return createMessagesQueryWithEncryptedContent({ type: 'Buffer', data: [] });
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/chat/messages/message-1', {
+				headers: { cookie: 'sb-access-token=valid-token' }
+			}),
+			{ params: Promise.resolve({ id: 'message-1' }) }
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(500);
+		expect(body).toEqual({ error: 'Invalid encrypted content' });
+		expect(mocks.messageEq).toHaveBeenCalledWith('id', 'message-1');
 	});
 });
