@@ -43,4 +43,25 @@ describe('Telnyx SMS webhook', () => {
 		expect(mocks.createServiceRoleClient).not.toHaveBeenCalled();
 		expect(mocks.createSMSWebhookEmailService).not.toHaveBeenCalled();
 	});
+
+	it('returns 400 for message events with non-string SMS text', async () => {
+		const { POST } = await import('./route.js');
+
+		const response = await POST(webhookRequest(JSON.stringify({
+			data: {
+				event_type: 'message.received',
+				payload: {
+					id: 'message-1',
+					from: { phone_number: '+15551234567' },
+					to: [{ phone_number: '+15557654321' }],
+					text: 123456
+				}
+			}
+		})));
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid message text');
+		expect(mocks.createServiceRoleClient).not.toHaveBeenCalled();
+	});
 });
