@@ -79,4 +79,14 @@ describe('GET /api/files/message/[messageId]', () => {
 		expect(response.status).toBe(400);
 		expect(mocks.authGetUser).not.toHaveBeenCalled();
 	});
+
+	it('rejects blank message ids before auth work', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/files/message/%20'), {
+			params: Promise.resolve({ messageId: '   ' })
+		});
+
+		expect(response.status).toBe(400);
+		expect(mocks.authGetUser).not.toHaveBeenCalled();
+	});
 });

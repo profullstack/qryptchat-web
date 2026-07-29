@@ -2,10 +2,15 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 
+function normalizeMessageId(messageId) {
+	return typeof messageId === 'string' ? messageId.trim() : '';
+}
+
 export async function GET(request, { params } = {}) {
 	try {
 		const { messageId } = (await params) || {};
-		if (!messageId) {
+		const normalizedMessageId = normalizeMessageId(messageId);
+		if (!normalizedMessageId) {
 			return NextResponse.json({ error: 'Message ID is required' }, { status: 400 });
 		}
 
@@ -57,7 +62,7 @@ export async function GET(request, { params } = {}) {
 					)
 				)
 			`)
-			.eq('message_id', messageId)
+			.eq('message_id', normalizedMessageId)
 			.eq('messages.conversations.conversation_participants.user_id', userId);
 
 		if (filesError) {
