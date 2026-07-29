@@ -108,4 +108,32 @@ describe('GET /api/auth/invite-anon authentication', () => {
     expect(mocks.authGetUser).not.toHaveBeenCalled();
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
+
+  it('fails closed when issued invite usage cannot be counted', async () => {
+    mocks.from.mockImplementation((table) => {
+      if (table === 'invite_issuers') {
+        return createSingleQuery({
+          data: { default_quota: 5, disabled: false },
+          error: null
+        });
+      }
+
+      if (table === 'issued_invites') {
+        return createCountQuery({
+          count: null,
+          error: { message: 'count failed' }
+        });
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const { GET } = await import('./route.js');
+
+    const response = await GET(inviteRequest('Bearer access-token-123'));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: 'Failed to verify invite quota' });
+  });
 });

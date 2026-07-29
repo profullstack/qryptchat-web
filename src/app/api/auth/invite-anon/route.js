@@ -47,7 +47,11 @@ export async function GET(request) {
 	if (auth.error) return auth.error;
 	const { serviceSupabase, authUser } = auth;
 
-	const { quota, used } = await getQuota(serviceSupabase, authUser.id);
+	const { quota, used, quotaError } = await getQuota(serviceSupabase, authUser.id);
+	if (quotaError) {
+		console.error('invite-anon: failed to verify invite quota', quotaError);
+		return NextResponse.json({ error: 'Failed to verify invite quota' }, { status: 500 });
+	}
 	return NextResponse.json({ remaining: Math.max(0, quota - used), quota, used });
 }
 
@@ -85,7 +89,11 @@ export async function POST(request) {
 		}
 
 		// --- Enforce the per-account quota ---
-		const { quota, used, issuerDisabled } = await getQuota(serviceSupabase, authUser.id);
+		const { quota, used, issuerDisabled, quotaError } = await getQuota(serviceSupabase, authUser.id);
+		if (quotaError) {
+			console.error('invite-anon: failed to verify invite quota', quotaError);
+			return NextResponse.json({ error: 'Failed to verify invite quota' }, { status: 500 });
+		}
 		if (issuerDisabled) {
 			return NextResponse.json({ error: 'Anonymous invites are disabled' }, { status: 503 });
 		}
@@ -163,7 +171,7 @@ async function authenticate(request) {
  * Resolve the caller's quota and current usage.
  * @param {any} serviceSupabase
  * @param {string} authUserId
- * @returns {Promise<{ quota: number, used: number, issuerDisabled: boolean }>}
+ * @returns {Promise<{ quota: number, used: number, issuerDisabled: boolean, quotaError: any }>}
  */
 async function getQuota(serviceSupabase, authUserId) {
 	const { data: issuer } = await serviceSupabase
@@ -174,10 +182,10 @@ async function getQuota(serviceSupabase, authUserId) {
 
 	const quota = issuer?.default_quota ?? DEFAULT_QUOTA;
 
-	const { count } = await serviceSupabase
+	const { count, error: countError } = await serviceSupabase
 		.from('issued_invites')
 		.select('jti', { count: 'exact', head: true })
 		.eq('issued_by', authUserId);
 
-	return { quota, used: count ?? 0, issuerDisabled: !!issuer?.disabled };
+	return { quota, used: count ?? 0, issuerDisabled: !!issuer?.disabled, quotaError: countError };
 }
