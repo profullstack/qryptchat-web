@@ -41,6 +41,25 @@ export async function POST(request, { params } = {}) {
 			encryptedMetadata
 		} = parsedBody.body;
 
+		// Validate inputs before profile/conversation lookups
+		if (!conversationId || !messageId || !encryptedMetadata) {
+			console.error('UPLOAD-URL: Missing required fields');
+			return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+		}
+
+		if (typeof encryptedMetadata !== 'object' || Array.isArray(encryptedMetadata)) {
+			console.error('UPLOAD-URL: Invalid encrypted metadata');
+			return NextResponse.json({ error: 'Invalid encrypted metadata' }, { status: 400 });
+		}
+
+		// Extract one encrypted copy to get file size for validation
+		// We can't decrypt it, but we can get the size from any user's copy
+		const firstUserId = Object.keys(encryptedMetadata)[0];
+		if (!firstUserId) {
+			console.error('UPLOAD-URL: No encrypted metadata found');
+			return NextResponse.json({ error: 'Invalid encrypted metadata' }, { status: 400 });
+		}
+
 		// Get the internal user ID from the users table using auth_user_id
 		const { data: internalUser, error: userError } = await supabase
 			.from('users')
@@ -55,20 +74,6 @@ export async function POST(request, { params } = {}) {
 
 		const userId = internalUser.id;
 		console.log(`📁 [UPLOAD-URL] Using internal user ID: ${userId}`);
-
-		// Validate inputs
-		if (!conversationId || !messageId || !encryptedMetadata) {
-			console.error( '📁 [UPLOAD-URL] Missing required fields');
-			return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-		}
-		
-		// Extract one encrypted copy to get file size for validation
-		// We can't decrypt it, but we can get the size from any user's copy
-		const firstUserId = Object.keys(encryptedMetadata)[0];
-		if (!firstUserId) {
-			console.error( '📁 [UPLOAD-URL] No encrypted metadata found');
-			return NextResponse.json({ error: 'Invalid encrypted metadata' }, { status: 400 });
-		}
 
 		// Validate user has access to the conversation
 		const { data: participant, error: participantError } = await supabase

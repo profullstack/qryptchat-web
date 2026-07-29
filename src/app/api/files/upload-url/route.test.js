@@ -51,4 +51,22 @@ describe('POST /api/files/upload-url validation', () => {
 		expect(body.error).toBe('Request body must be a JSON object');
 		expect(mocks.from).not.toHaveBeenCalled();
 	});
+
+	it('rejects non-object encrypted metadata before database work', async () => {
+		const { POST } = await import('./route.js');
+		const request = {
+			json: vi.fn().mockResolvedValue({
+				conversationId: 'conversation-1',
+				messageId: 'message-1',
+				encryptedMetadata: 'not-a-recipient-map'
+			})
+		};
+
+		const response = await POST(request);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid encrypted metadata');
+		expect(mocks.from).not.toHaveBeenCalled();
+	});
 });
