@@ -8,9 +8,14 @@ import { withAuth } from '@/lib/api/middleware/auth.js';
 import { sseManager } from '@/lib/api/sse-manager.js';
 import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 
+function normalizeConversationId(conversationId) {
+	return typeof conversationId === 'string' ? conversationId.trim() : '';
+}
+
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { conversationId } = await request.json();
+		const { conversationId: rawConversationId } = await request.json();
+		const conversationId = normalizeConversationId(rawConversationId);
 
 		if (!conversationId) {
 			return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
