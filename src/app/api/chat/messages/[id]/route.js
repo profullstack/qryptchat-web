@@ -55,8 +55,9 @@ async function authenticateUser(request) {
 export async function GET(request, { params } = {}) {
 	try {
 		const { id: messageId } = await resolveRouteParams(params);
+		const normalizedMessageId = messageId?.trim();
 		
-		if (!messageId) {
+		if (!normalizedMessageId) {
 			return NextResponse.json({ error: 'Message ID is required' }, { status: 400 });
 		}
 		
@@ -90,7 +91,7 @@ export async function GET(request, { params } = {}) {
 				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
 				message_recipients!inner(encrypted_content)
 			`)
-			.eq('id', messageId)
+			.eq('id', normalizedMessageId)
 			.eq('message_recipients.recipient_user_id', userId)
 			.single();
 		

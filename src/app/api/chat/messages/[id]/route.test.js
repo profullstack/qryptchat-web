@@ -82,10 +82,35 @@ describe('GET /api/chat/messages/[id]', () => {
 		expect(mocks.messageEq).toHaveBeenCalledWith('id', 'message-1');
 	});
 
+	it('trims message ids before fetching the message', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/chat/messages/%20message-1%20', {
+				headers: { cookie: 'sb-access-token=valid-token' }
+			}),
+			{ params: Promise.resolve({ id: ' message-1 ' }) }
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.messageEq).toHaveBeenCalledWith('id', 'message-1');
+	});
+
 	it('rejects missing async route params before authentication', async () => {
 		const { GET } = await import('./route.js');
 		const response = await GET(new Request('https://qrypt.chat/api/chat/messages/'), {
 			params: Promise.resolve({})
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Message ID is required' });
+		expect(mocks.authGetUser).not.toHaveBeenCalled();
+	});
+
+	it('rejects blank message ids before authentication', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(new Request('https://qrypt.chat/api/chat/messages/%20%20'), {
+			params: Promise.resolve({ id: '  ' })
 		});
 		const body = await response.json();
 
