@@ -163,11 +163,16 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Missing or invalid user_ids array' }, { status: 400 });
 		}
 
+		const normalizedUserIds = user_ids.map((userId) => typeof userId === 'string' ? userId.trim() : '');
+		if (normalizedUserIds.some((userId) => !userId)) {
+			return NextResponse.json({ error: 'user_ids must contain non-empty strings' }, { status: 400 });
+		}
+
 		/** @type {Record<string, string|null>} */
 		const publicKeys = {};
 
 		// Process each user ID
-		for (const userId of user_ids) {
+		for (const userId of normalizedUserIds) {
 			try {
 				// Get the user's auth_user_id from the internal user ID
 				const { data: userData, error: userError } = await getServiceRoleClient()
