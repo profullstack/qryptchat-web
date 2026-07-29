@@ -39,7 +39,14 @@ export async function POST(request, { params } = {}) {
 
 		
 	try {
-		const { phoneNumber, action = 'diagnose' } = await request.json();
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+		}
+
+		const { phoneNumber, action = 'diagnose', verificationCode } = body;
 
 		if (!phoneNumber) {
 			return NextResponse.json(
@@ -64,7 +71,6 @@ export async function POST(request, { params } = {}) {
 				});
 
 			case 'test-verify':
-				const { verificationCode } = await request.json();
 				if (!verificationCode) {
 					return NextResponse.json(
 						{ error: 'Verification code is required for verify test' },
