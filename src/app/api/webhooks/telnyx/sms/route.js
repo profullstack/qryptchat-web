@@ -120,6 +120,11 @@ export async function POST(request) {
 		}
 
 		const payload = body.data.payload;
+		if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+			console.log('[TELNYX-WEBHOOK] Invalid message payload');
+			return NextResponse.json({ error: 'Invalid message payload' }, { status: 400 });
+		}
+
 		const fromPhone = payload.from?.phone_number;
 		const toPhone = payload.to?.[0]?.phone_number;
 		const messageText = payload.text;

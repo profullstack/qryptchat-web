@@ -43,4 +43,20 @@ describe('Telnyx SMS webhook', () => {
 		expect(mocks.createServiceRoleClient).not.toHaveBeenCalled();
 		expect(mocks.createSMSWebhookEmailService).not.toHaveBeenCalled();
 	});
+
+	it('returns 400 for message events with a malformed payload object', async () => {
+		const { POST } = await import('./route.js');
+
+		const response = await POST(webhookRequest(JSON.stringify({
+			data: {
+				event_type: 'message.received',
+				payload: null
+			}
+		})));
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid message payload');
+		expect(mocks.createServiceRoleClient).not.toHaveBeenCalled();
+	});
 });
