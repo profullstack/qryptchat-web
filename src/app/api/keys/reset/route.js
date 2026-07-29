@@ -13,7 +13,7 @@ export async function POST(request, { params } = {}) {
 		// Get the request body
 		const { publicKey } = await request.json();
 
-		if (!publicKey) {
+		if (!publicKey || typeof publicKey !== 'string' || !publicKey.trim()) {
 			return NextResponse.json({ error: 'Missing required field: publicKey' }, { status: 400 });
 		}
 
