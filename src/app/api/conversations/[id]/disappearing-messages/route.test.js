@@ -124,4 +124,26 @@ describe('/api/conversations/[id]/disappearing-messages', () => {
 		expect(mocks.participantEq).toHaveBeenCalledWith('conversation_id', 'conversation-1');
 		expect(mocks.updateEq).toHaveBeenCalledWith('conversation_id', 'conversation-1');
 	});
+
+	it('returns 400 for malformed PUT JSON before participant lookup', async () => {
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'conversation_participants') throw new Error('Participant query should not run');
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const { PUT } = await import('./route.js');
+		const response = await PUT({
+			headers: new Headers({ cookie: 'sb-access-token=valid-token' }),
+			json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected token'))
+		}, {
+			params: Promise.resolve({ id: 'conversation-1' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid JSON body');
+		expect(mocks.participantEq).not.toHaveBeenCalled();
+		expect(mocks.updateEq).not.toHaveBeenCalled();
+	});
 });

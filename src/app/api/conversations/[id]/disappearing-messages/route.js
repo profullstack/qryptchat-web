@@ -178,7 +178,14 @@ export async function PUT(request, { params } = {}) {
       return NextResponse.json({ error: 'Missing conversation ID' }, { status: 400 });
     }
 
-    const { disappear_seconds, start_on } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const { disappear_seconds, start_on } = body;
 
     // Validate input
     if (typeof disappear_seconds !== 'number' || disappear_seconds < 0) {
