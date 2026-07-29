@@ -62,11 +62,13 @@ export async function POST(request) {
 		}
 
 		const { inviteToken, username, displayName, publicKey } = body || {};
+		const cleanUsername = typeof username === 'string' ? username.trim() : '';
+		const cleanDisplayName = typeof displayName === 'string' ? displayName.trim() : '';
 
 		if (!inviteToken || typeof inviteToken !== 'string') {
 			return NextResponse.json({ error: 'Invite token is required' }, { status: 400 });
 		}
-		if (!username || typeof username !== 'string') {
+		if (!cleanUsername) {
 			return NextResponse.json({ error: 'Username is required' }, { status: 400 });
 		}
 		if (!publicKey || typeof publicKey !== 'string') {
@@ -116,7 +118,7 @@ export async function POST(request) {
 		const { data: usernameCheck } = await serviceSupabase
 			.from('users')
 			.select('id')
-			.ilike('username', username)
+			.ilike('username', cleanUsername)
 			.single();
 		if (usernameCheck) {
 			return NextResponse.json(
@@ -152,8 +154,8 @@ export async function POST(request) {
 				auth_user_id: authUser.id,
 				phone_number: null,
 				account_type: 'anonymous',
-				username,
-				display_name: displayName || username,
+				username: cleanUsername,
+				display_name: cleanDisplayName || cleanUsername,
 				created_at: new Date().toISOString(),
 				updated_at: new Date().toISOString()
 			})

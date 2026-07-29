@@ -24,15 +24,15 @@ vi.mock('@/lib/invites/verify.js', () => ({
 	InviteVerificationError: class InviteVerificationError extends Error {}
 }));
 
-function registerRequest(authorization) {
+function registerRequest(authorization, body = {
+	inviteToken: 'qci1.payload.signature',
+	username: 'anon-user',
+	publicKey: 'ml-kem-public-key'
+}) {
 	return new Request('https://example.com/api/auth/register-anon', {
 		method: 'POST',
 		headers: authorization ? { authorization } : {},
-		body: JSON.stringify({
-			inviteToken: 'qci1.payload.signature',
-			username: 'anon-user',
-			publicKey: 'ml-kem-public-key'
-		})
+		body: JSON.stringify(body)
 	});
 }
 
@@ -68,6 +68,22 @@ describe('register-anon bearer authentication', () => {
 		expect(body.error).toBe('Missing authorization header');
 		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
 		expect(mocks.serverAuthGetUser).not.toHaveBeenCalled();
+		expect(mocks.verifyInviteToken).not.toHaveBeenCalled();
+	});
+
+	it('rejects whitespace-only usernames before validating the session', async () => {
+		const { POST } = await import('./route.js');
+
+		const response = await POST(registerRequest('Bearer access-token-123', {
+			inviteToken: 'qci1.payload.signature',
+			username: '   ',
+			publicKey: 'ml-kem-public-key'
+		}));
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Username is required');
+		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
 		expect(mocks.verifyInviteToken).not.toHaveBeenCalled();
 	});
 });
