@@ -106,7 +106,14 @@ export async function POST(request) {
     const userId = userData.id;
     console.log('🔐 [API] ✅ Internal user ID:', userId);
 
-    const { conversation_id, encrypted_contents, content_type = 'text', has_attachments = false, reply_to_id } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const { conversation_id, encrypted_contents, content_type = 'text', has_attachments = false, reply_to_id } = body;
 
     // Validate required fields
     if (!conversation_id || !encrypted_contents) {
