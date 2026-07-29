@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
 	authGetUser: vi.fn(),
 	serviceFrom: vi.fn(),
+	userEq: vi.fn(),
 	rpc: vi.fn()
 }));
 
@@ -32,7 +33,7 @@ function createUsersQuery() {
 			selected = fields;
 			return query;
 		}),
-		eq: vi.fn(() => query),
+		eq: mocks.userEq,
 		single: vi.fn(() => {
 			if (selected.includes('id, auth_user_id')) {
 				return Promise.resolve({
@@ -46,6 +47,7 @@ function createUsersQuery() {
 			});
 		})
 	};
+	mocks.userEq.mockReturnValue(query);
 	return query;
 }
 
@@ -81,5 +83,37 @@ describe('public key cookie authentication', () => {
 		expect(response.status).toBe(200);
 		expect(body).toEqual({ public_key: 'public-key', user_id: 'target-user-id' });
 		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
+	});
+
+	it('trims user_id before public key lookup and response', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/crypto/public-keys?user_id=%20target-user-id%20', {
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`
+				}
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(body).toEqual({ public_key: 'public-key', user_id: 'target-user-id' });
+		expect(mocks.userEq).toHaveBeenCalledWith('id', 'target-user-id');
+	});
+
+	it('rejects blank user_id before public key lookup', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/crypto/public-keys?user_id=%20%20', {
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`
+				}
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Missing user_id parameter' });
+		expect(mocks.serviceFrom).not.toHaveBeenCalled();
 	});
 });

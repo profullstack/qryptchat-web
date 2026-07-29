@@ -99,15 +99,15 @@ async function authenticateUser(request) {
 export async function GET(request) {
 	const url = new URL(request.url);
 	try {
+		const userId = url.searchParams.get('user_id')?.trim();
+		if (!userId) {
+			return NextResponse.json({ error: 'Missing user_id parameter' }, { status: 400 });
+		}
+
 		// Authenticate user
 		const { user, error: authError } = await authenticateUser(request);
 		if (authError || !user) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-		}
-
-		const userId = url.searchParams.get('user_id');
-		if (!userId) {
-			return NextResponse.json({ error: 'Missing user_id parameter' }, { status: 400 });
 		}
 
 		// Get the user's auth_user_id from the internal user ID
