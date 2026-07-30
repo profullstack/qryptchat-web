@@ -16,7 +16,14 @@ function getBearerToken(authHeader) {
 
 export async function POST(request, { params } = {}) {
 	try {
-		const { bio, website } = await request.json();
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+		}
+
+		const { bio, website } = body;
 
 		// Get authorization header
 		const authHeader = request.headers.get('authorization');
