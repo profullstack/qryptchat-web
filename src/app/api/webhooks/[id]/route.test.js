@@ -22,6 +22,19 @@ vi.mock('@/lib/api/middleware/auth.js', () => ({
 }));
 
 describe('DELETE /api/webhooks/[id]', () => {
+	it('rejects blank webhook ids before deleting', async () => {
+		const { DELETE } = await import('./route.js');
+		const response = await DELETE(new Request('https://qrypt.chat/api/webhooks/%20'), {
+			params: Promise.resolve({ id: '   ' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Webhook id is required' });
+		expect(mocks.deleteMock).not.toHaveBeenCalled();
+		expect(mocks.eqMock).not.toHaveBeenCalled();
+	});
+
 	it('reads the webhook id from route context params', async () => {
 		mocks.eqMock.mockReturnThis();
 		mocks.deleteMock.mockReturnValue({ eq: mocks.eqMock });
