@@ -29,6 +29,10 @@ export async function GET(request, { params } = {}) {
 			.replace(/\(/g, '')      // remove open parens (PostgREST operators)
 			.replace(/\)/g, '')      // remove close parens
 			.replace(/\./g, '');     // remove dots (PostgREST column separator)
+
+		if (sanitizedQuery.trim().length < 1) {
+			return NextResponse.json({ users: [] });
+		}
 		
 		// Enhanced fuzzy search across multiple fields with relevance scoring
 		// Search by username, display_name (full name), phone_number, and unique_identifier
