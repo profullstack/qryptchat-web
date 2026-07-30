@@ -72,6 +72,10 @@ export async function POST(request) {
 		if (!publicKey || typeof publicKey !== 'string') {
 			return NextResponse.json({ error: 'Public key is required' }, { status: 400 });
 		}
+		const normalizedPublicKey = publicKey.trim();
+		if (!normalizedPublicKey) {
+			return NextResponse.json({ error: 'Public key is required' }, { status: 400 });
+		}
 
 		// --- Validate anonymous Bearer session ---
 		const authHeader = request.headers.get('authorization');
@@ -179,7 +183,7 @@ export async function POST(request) {
 			.insert({
 				user_id: authUser.id,
 				key_type: 'ML-KEM-1024',
-				public_key: publicKey
+				public_key: normalizedPublicKey
 			});
 
 		if (keyError) {
