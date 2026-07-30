@@ -65,6 +65,10 @@ export async function POST(request, { params } = {}) {
 			console.error('UPLOAD-COMPLETE: Invalid encrypted metadata');
 			return NextResponse.json({ error: 'Invalid encrypted metadata' }, { status: 400 });
 		}
+		if (Object.keys(encryptedMetadata).length === 0) {
+			console.error('UPLOAD-COMPLETE: No encrypted metadata found');
+			return NextResponse.json({ error: 'Invalid encrypted metadata' }, { status: 400 });
+		}
 
 		// Get the internal user ID from the users table using auth_user_id
 		const { data: internalUser, error: userError } = await supabase
