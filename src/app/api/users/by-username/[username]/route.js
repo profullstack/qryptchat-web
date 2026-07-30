@@ -4,7 +4,8 @@ import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 export async function GET(request, { params } = {}) {
   try {
     const { username } = (await params) || {};
-    if (!username) {
+    const normalizedUsername = username?.trim().toLowerCase();
+    if (!normalizedUsername) {
       return NextResponse.json({ error: 'Username required' }, { status: 400 });
     }
 
@@ -18,7 +19,7 @@ export async function GET(request, { params } = {}) {
     const { data, error } = await supabase
       .from('users')
       .select('id, username, display_name, avatar_url, bio, unique_identifier')
-      .eq('username', username.toLowerCase())
+      .eq('username', normalizedUsername)
       .single();
 
     if (error || !data) {
