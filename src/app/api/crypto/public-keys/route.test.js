@@ -82,4 +82,25 @@ describe('public key cookie authentication', () => {
 		expect(body).toEqual({ public_key: 'public-key', user_id: 'target-user-id' });
 		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
 	});
+
+	it('rejects non-string public keys before upsert RPC work', async () => {
+		const { PUT } = await import('./route.js');
+		const response = await PUT(
+			new Request('https://qrypt.chat/api/crypto/public-keys', {
+				method: 'PUT',
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`,
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify({
+					public_key: { key: 'ml-kem-public-key' }
+				})
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Missing public_key' });
+		expect(mocks.rpc).not.toHaveBeenCalled();
+	});
 });

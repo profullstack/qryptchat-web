@@ -224,16 +224,20 @@ export async function PUT(request) {
 
 		const { public_key, key_type = 'ML-KEM-1024' } = await request.json();
 		
-		if (!public_key) {
+		if (!public_key || typeof public_key !== 'string' || !public_key.trim()) {
 			return NextResponse.json({ error: 'Missing public_key' }, { status: 400 });
+		}
+
+		if (typeof key_type !== 'string' || !key_type.trim()) {
+			return NextResponse.json({ error: 'Invalid key_type' }, { status: 400 });
 		}
 
 		// Sync public key to database using the upsert function
 		const { data: result, error } = await getServiceRoleClient()
 			.rpc('upsert_user_public_key', {
 				target_user_id: user.auth_user_id, // Use auth_user_id for the function
-				public_key_param: public_key,
-				key_type_param: key_type
+				public_key_param: public_key.trim(),
+				key_type_param: key_type.trim()
 			});
 
 		if (error) {
