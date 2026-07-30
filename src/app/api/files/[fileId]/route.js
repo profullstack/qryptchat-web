@@ -173,12 +173,23 @@ export async function HEAD(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const userId = user.id;
 		const { fileId } = await resolveRouteParams(params);
 		const normalizedFileId = normalizeFileId(fileId);
 		if (!normalizedFileId) {
 			return missingFileIdResponse();
 		}
+
+		const { data: internalUser, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (userError || !internalUser) {
+			return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+		}
+
+		const userId = internalUser.id;
 
 		// Get file metadata from database
 		const { data: fileData, error: fileError } = await supabase
@@ -189,13 +200,15 @@ export async function HEAD(request, { params } = {}) {
 				created_at,
 				messages!inner(
 					conversation_id,
-					conversation_participants!inner(
-						user_id
+					conversations!inner(
+						conversation_participants!inner(
+							user_id
+						)
 					)
 				)
 			`)
 			.eq('id', normalizedFileId)
-			.eq('messages.conversation_participants.user_id', userId)
+			.eq('messages.conversations.conversation_participants.user_id', userId)
 			.single();
 
 		if (fileError || !fileData) {
@@ -231,12 +244,24 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const userId = user.id;
 		const { fileId } = await resolveRouteParams(params);
 		const normalizedFileId = normalizeFileId(fileId);
 		if (!normalizedFileId) {
 			return missingFileIdResponse();
 		}
+
+		const authUserId = user.id;
+		const { data: internalUser, error: userError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', authUserId)
+			.single();
+
+		if (userError || !internalUser) {
+			return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+		}
+
+		const userId = internalUser.id;
 
 		console.log(`📁 [FILE-INFO] Info request from user: ${userId} for file: ${fileId}`);
 
@@ -252,13 +277,15 @@ export async function POST(request, { params } = {}) {
 				messages!inner(
 					id,
 					conversation_id,
-					conversation_participants!inner(
-						user_id
+					conversations!inner(
+						conversation_participants!inner(
+							user_id
+						)
 					)
 				)
 			`)
 			.eq('id', normalizedFileId)
-			.eq('messages.conversation_participants.user_id', userId)
+			.eq('messages.conversations.conversation_participants.user_id', userId)
 			.single();
 
 		if (fileError || !fileData) {
@@ -274,7 +301,7 @@ export async function POST(request, { params } = {}) {
 			encryptedMetadata: fileData.encrypted_metadata, // Client will decrypt
 			createdAt: fileData.created_at,
 			createdBy: fileData.created_by,
-			isOwner: fileData.created_by === userId
+			isOwner: fileData.created_by === authUserId || fileData.created_by === userId
 		});
 
 	} catch (err) {
