@@ -24,7 +24,7 @@ export async function POST(request, { params } = {}) {
 
     const { message, context = {} } = body;
 
-    if (!message) {
+    if (typeof message !== 'string' || !message.trim()) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
@@ -34,7 +34,7 @@ export async function POST(request, { params } = {}) {
     }
 
     // Process the command
-    const response = await pluginManager.processCommand(message, context);
+    const response = await pluginManager.processCommand(message.trim(), context);
 
     if (response === null) {
       return NextResponse.json({ 
