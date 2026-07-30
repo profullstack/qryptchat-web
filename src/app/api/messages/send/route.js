@@ -41,6 +41,10 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return NextResponse.json({ error: 'encryptedContents values must be encrypted content strings' }, { status: 400 });
 		}
 
+		if (Object.values(encryptedContents).some((content) => !content.trim())) {
+			return NextResponse.json({ error: 'encryptedContents values must not be blank' }, { status: 400 });
+		}
+
 		if (metadata !== undefined && (typeof metadata !== 'object' || Array.isArray(metadata) || metadata === null)) {
 			return NextResponse.json({ error: 'metadata must be a JSON object' }, { status: 400 });
 		}

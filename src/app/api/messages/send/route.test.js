@@ -81,6 +81,25 @@ describe('POST /api/messages/send validation', () => {
 		expect(mocks.mockSupabase.from).not.toHaveBeenCalled();
 	});
 
+	it('rejects blank encrypted content strings before database work', async () => {
+		const { POST } = await import('./route.js');
+		const request = {
+			json: vi.fn().mockResolvedValue({
+				conversationId: 'conversation-1',
+				encryptedContents: {
+					'user-1': '   '
+				}
+			})
+		};
+
+		const response = await POST(request);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('encryptedContents values must not be blank');
+		expect(mocks.mockSupabase.from).not.toHaveBeenCalled();
+	});
+
 	it('rejects non-object metadata before database work', async () => {
 		const { POST } = await import('./route.js');
 		const request = {
