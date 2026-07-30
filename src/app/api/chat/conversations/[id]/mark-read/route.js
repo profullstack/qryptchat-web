@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 
+function normalizeConversationId(conversationId) {
+	return typeof conversationId === 'string' ? conversationId.trim() : '';
+}
+
 /**
  * Mark all messages in a conversation as read for the current user
  * @type {import('./$types').RequestHandler}
  */
 export async function POST(request, { params } = {}) {
 	try {
-		const supabase = await createSupabaseServerClient();
 		const { id: conversationId } = (await params) || {};
+		const normalizedConversationId = normalizeConversationId(conversationId);
 
-		if (!conversationId) {
+		if (!normalizedConversationId) {
 			return NextResponse.json({ error: 'Conversation ID is required' }, { status: 400 });
 		}
+
+		const supabase = await createSupabaseServerClient();
 		
 		// Get user from session
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -42,7 +48,7 @@ export async function POST(request, { params } = {}) {
 				supabase
 					.from('messages')
 					.select('id')
-					.eq('conversation_id', conversationId)
+					.eq('conversation_id', normalizedConversationId)
 			);
 
 		if (updateError) {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+	createSupabaseServerClient: vi.fn(),
 	authGetUser: vi.fn(),
 	from: vi.fn(),
 	usersEq: vi.fn(),
@@ -9,13 +10,17 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/supabase.js', () => ({
-	createSupabaseServerClient: vi.fn(async () => ({
+	createSupabaseServerClient: mocks.createSupabaseServerClient
+}));
+
+function createSupabaseClient() {
+	return {
 		auth: {
 			getUser: mocks.authGetUser
 		},
 		from: mocks.from
-	}))
-}));
+	};
+}
 
 function createUsersQuery() {
 	const query = {
@@ -55,6 +60,7 @@ describe('POST /api/chat/conversations/[id]/mark-read', () => {
 		vi.resetModules();
 		vi.clearAllMocks();
 
+		mocks.createSupabaseServerClient.mockResolvedValue(createSupabaseClient());
 		mocks.authGetUser.mockResolvedValue({
 			data: { user: { id: 'auth-user-id' } },
 			error: null
@@ -88,6 +94,19 @@ describe('POST /api/chat/conversations/[id]/mark-read', () => {
 
 		expect(response.status).toBe(400);
 		expect(body).toEqual({ error: 'Conversation ID is required' });
+		expect(mocks.authGetUser).not.toHaveBeenCalled();
+	});
+
+	it('rejects blank conversation ids before creating a Supabase client', async () => {
+		const { POST } = await import('./route.js');
+		const response = await POST(new Request('https://qrypt.chat/api/chat/conversations/%20/mark-read'), {
+			params: Promise.resolve({ id: '   ' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Conversation ID is required' });
+		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
 		expect(mocks.authGetUser).not.toHaveBeenCalled();
 	});
 });
