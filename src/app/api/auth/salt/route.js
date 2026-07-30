@@ -102,9 +102,10 @@ export async function POST(request) {
 		}
 
 		const { salt } = await request.json();
-		if (!salt) {
+		if (typeof salt !== 'string' || !salt.trim()) {
 			return NextResponse.json({ error: 'Missing salt' }, { status: 400 });
 		}
+		const normalizedSalt = salt.trim();
 
 		// Verify the authenticated user has a record and look up their phone.
 		const { data: existing } = await getServiceRoleClient()
@@ -124,7 +125,7 @@ export async function POST(request) {
 
 		const { error } = await getServiceRoleClient()
 			.from('users')
-			.update({ salt })
+			.update({ salt: normalizedSalt })
 			.eq('auth_user_id', user.id);
 
 		if (error) {
@@ -132,7 +133,7 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Failed to store salt' }, { status: 500 });
 		}
 
-		return NextResponse.json({ salt, existing: false });
+		return NextResponse.json({ salt: normalizedSalt, existing: false });
 	} catch (error) {
 		console.error('Salt POST error:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
