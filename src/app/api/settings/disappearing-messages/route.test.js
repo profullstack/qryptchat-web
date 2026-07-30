@@ -130,4 +130,16 @@ describe('settings disappearing messages authentication', () => {
 		expect(mocks.authGetUser).toHaveBeenCalledWith('valid-token');
 		expect(mocks.updateEq).toHaveBeenCalledWith('auth_user_id', 'auth-user-id');
 	});
+
+	it('rejects fractional retention day values before updating settings', async () => {
+		const { PUT } = await import('./route.js');
+
+		const response = await PUT(request('PUT', { default_message_retention_days: 1.5 }));
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid retention days value');
+		expect(mocks.from).not.toHaveBeenCalled();
+		expect(mocks.updateEq).not.toHaveBeenCalled();
+	});
 });

@@ -78,7 +78,11 @@ export async function PUT(request) {
 		const { default_message_retention_days } = await request.json();
 
 		// Validate input
-		if (typeof default_message_retention_days !== 'number' || default_message_retention_days < 0) {
+		if (
+			typeof default_message_retention_days !== 'number' ||
+			!Number.isInteger(default_message_retention_days) ||
+			default_message_retention_days < 0
+		) {
 			return NextResponse.json({ error: 'Invalid retention days value' }, { status: 400 });
 		}
 
