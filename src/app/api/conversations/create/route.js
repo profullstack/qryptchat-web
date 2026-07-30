@@ -27,11 +27,22 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return NextResponse.json({ error: 'Missing or invalid participantIds' }, { status: 400 });
 		}
 
+		const normalizedParticipantIds = participantIds.map((participantId) =>
+			typeof participantId === 'string' ? participantId.trim() : ''
+		);
+
+		if (
+			normalizedParticipantIds.length !== participantIds.length ||
+			normalizedParticipantIds.some((participantId) => participantId.length === 0)
+		) {
+			return NextResponse.json({ error: 'Invalid participantIds' }, { status: 400 });
+		}
+
 		const { supabase, user } = locals;
 
 		// For direct conversations, check if one already exists
-		if (!isGroup && participantIds.length === 1) {
-			const otherUserId = participantIds[0];
+		if (!isGroup && normalizedParticipantIds.length === 1) {
+			const otherUserId = normalizedParticipantIds[0];
 			
 			// Check for existing direct conversation
 			const { data: existing } = await supabase
@@ -64,7 +75,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 		}
 
 		// Add participants
-		const allParticipants = [user.id, ...participantIds];
+		const allParticipants = [user.id, ...normalizedParticipantIds];
 		const participantInserts = allParticipants.map(userId => ({
 			conversation_id: conversation.id,
 			user_id: userId
@@ -83,7 +94,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 		sseManager.joinRoom(user.id, conversation.id);
 
 		// Notify other participants
-		for (const participantId of participantIds) {
+		for (const participantId of normalizedParticipantIds) {
 			sseManager.sendToUser(participantId, MESSAGE_TYPES.CONVERSATION_CREATED, {
 				conversation
 			});
