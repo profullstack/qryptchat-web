@@ -114,7 +114,7 @@ export async function POST(request) {
     }
 
     // Validate encrypted_contents is an object with user_id -> encrypted_content mappings
-    if (typeof encrypted_contents !== 'object' || Object.keys(encrypted_contents).length === 0) {
+    if (typeof encrypted_contents !== 'object' || Array.isArray(encrypted_contents) || Object.keys(encrypted_contents).length === 0) {
       return NextResponse.json({ error: 'encrypted_contents must be an object with user_id -> encrypted_content mappings' }, { status: 400 });
     }
 
