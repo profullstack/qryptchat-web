@@ -60,6 +60,10 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'Invalid request format' }, { status: 400 });
 		}
 
+		if (phoneNumber !== null && phoneNumber !== undefined && typeof phoneNumber !== 'string') {
+			return NextResponse.json({ error: 'Phone number must be a string' }, { status: 400 });
+		}
+
 		logger.info('SMS verification request received', {
 			phoneNumber: phoneNumber ? `${phoneNumber.substring(0, 3)}***${phoneNumber.substring(phoneNumber.length - 2)}` : null,
 			hasCode: !!verificationCode,
