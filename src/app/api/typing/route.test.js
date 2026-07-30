@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
 		from: vi.fn()
 	},
 	mockBroadcastToRoom: vi.fn(),
+	participantEq: vi.fn(),
 	participantResult: {
 		data: { id: 'participant-row' },
 		error: null
@@ -54,7 +55,10 @@ function setupSupabase() {
 		}
 
 		if (table === 'conversation_participants') {
-			return createQuery(mocks.participantResult);
+			const query = createQuery(mocks.participantResult);
+			mocks.participantEq.mockReturnValue(query);
+			query.eq = mocks.participantEq;
+			return query;
 		}
 
 		throw new Error(`Unexpected table: ${table}`);
@@ -126,6 +130,29 @@ describe('typing API conversation access', () => {
 		);
 	});
 
+	it('trims typing start conversation ids before checking membership and broadcasting', async () => {
+		const { POST } = await import('./start/route.js');
+		const response = await POST({
+			json: vi.fn().mockResolvedValue({ conversationId: '  conversation-1  ' })
+		});
+
+		expect(response.status).toBe(200);
+		expect(mocks.participantEq).toHaveBeenCalledWith('conversation_id', 'conversation-1');
+	});
+
+	it('rejects blank typing start conversation ids before querying users', async () => {
+		const { POST } = await import('./start/route.js');
+		const response = await POST({
+			json: vi.fn().mockResolvedValue({ conversationId: '   ' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Missing conversationId' });
+		expect(mocks.mockSupabase.from).not.toHaveBeenCalled();
+		expect(mocks.mockBroadcastToRoom).not.toHaveBeenCalled();
+	});
+
 	it('broadcasts typing stop after membership is verified', async () => {
 		const { POST } = await import('./stop/route.js');
 		const response = await POST({
@@ -144,5 +171,18 @@ describe('typing API conversation access', () => {
 			}),
 			'internal-user-id'
 		);
+	});
+
+	it('rejects blank typing stop conversation ids before querying users', async () => {
+		const { POST } = await import('./stop/route.js');
+		const response = await POST({
+			json: vi.fn().mockResolvedValue({ conversationId: '   ' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Missing conversationId' });
+		expect(mocks.mockSupabase.from).not.toHaveBeenCalled();
+		expect(mocks.mockBroadcastToRoom).not.toHaveBeenCalled();
 	});
 });
