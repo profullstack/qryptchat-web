@@ -188,8 +188,8 @@ export async function PUT(request, { params } = {}) {
     const { disappear_seconds, start_on } = body;
 
     // Validate input
-    if (typeof disappear_seconds !== 'number' || disappear_seconds < 0) {
-      return NextResponse.json({ error: 'disappear_seconds must be a non-negative number' }, { status: 400 });
+    if (typeof disappear_seconds !== 'number' || !Number.isInteger(disappear_seconds) || disappear_seconds < 0) {
+      return NextResponse.json({ error: 'disappear_seconds must be a non-negative integer' }, { status: 400 });
     }
 
     if (start_on && !['delivered', 'read'].includes(start_on)) {

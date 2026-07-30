@@ -146,4 +146,23 @@ describe('/api/conversations/[id]/disappearing-messages', () => {
 		expect(mocks.participantEq).not.toHaveBeenCalled();
 		expect(mocks.updateEq).not.toHaveBeenCalled();
 	});
+
+	it('rejects fractional disappearing seconds before participant lookup', async () => {
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'conversation_participants') throw new Error('Participant query should not run');
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const { PUT } = await import('./route.js');
+		const response = await PUT(makeRequest({ disappear_seconds: 1.5 }), {
+			params: Promise.resolve({ id: 'conversation-1' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('disappear_seconds must be a non-negative integer');
+		expect(mocks.participantEq).not.toHaveBeenCalled();
+		expect(mocks.updateEq).not.toHaveBeenCalled();
+	});
 });
