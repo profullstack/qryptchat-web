@@ -130,6 +130,11 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
 		}
 
+		if (typeof messageText !== 'string') {
+			console.log('[TELNYX-WEBHOOK] Invalid message text type');
+			return NextResponse.json({ error: 'Invalid message text' }, { status: 400 });
+		}
+
 		// Extract OTP code from message text (assuming it's just the code)
 		const otpCode = messageText.trim();
 		
