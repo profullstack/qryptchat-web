@@ -155,7 +155,10 @@ export async function PUT(request) {
 
 		// Validate that encrypted_keys is valid JSON (it should be the export format)
 		try {
-			JSON.parse(encrypted_keys);
+			const backupExport = JSON.parse(encrypted_keys);
+			if (!backupExport || typeof backupExport !== 'object' || Array.isArray(backupExport)) {
+				return NextResponse.json({ error: 'encrypted_keys must be a JSON object string' }, { status: 400 });
+			}
 		} catch {
 			return NextResponse.json({ error: 'encrypted_keys must be a valid JSON string' }, { status: 400 });
 		}

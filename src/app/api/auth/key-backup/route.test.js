@@ -41,6 +41,24 @@ function createBackupQuery() {
 	return query;
 }
 
+function createUpsertQuery() {
+	const query = {
+		upsert: vi.fn(() => query),
+		select: vi.fn(() => query),
+		single: vi.fn(() =>
+			Promise.resolve({
+				data: {
+					id: 'backup-id',
+					created_at: '2026-07-11T00:00:00.000Z',
+					updated_at: '2026-07-11T00:00:00.000Z'
+				},
+				error: null
+			})
+		)
+	};
+	return query;
+}
+
 describe('key backup cookie authentication', () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -107,5 +125,31 @@ describe('key backup cookie authentication', () => {
 
 		expect(response.status).toBe(200);
 		expect(mocks.authGetUser).toHaveBeenCalledWith('cookie-token');
+	});
+
+	it('rejects encrypted_keys JSON that is not an object export', async () => {
+		const { PUT } = await import('./route.js');
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'key_backups') return createUpsertQuery();
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const response = await PUT(
+			new Request('https://qrypt.chat/api/auth/key-backup', {
+				method: 'PUT',
+				headers: {
+					authorization: 'Bearer access-token',
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify({
+					encrypted_keys: '"not-a-backup-export"'
+				})
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'encrypted_keys must be a JSON object string' });
+		expect(mocks.serviceFrom).not.toHaveBeenCalled();
 	});
 });
