@@ -23,3 +23,7 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 supabase/.temp/
 .next/
+
+# Claude Code: local-only, machine-specific (keep shared config committed)
+**/.claude/settings.local.json
+**/.claude/worktrees/
