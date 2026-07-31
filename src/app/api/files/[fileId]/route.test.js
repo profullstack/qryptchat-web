@@ -42,16 +42,29 @@ function createFileQuery() {
 	return query;
 }
 
+function createUserQuery() {
+	const query = {
+		select: vi.fn(() => query),
+		eq: vi.fn(() => query),
+		single: vi.fn().mockResolvedValue({
+			data: { id: 'user-1' },
+			error: null
+		})
+	};
+	return query;
+}
+
 describe('/api/files/[fileId]', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
 
 		mocks.authGetUser.mockResolvedValue({
-			data: { user: { id: 'user-1' } },
+			data: { user: { id: 'auth-user-1' } },
 			error: null
 		});
 		mocks.from.mockImplementation((table) => {
+			if (table === 'users') return createUserQuery();
 			if (table === 'encrypted_files') return createFileQuery();
 			throw new Error(`Unexpected table: ${table}`);
 		});
@@ -79,6 +92,10 @@ describe('/api/files/[fileId]', () => {
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Content-Type')).toBe('application/octet-stream');
 		expect(mocks.eq).toHaveBeenCalledWith('id', 'file-1');
+		expect(mocks.eq).toHaveBeenCalledWith(
+			'messages.conversations.conversation_participants.user_id',
+			'user-1'
+		);
 	});
 
 	it('resolves async route params for POST metadata requests', async () => {
@@ -92,5 +109,9 @@ describe('/api/files/[fileId]', () => {
 		expect(body.id).toBe('file-1');
 		expect(body.conversationId).toBe('conversation-1');
 		expect(mocks.eq).toHaveBeenCalledWith('id', 'file-1');
+		expect(mocks.eq).toHaveBeenCalledWith(
+			'messages.conversations.conversation_participants.user_id',
+			'user-1'
+		);
 	});
 });
