@@ -102,6 +102,18 @@ describe('GET /api/chat/messages/[id]', () => {
 		expect(mocks.messageEq).toHaveBeenCalledWith('id', 'message-1');
 	});
 
+	it('preserves padded auth cookie values when verifying the session', async () => {
+		const { GET } = await import('./route.js');
+		await GET(
+			new Request('https://qrypt.chat/api/chat/messages/message-1', {
+				headers: { cookie: 'sb-access-token=valid-token==' }
+			}),
+			{ params: Promise.resolve({ id: 'message-1' }) }
+		);
+
+		expect(mocks.authGetUser).toHaveBeenCalledWith('valid-token==');
+	});
+
 	it('rejects missing async route params before authentication', async () => {
 		const { GET } = await import('./route.js');
 		const response = await GET(new Request('https://qrypt.chat/api/chat/messages/'), {
