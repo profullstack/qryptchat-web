@@ -123,7 +123,8 @@ export async function GET(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { id: conversationId } = await resolveRouteParams(params);
+		const { id: rawConversationId } = await resolveRouteParams(params);
+		const conversationId = typeof rawConversationId === 'string' ? rawConversationId.trim() : '';
 		if (!conversationId) {
 			return NextResponse.json({ error: 'Missing conversation ID' }, { status: 400 });
 		}
