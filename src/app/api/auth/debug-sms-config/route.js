@@ -81,12 +81,14 @@ export async function POST(request, { params } = {}) {
 	try {
 		const { testPhoneNumber } = await request.json();
 		
-		if (!testPhoneNumber) {
+		if (typeof testPhoneNumber !== 'string' || !testPhoneNumber.trim()) {
 			return NextResponse.json(
-				{ error: 'testPhoneNumber is required' },
+				{ error: 'testPhoneNumber must be a non-empty string' },
 				{ status: 400 }
 			);
 		}
+
+		const normalizedPhoneNumber = testPhoneNumber.trim();
 
 		// First run the diagnostic
 		const config = {
@@ -118,7 +120,7 @@ export async function POST(request, { params } = {}) {
 		console.log(`From number: ${config.TWILIO_PHONE_NUMBER || 'Message Service: ' + config.TWILIO_MESSAGE_SERVICE_SID?.substring(0, 8) + '***'}`);
 		
 		const { error: smsError } = await supabase.auth.signInWithOtp({
-			phone: testPhoneNumber,
+			phone: normalizedPhoneNumber,
 			options: {
 				channel: 'sms',
 				shouldCreateUser: true
@@ -137,7 +139,7 @@ export async function POST(request, { params } = {}) {
 					code: smsError.code
 				},
 				diagnostic,
-				testPhoneNumber: testPhoneNumber.substring(0, 3) + '***' + testPhoneNumber.substring(testPhoneNumber.length - 2),
+				testPhoneNumber: normalizedPhoneNumber.substring(0, 3) + '***' + normalizedPhoneNumber.substring(normalizedPhoneNumber.length - 2),
 				timestamp: new Date().toISOString()
 			}, { status: 400 });
 		}
@@ -148,7 +150,7 @@ export async function POST(request, { params } = {}) {
 			success: true,
 			message: 'SMS test successful',
 			diagnostic,
-			testPhoneNumber: testPhoneNumber.substring(0, 3) + '***' + testPhoneNumber.substring(testPhoneNumber.length - 2),
+			testPhoneNumber: normalizedPhoneNumber.substring(0, 3) + '***' + normalizedPhoneNumber.substring(normalizedPhoneNumber.length - 2),
 			timestamp: new Date().toISOString()
 		});
 
