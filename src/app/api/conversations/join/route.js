@@ -36,6 +36,18 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		const userId = userData.id;
 
+		const { data: participant, error: participantError } = await supabase
+			.from('conversation_participants')
+			.select('id')
+			.eq('conversation_id', conversationId)
+			.eq('user_id', userId)
+			.is('left_at', null)
+			.single();
+
+		if (participantError || !participant) {
+			return NextResponse.json({ error: 'Access denied to conversation' }, { status: 403 });
+		}
+
 		// Join SSE room for real-time updates
 		sseManager.joinRoom(userId, conversationId);
 
