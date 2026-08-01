@@ -72,4 +72,36 @@ describe('POST /api/chat/messages validation', () => {
 		expect(mocks.userEq).toHaveBeenCalledWith('auth_user_id', 'auth-user-id');
 		expect(mocks.serviceFrom).toHaveBeenCalledTimes(1);
 	});
+
+	it.each([
+		['non-string values', { 'recipient-1': { ciphertext: 'not-a-string' } }],
+		['blank values', { 'recipient-1': '   ' }]
+	])('rejects encrypted_contents %s before participant lookup', async (_label, encrypted_contents) => {
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'conversation_participants') throw new Error('Participant query should not run');
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const { POST } = await import('./route.js');
+		const response = await POST(
+			new Request('https://qrypt.chat/api/chat/messages', {
+				method: 'POST',
+				headers: {
+					cookie: 'sb-access-token=valid-token',
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify({
+					conversation_id: 'conversation-1',
+					encrypted_contents
+				})
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('encrypted_contents values must be non-empty strings');
+		expect(mocks.userEq).toHaveBeenCalledWith('auth_user_id', 'auth-user-id');
+		expect(mocks.serviceFrom).toHaveBeenCalledTimes(1);
+	});
 });
