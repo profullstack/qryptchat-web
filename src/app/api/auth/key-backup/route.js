@@ -51,7 +51,9 @@ async function authenticateUser(request) {
 
 		const cookies = Object.fromEntries(
 			cookieHeader.split(/;\s*/).map(cookie => {
-				const [name, value] = cookie.split('=');
+				const separator = cookie.indexOf('=');
+				const name = separator === -1 ? cookie : cookie.slice(0, separator);
+				const value = separator === -1 ? '' : cookie.slice(separator + 1);
 				return [name, decodeURIComponent(value)];
 			})
 		);

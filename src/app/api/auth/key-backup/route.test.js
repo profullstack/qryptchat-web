@@ -23,6 +23,10 @@ function cookieValue(token) {
 	return `base64-${Buffer.from(JSON.stringify({ access_token: token })).toString('base64')}`;
 }
 
+function paddedCookieValue() {
+	return 'base64-eyJhY2Nlc3NfdG9rZW4iOiJhYmMiLCJwYWRkaW5nIjoieCJ9==';
+}
+
 function createBackupQuery() {
 	const query = {
 		select: vi.fn(() => query),
@@ -96,6 +100,20 @@ describe('key backup cookie authentication', () => {
 			}
 		});
 		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
+	});
+
+	it('preserves equals padding in base64 auth cookies', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/auth/key-backup', {
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${paddedCookieValue()}`
+				}
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('abc');
 	});
 
 	it('normalizes bearer scheme casing and extra spaces', async () => {

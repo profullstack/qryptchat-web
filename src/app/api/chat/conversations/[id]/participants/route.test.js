@@ -21,6 +21,10 @@ vi.mock('@/lib/supabase/service-role.js', () => ({
 	}))
 }));
 
+function paddedCookieValue() {
+	return 'base64-eyJhY2Nlc3NfdG9rZW4iOiJhYmMiLCJwYWRkaW5nIjoieCJ9==';
+}
+
 function createUsersQuery() {
 	const query = {
 		select: vi.fn(() => query),
@@ -108,6 +112,27 @@ describe('GET /api/chat/conversations/[id]/participants', () => {
 		expect(body.conversation_id).toBe('conversation-1');
 		expect(body.participants).toHaveLength(1);
 		expect(mocks.participantEq).toHaveBeenCalledWith('conversation_id', 'conversation-1');
+	});
+
+	it('preserves equals padding in base64 auth cookies', async () => {
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'conversation_participants') {
+				return createParticipantCheckQuery();
+			}
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/chat/conversations/conversation-1/participants', {
+				headers: { cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${paddedCookieValue()}` }
+			}),
+			{ params: Promise.resolve({ id: 'conversation-1' }) }
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('abc');
 	});
 
 	it('rejects missing async route params after authentication', async () => {
