@@ -113,14 +113,25 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'participant_ids is required and must be a non-empty array' }, { status: 400 });
 		}
 
+		const normalizedParticipantIds = participant_ids.map((participantId) =>
+			typeof participantId === 'string' ? participantId.trim() : ''
+		);
+
+		if (
+			normalizedParticipantIds.length !== participant_ids.length ||
+			normalizedParticipantIds.some((participantId) => participantId.length === 0)
+		) {
+			return NextResponse.json({ error: 'participant_ids must contain non-empty strings' }, { status: 400 });
+		}
+
 		// Skip participant validation for now due to network issues
 		// TODO: Re-enable participant validation once network connectivity is stable
 		console.log('Skipping participant validation due to network issues');
 		console.log('Participant IDs to add:', participant_ids);
 
 		// For direct messages, check if conversation already exists
-		if (type === 'direct' && participant_ids.length === 1) {
-			const other_user_id = participant_ids[0];
+		if (type === 'direct' && normalizedParticipantIds.length === 1) {
+			const other_user_id = normalizedParticipantIds[0];
 			
 			// Check if conversation already exists between these users
 			const { data: existingConversations } = await supabase
@@ -175,7 +186,7 @@ export async function POST(request, { params } = {}) {
 		const participants = [];
 
 		// Add other participants (validate they exist in users table)
-		for (const participantId of participant_ids) {
+		for (const participantId of normalizedParticipantIds) {
 			participants.push({
 				conversation_id: conversationId,
 				user_id: participantId,
@@ -185,7 +196,7 @@ export async function POST(request, { params } = {}) {
 
 		if (internalUser) {
 			// Add creator as admin if not already in participants
-			if (!participant_ids.includes(internalUser.id)) {
+			if (!normalizedParticipantIds.includes(internalUser.id)) {
 				participants.push({
 					conversation_id: conversationId,
 					user_id: internalUser.id,
