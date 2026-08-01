@@ -118,6 +118,12 @@ export async function POST(request) {
       return NextResponse.json({ error: 'encrypted_contents must be an object with user_id -> encrypted_content mappings' }, { status: 400 });
     }
 
+    if (Object.entries(encrypted_contents).some(([, encryptedContent]) => (
+      typeof encryptedContent !== 'string' || encryptedContent.trim().length === 0
+    ))) {
+      return NextResponse.json({ error: 'encrypted_contents values must be non-empty strings' }, { status: 400 });
+    }
+
     // Verify user is a participant in the conversation
     const { data: participant, error: participantError } = await getServiceRoleClient()
       .from('conversation_participants')
