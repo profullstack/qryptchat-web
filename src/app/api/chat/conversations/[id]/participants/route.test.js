@@ -129,4 +129,25 @@ describe('GET /api/chat/conversations/[id]/participants', () => {
 		expect(body).toEqual({ error: 'Missing conversation ID' });
 		expect(mocks.authGetUser).toHaveBeenCalled();
 	});
+
+	it('rejects whitespace-only conversation IDs before participant lookup', async () => {
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'conversation_participants') throw new Error('Participant lookup should not run');
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/chat/conversations/%20%20/participants', {
+				headers: { cookie: 'session=header.payload.signature' }
+			}),
+			{ params: Promise.resolve({ id: '   ' }) }
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toEqual({ error: 'Missing conversation ID' });
+		expect(mocks.authGetUser).toHaveBeenCalled();
+	});
 });
