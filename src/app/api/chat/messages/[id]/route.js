@@ -28,7 +28,8 @@ async function authenticateUser(request) {
 			return null;
 		}
 		
-		const token = sessionCookie.split('=')[1];
+		const separatorIndex = sessionCookie.indexOf('=');
+		const token = separatorIndex >= 0 ? sessionCookie.slice(separatorIndex + 1) : '';
 		if (!token) {
 			return null;
 		}
