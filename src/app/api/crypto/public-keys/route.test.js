@@ -25,6 +25,10 @@ function cookieValue(token) {
 	return `base64-${Buffer.from(JSON.stringify({ access_token: token })).toString('base64')}`;
 }
 
+function paddedCookieValue() {
+	return 'base64-eyJhY2Nlc3NfdG9rZW4iOiJhYmMiLCJwYWRkaW5nIjoieCJ9==';
+}
+
 function createUsersQuery() {
 	let selected = '';
 	const query = {
@@ -81,6 +85,20 @@ describe('public key cookie authentication', () => {
 		expect(response.status).toBe(200);
 		expect(body).toEqual({ public_key: 'public-key', user_id: 'target-user-id' });
 		expect(mocks.authGetUser).toHaveBeenCalledWith('access-token');
+	});
+
+	it('preserves equals padding in base64 auth cookies', async () => {
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/crypto/public-keys?user_id=target-user-id', {
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${paddedCookieValue()}`
+				}
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('abc');
 	});
 
 	it('rejects non-string public keys before upsert RPC work', async () => {
