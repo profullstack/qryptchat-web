@@ -131,4 +131,27 @@ describe('POST /api/files/upload-complete validation', () => {
 		expect(mocks.from).not.toHaveBeenCalled();
 		expect(mocks.broadcastToRoom).not.toHaveBeenCalled();
 	});
+
+	it('rejects a storage path that is not bound to the authenticated upload', async () => {
+		const { POST } = await import('./route.js');
+		const request = {
+			json: vi.fn().mockResolvedValue({
+				storagePath: 'another-user/conversation-1/file-1',
+				fileId: 'file-1',
+				metadata: {
+					messageId: 'message-1',
+					conversationId: 'conversation-1',
+					encryptedMetadata: { 'user-1': 'encrypted-metadata' }
+				}
+			})
+		};
+
+		const response = await POST(request);
+		const body = await response.json();
+
+		expect(response.status).toBe(403);
+		expect(body.error).toBe('Storage path does not match upload request');
+		expect(mocks.from).not.toHaveBeenCalled();
+		expect(mocks.broadcastToRoom).not.toHaveBeenCalled();
+	});
 });

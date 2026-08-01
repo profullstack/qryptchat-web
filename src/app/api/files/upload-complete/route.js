@@ -70,6 +70,15 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'Invalid encrypted metadata' }, { status: 400 });
 		}
 
+		// Only complete the object created by upload-url for this authenticated
+		// user, conversation, and file id. Without this check a caller could
+		// register an unrelated object path against an authorized message.
+		const expectedStoragePath = `${user.id}/${conversationId}/${fileId}`;
+		if (storagePath !== expectedStoragePath) {
+			console.error('UPLOAD-COMPLETE: Storage path does not match upload request');
+			return NextResponse.json({ error: 'Storage path does not match upload request' }, { status: 403 });
+		}
+
 		// Get the internal user ID from the users table using auth_user_id
 		const { data: internalUser, error: userError } = await supabase
 			.from('users')
