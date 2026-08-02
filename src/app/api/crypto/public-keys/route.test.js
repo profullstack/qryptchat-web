@@ -103,4 +103,39 @@ describe('public key cookie authentication', () => {
 		expect(body).toEqual({ error: 'Missing public_key' });
 		expect(mocks.rpc).not.toHaveBeenCalled();
 	});
+
+	it('rejects oversized public-key batches before service-role queries', async () => {
+		const { POST } = await import('./route.js');
+		const response = await POST(
+			new Request('https://qrypt.chat/api/crypto/public-keys', {
+				method: 'POST',
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`,
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify({ user_ids: Array.from({ length: 101 }, (_, index) => `user-${index}`) })
+			})
+		);
+
+		expect(response.status).toBe(400);
+		expect(mocks.serviceFrom).not.toHaveBeenCalled();
+	});
+
+	it('trims and deduplicates user IDs before lookup', async () => {
+		const { POST } = await import('./route.js');
+		const response = await POST(
+			new Request('https://qrypt.chat/api/crypto/public-keys', {
+				method: 'POST',
+				headers: {
+					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`,
+					'content-type': 'application/json'
+				},
+				body: JSON.stringify({ user_ids: [' target-user-id ', 'target-user-id'] })
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ public_keys: { 'target-user-id': 'public-key' } });
+		expect(mocks.serviceFrom).toHaveBeenCalledTimes(1);
+	});
 });

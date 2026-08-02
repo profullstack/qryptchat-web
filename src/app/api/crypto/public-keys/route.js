@@ -151,6 +151,8 @@ export async function GET(request) {
  */
 export async function POST(request) {
 	try {
+		const MAX_BATCH_SIZE = 100;
+
 		// Authenticate user
 		const { user, error: authError } = await authenticateUser(request);
 		if (authError || !user) {
@@ -163,11 +165,25 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Missing or invalid user_ids array' }, { status: 400 });
 		}
 
+		if (user_ids.length > MAX_BATCH_SIZE) {
+			return NextResponse.json({ error: `user_ids must contain at most ${MAX_BATCH_SIZE} items` }, { status: 400 });
+		}
+
+		const normalizedUserIds = [...new Set(user_ids.map((userId) => {
+			if (typeof userId !== 'string') return null;
+			const normalized = userId.trim();
+			return normalized || null;
+		}))];
+
+		if (normalizedUserIds.includes(null)) {
+			return NextResponse.json({ error: 'user_ids must contain non-empty strings' }, { status: 400 });
+		}
+
 		/** @type {Record<string, string|null>} */
 		const publicKeys = {};
 
 		// Process each user ID
-		for (const userId of user_ids) {
+		for (const userId of normalizedUserIds) {
 			try {
 				// Get the user's auth_user_id from the internal user ID
 				const { data: userData, error: userError } = await getServiceRoleClient()
