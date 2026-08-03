@@ -17,6 +17,27 @@ function getServiceRoleClient() {
 // Create regular client for JWT validation
 const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+export const MAX_PUBLIC_KEY_BATCH_SIZE = 100;
+
+export function normalizePublicKeyUserIds(value) {
+	if (!Array.isArray(value) || value.length > MAX_PUBLIC_KEY_BATCH_SIZE) {
+		return null;
+	}
+
+	const userIds = [];
+	const seen = new Set();
+	for (const candidate of value) {
+		if (typeof candidate !== 'string') return null;
+		const userId = candidate.trim();
+		if (!userId || userId.length > 128) return null;
+		if (seen.has(userId)) continue;
+		seen.add(userId);
+		userIds.push(userId);
+	}
+
+	return userIds;
+}
+
 /**
  * Authenticate user from request cookies
  * @param {Request} request
@@ -159,17 +180,26 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { user_ids } = await request.json();
-		
-		if (!user_ids || !Array.isArray(user_ids)) {
-			return NextResponse.json({ error: 'Missing or invalid user_ids array' }, { status: 400 });
+		let body;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
 		}
 
-		/** @type {Record<string, string|null>} */
-		const publicKeys = {};
+		const userIds = normalizePublicKeyUserIds(body?.user_ids);
+		if (!userIds) {
+			return NextResponse.json(
+				{ error: `user_ids must contain at most ${MAX_PUBLIC_KEY_BATCH_SIZE} non-empty strings` },
+				{ status: 400 }
+			);
+		}
+
+		/** @type {Map<string, string|null>} */
+		const publicKeys = new Map();
 
 		// Process each user ID
-		for (const userId of user_ids) {
+		for (const userId of userIds) {
 			try {
 				// Get the user's auth_user_id from the internal user ID
 				const { data: userData, error: userError } = await getServiceRoleClient()
@@ -179,8 +209,8 @@ export async function POST(request) {
 					.single();
 
 				if (userError || !userData?.auth_user_id) {
-					console.log(`🔑 No auth_user_id found for internal user ${userId}`);
-					publicKeys[userId] = null;
+					console.log('No auth_user_id found for requested public key');
+					publicKeys.set(userId, null);
 					continue;
 				}
 
@@ -192,19 +222,19 @@ export async function POST(request) {
 					});
 
 				if (error) {
-					console.error(`Error fetching public key for user ${userId}:`, error);
-					publicKeys[userId] = null;
+					console.error('Error fetching requested public key:', error);
+					publicKeys.set(userId, null);
 				} else {
-					publicKeys[userId] = publicKey;
+					publicKeys.set(userId, publicKey);
 				}
 
 			} catch (error) {
-				console.error(`Error processing user ${userId}:`, error);
-				publicKeys[userId] = null;
+				console.error('Error processing public key lookup:', error);
+				publicKeys.set(userId, null);
 			}
 		}
 
-		return NextResponse.json({ public_keys: publicKeys });
+		return NextResponse.json({ public_keys: Object.fromEntries(publicKeys) });
 
 	} catch (error) {
 		console.error('Error in POST /api/crypto/public-keys:', error);
