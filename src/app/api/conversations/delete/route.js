@@ -84,17 +84,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return NextResponse.json({ error: 'Failed to fetch conversation details' }, { status: 500 });
 		}
 
-		const { count: participantCount, error: countError } = await supabase
-			.from('conversation_participants')
-			.select('*', { count: 'exact', head: true })
-			.eq('conversation_id', conversationId);
-
-		if (countError) {
-			console.error('Error counting participants:', countError);
-		}
-
-		// Determine if this is a direct message (2 participants) or group
-		const isDirectMessage = conversation.type === 'direct' || participantCount === 2;
+		const isDirectMessage = conversation.type === 'direct';
 
 		if (isDirectMessage) {
 			// For direct messages, delete everything for all participants
