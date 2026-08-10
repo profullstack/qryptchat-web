@@ -13,6 +13,47 @@ export const metadata = {
   },
   description: 'End-to-end encrypted messaging with post-quantum cryptography (ML-KEM-1024 / CRYSTALS-Kyber and CRYSTALS-Dilithium). Open source, self-hostable, and accessible over Tor.',
   applicationName: 'QryptChat',
+  // Chromium refuses to offer "Install app" without a linked manifest, and iOS
+  // needs the apple-* tags below for "Add to Home Screen" to open standalone.
+  // Both were lost when src/app.html went away in the Next.js migration.
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'QryptChat',
+  },
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icons/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      // Desktop environments (KDE/Plasma, GNOME) pick the largest declared icon
+      // for the installed app's launcher entry.
+      { url: '/icons/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: ['/favicon.ico'],
+    apple: [
+      { url: '/icons/apple-touch-icon-180x180.png', sizes: '180x180', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-152x152.png', sizes: '152x152', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-144x144.png', sizes: '144x144', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-120x120.png', sizes: '120x120', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-114x114.png', sizes: '114x114', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-76x76.png', sizes: '76x76', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-72x72.png', sizes: '72x72', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-60x60.png', sizes: '60x60', type: 'image/png' },
+      { url: '/icons/apple-touch-icon-57x57.png', sizes: '57x57', type: 'image/png' },
+    ],
+  },
+  other: {
+    // `appleWebApp.capable` above emits the modern `mobile-web-app-capable`.
+    // iOS before 15.4 ignores the manifest's `display` and only goes standalone
+    // on the apple-prefixed tag, which Next no longer emits — declare it here.
+    'apple-mobile-web-app-capable': 'yes',
+    'msapplication-TileColor': '#6366f1',
+    'msapplication-TileImage': '/icons/mstile-144x144.png',
+    'msapplication-config': '/icons/browserconfig.xml',
+  },
   keywords: [
     'quantum-resistant messaging',
     'post-quantum cryptography',
@@ -45,6 +86,13 @@ export const metadata = {
     description: 'End-to-end encrypted messaging with post-quantum cryptography. Open source, self-hostable, and accessible over Tor.',
     images: ['/banner.png'],
   },
+};
+
+export const viewport = {
+  themeColor: '#ffffff',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 const organizationJsonLd = {
@@ -82,11 +130,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.svg" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#ffffff" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/* Icons, viewport, theme-color and the apple-mobile-web-app-* tags are
+            emitted from the `metadata` / `viewport` exports above — declaring
+            them here too produced duplicate tags. */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}

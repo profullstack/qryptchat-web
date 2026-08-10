@@ -1,13 +1,18 @@
 {
+  "id": "/?source=pwa",
   "name": "QryptChat - Quantum-Resistant Messaging",
   "short_name": "QryptChat",
   "description": "Secure, quantum-resistant end-to-end encrypted messaging",
-  "version": "1.0",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "portrait",
   "theme_color": "#6366f1",
   "background_color": "#ffffff",
+  "categories": ["social", "communication", "productivity"],
   "icons": [
     {
       "src": "/icons/android-chrome-36x36.png",
@@ -59,8 +64,14 @@
     {
       "src": "/icons/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ],
-  "splash_pages": null
+  ]
 }
