@@ -3,7 +3,6 @@
  * This confirms that our backward compatibility fixes work properly
  */
 
-import { describe, it, before } from 'mocha';
 import { expect } from 'chai';
 import { PostQuantumEncryptionService } from '../src/lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '../src/lib/crypto/public-key-service.js';
@@ -19,7 +18,7 @@ describe('ML-KEM-1024 Consistent Usage', () => {
   const ML_KEM_768_PUBLIC_KEY_SIZE = 1184; // bytes
   const ML_KEM_1024_PUBLIC_KEY_SIZE = 1568; // bytes
 
-  before(async () => {
+  beforeAll(async () => {
     // Create two separate encryption services (Alice and Bob)
     alice = new PostQuantumEncryptionService();
     bob = new PostQuantumEncryptionService();

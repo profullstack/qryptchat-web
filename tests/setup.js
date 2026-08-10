@@ -1,4 +1,7 @@
 import '@testing-library/jest-dom';
+// jsdom ships no IndexedDB, but the app stores private keys there, so any test
+// touching key storage died on `ReferenceError: indexedDB is not defined`.
+import 'fake-indexeddb/auto';
 import { vi } from 'vitest';
 
 // Mock window.matchMedia

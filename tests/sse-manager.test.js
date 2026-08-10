@@ -7,7 +7,6 @@
  */
 
 import { expect } from 'chai';
-import { describe, it, before, after, beforeEach, afterEach } from 'mocha';
 import { sseManager } from '../src/lib/api/sse-manager.js';
 
 describe('SSE Manager Unit Tests', () => {

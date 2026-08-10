@@ -1,5 +1,4 @@
 // Test to verify large file upload fixes are working
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';

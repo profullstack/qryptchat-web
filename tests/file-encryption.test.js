@@ -1,5 +1,4 @@
 // tests/file-encryption.test.js - Test file encryption/decryption utilities
-import { describe, it, beforeEach } from 'mocha';
 import { expect } from 'chai';
 import { fileEncryption } from '../src/lib/crypto/file-encryption.js';
 

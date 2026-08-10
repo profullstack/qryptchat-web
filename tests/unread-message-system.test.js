@@ -1,7 +1,6 @@
 // End-to-end test for unread message system
 // Tests database triggers, API endpoints, and unread count functionality
 
-import { describe, it, before, after } from 'mocha';
 import { expect } from 'chai';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
@@ -16,7 +15,7 @@ describe('Unread Message System', () => {
   let testUserId1, testUserId2;
   let conversationId;
 
-  before(async () => {
+  beforeAll(async () => {
     // Initialize service role client for setup
     supabaseServiceRole = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     
@@ -67,7 +66,7 @@ describe('Unread Message System', () => {
       ]);
   });
 
-  after(async () => {
+  afterAll(async () => {
     // Clean up test data
     if (conversationId) {
       await supabaseServiceRole
@@ -198,7 +197,7 @@ describe('Unread Message System', () => {
   describe('Mark as Read Functionality', () => {
     let testMessageId;
 
-    before(async () => {
+    beforeAll(async () => {
       // Create another test message
       const { data: message } = await supabaseServiceRole
         .from('messages')

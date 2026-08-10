@@ -1,5 +1,4 @@
 // Test to debug file upload size limits and verify Supabase configuration
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';

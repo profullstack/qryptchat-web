@@ -3,7 +3,6 @@
  * Tests the flow of generating keys during signup and syncing them to database
  */
 
-import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 import { keySyncService } from '../src/lib/crypto/key-sync-service.js';
 import { postQuantumEncryption } from '../src/lib/crypto/post-quantum-encryption.js';

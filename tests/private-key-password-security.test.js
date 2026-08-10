@@ -11,7 +11,7 @@ import { keyManager } from '../src/lib/crypto/key-manager.js';
 describe('Private Key Password Security Vulnerability', () => {
 	let originalKeys;
 	
-	before(async () => {
+	beforeAll(async () => {
 		// Initialize the crypto systems
 		await keyManager.initialize();
 		await postQuantumEncryption.initialize();
@@ -26,7 +26,7 @@ describe('Private Key Password Security Vulnerability', () => {
 		originalKeys = await postQuantumEncryption.exportUserKeys();
 	});
 	
-	after(async () => {
+	afterAll(async () => {
 		// Restore original keys
 		if (originalKeys) {
 			await postQuantumEncryption.clearUserKeys();

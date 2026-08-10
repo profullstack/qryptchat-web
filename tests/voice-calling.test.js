@@ -3,7 +3,6 @@
  * Tests voice call service, signaling, and state management
  */
 
-import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 import sinon from 'sinon';
 

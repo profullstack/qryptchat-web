@@ -3,13 +3,12 @@
  * Verifies that file metadata is properly encrypted E2E
  */
 
-import { describe, it, before } from 'mocha';
 import { expect } from 'chai';
 import { metadataEncryption } from '../src/lib/crypto/metadata-encryption.js';
 import { multiRecipientEncryption } from '../src/lib/crypto/multi-recipient-encryption.js';
 
 describe('Metadata Encryption Service', () => {
-	before(async () => {
+	beforeAll(async () => {
 		// Initialize the encryption services
 		await metadataEncryption.initialize();
 		await multiRecipientEncryption.initialize();

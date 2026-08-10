@@ -3,7 +3,6 @@
  * This test helps identify and fix users who don't have public keys in the database
  */
 
-import { describe, it, before, after } from 'mocha';
 import { expect } from 'chai';
 
 describe('Fix Missing Public Keys', () => {

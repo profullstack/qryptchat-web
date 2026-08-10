@@ -1,7 +1,6 @@
 // Debug script to check the current red dot issue in real-time
 // This will show exactly what's happening with your specific data
 
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
