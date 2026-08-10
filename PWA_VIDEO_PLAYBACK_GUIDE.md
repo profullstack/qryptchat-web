@@ -109,7 +109,7 @@ Navigate to `chrome://flags/` and enable:
 
 ### For PWA Manifest Optimization:
 
-Update your `static/manifest.json`:
+Update your `public/manifest.json`:
 ```json
 {
   "name": "QryptChat - Quantum-Resistant Messaging",
