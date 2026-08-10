@@ -108,4 +108,50 @@ describe('PWA installability', () => {
       expect(sw).toMatch(/url\.origin\s*!==\s*self\.location\.origin/);
     });
   });
+
+  describe('icon pipeline', () => {
+    const generator = readText('scripts/generate-icons.js');
+    const installer = readText('scripts/install-desktop-icons.sh');
+    const manifest = JSON.parse(readText('public/manifest.json'));
+
+    // `public/` is the only directory Next serves. Both scripts used to read and
+    // write `static/` (the SvelteKit holdover), so regenerating icons updated a
+    // tree nobody served while the served one silently went stale.
+    it('generates into the directory Next actually serves', () => {
+      expect(generator).toMatch(/ICONS_DIR\s*=\s*['"]\.\/public\/icons['"]/);
+      expect(generator).toMatch(/SVG_PATH\s*=\s*['"]\.\/public\/favicon\.svg['"]/);
+    });
+
+    it('no longer points any tooling at static/', () => {
+      expect(generator).not.toMatch(/\.\/static\//);
+      expect(installer).not.toMatch(/\.\/static\//);
+    });
+
+    const generated = [...generator.matchAll(/name:\s*'([^']+)'/g)].map((m) => m[1]);
+
+    it('regenerates every icon the manifest points at', () => {
+      for (const icon of manifest.icons) {
+        expect(generated).toContain(icon.src.replace('/icons/', ''));
+      }
+    });
+
+    it('regenerates every icon the layout points at', () => {
+      const layout = readText('src/app/layout.jsx');
+      const referenced = [...layout.matchAll(/'\/icons\/([a-z0-9-]+\.png)'/g)].map((m) => m[1]);
+
+      expect(referenced.length).toBeGreaterThan(0);
+      for (const name of referenced) {
+        expect(generated).toContain(name);
+      }
+    });
+
+    it('copies desktop-launcher icons from files that exist', () => {
+      const copied = [...installer.matchAll(/\.\/public\/icons\/([a-z0-9-]+\.png)/g)].map((m) => m[1]);
+
+      expect(copied.length).toBeGreaterThan(0);
+      for (const name of copied) {
+        expect(existsSync(resolve(ROOT, 'public/icons', name))).toBe(true);
+      }
+    });
+  });
 });
