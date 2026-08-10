@@ -3,14 +3,35 @@
  * Basic offline functionality without ES module imports
  */
 
-const CACHE_NAME = 'qryptchat-v1';
+// Bumped to v1 -> v2 so clients running the old cache-first worker drop the
+// stale app shell they precached on install.
+const CACHE_NAME = 'qryptchat-v2';
+const OFFLINE_SHELL = '/';
 const STATIC_CACHE_URLS = [
-  '/',
+  OFFLINE_SHELL,
   '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   '/favicon.svg'
 ];
+
+/**
+ * Content-addressed or rarely-changing assets that are safe to serve from cache.
+ * Everything else (API routes, SSE streams, auth) must always hit the network —
+ * encrypted message payloads must never come back from a cache.
+ * @param {URL} url
+ * @returns {boolean}
+ */
+function isCacheableAsset(url) {
+  if (url.pathname.startsWith('/api/')) return false;
+  return (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/fonts/') ||
+    url.pathname === '/manifest.json' ||
+    /\.(?:png|jpe?g|svg|webp|ico|woff2?|css)$/.test(url.pathname)
+  );
+}
 
 // Install event - cache static resources
 self.addEventListener('install', (event) => {
@@ -48,14 +69,48 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event
 self.addEventListener('fetch', (event) => {
+  const { request } = event;
+
+  // Never intercept uploads/mutations or third-party origins (Supabase, analytics).
+  if (request.method !== 'GET') return;
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return;
+  }
+  if (url.origin !== self.location.origin) return;
+
+  // Page loads are network-first with the cached shell as an offline fallback.
+  // Cache-first here pinned the installed app to the HTML captured at install
+  // time, whose hashed Next.js chunks stop existing after the next deploy.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok && url.pathname === OFFLINE_SHELL) {
+            const copy = response.clone();
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_SHELL, copy))
+            );
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(OFFLINE_SHELL);
+          return cached || Response.error();
+        })
+    );
+    return;
+  }
+
+  if (!isCacheableAsset(url)) return;
+
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
+    caches.match(request).then((cached) => cached || fetch(request))
   );
 });
 
