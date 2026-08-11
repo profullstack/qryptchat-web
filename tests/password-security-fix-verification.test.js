@@ -10,7 +10,7 @@ import { keyManager } from '../src/lib/crypto/key-manager.js';
 describe('Password Security Fix Verification', () => {
 	let originalKeys;
 	
-	before(async () => {
+	beforeAll(async () => {
 		// Initialize the crypto systems
 		await keyManager.initialize();
 		await postQuantumEncryption.initialize();
@@ -25,7 +25,7 @@ describe('Password Security Fix Verification', () => {
 		originalKeys = await postQuantumEncryption.exportUserKeys();
 	});
 	
-	after(async () => {
+	afterAll(async () => {
 		// Restore original keys
 		if (originalKeys) {
 			await postQuantumEncryption.clearUserKeys();

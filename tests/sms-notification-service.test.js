@@ -3,7 +3,6 @@
  */
 
 import { expect } from 'chai';
-import { describe, it, beforeEach, afterEach } from 'mocha';
 import { SMSNotificationService } from '../src/lib/services/sms-notification-service.js';
 
 describe('SMSNotificationService', () => {

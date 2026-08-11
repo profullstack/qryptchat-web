@@ -3,7 +3,6 @@
  * This test simulates the complete data flow from client to database and back
  */
 
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { postQuantumEncryption } from '../src/lib/crypto/post-quantum-encryption.js';
 

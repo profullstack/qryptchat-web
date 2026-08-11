@@ -1,7 +1,6 @@
 // Comprehensive test suite for disappearing messages system
 // Tests the complete workflow from message creation to expiry
 
-import { describe, it, before, after, beforeEach } from 'mocha';
 import { expect } from 'chai';
 import { createServiceRoleClient } from '../src/lib/supabase/service-role.js';
 
@@ -30,7 +29,7 @@ describe('Disappearing Messages System', () => {
     }
   ];
 
-  before(async () => {
+  beforeAll(async () => {
     console.log('Setting up disappearing messages test environment...');
     
     // Clean up any existing test data
@@ -71,7 +70,7 @@ describe('Disappearing Messages System', () => {
     console.log(`Created ${testUsers.length} test users`);
   });
 
-  after(async () => {
+  afterAll(async () => {
     console.log('Cleaning up test environment...');
     await cleanupTestData();
   });

@@ -3,7 +3,6 @@
  * This test checks if users are getting the correct encrypted copies
  */
 
-import { describe, it, before, after } from 'mocha';
 import { expect } from 'chai';
 
 describe('Message Retrieval Debug', () => {
@@ -12,7 +11,7 @@ describe('Message Retrieval Debug', () => {
   let testConversation;
   let testMessage;
 
-  before(async () => {
+  beforeAll(async () => {
     // This test requires a real database connection to debug the issue
     console.log('🔍 [DEBUG] This test requires manual database inspection');
     console.log('🔍 [DEBUG] Check the following SQL queries in your database:');

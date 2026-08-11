@@ -1,7 +1,6 @@
 // Debug script to find messages missing message_status entries
 // This will help identify why red dots aren't disappearing
 
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import { createClient } from '@supabase/supabase-js';
 

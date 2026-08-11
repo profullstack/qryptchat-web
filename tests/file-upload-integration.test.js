@@ -1,5 +1,4 @@
 // tests/file-upload-integration.test.js - Integration tests for file upload system
-import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 import { fileEncryption } from '../src/lib/crypto/file-encryption.js';
 

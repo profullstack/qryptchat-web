@@ -3,7 +3,6 @@
  * This test helps identify if users have different keys locally vs database
  */
 
-import { describe, it } from 'mocha';
 import { expect } from 'chai';
 
 describe('Key Mismatch Debug', () => {

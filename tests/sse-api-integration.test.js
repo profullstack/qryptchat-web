@@ -7,20 +7,19 @@
  */
 
 import { expect } from 'chai';
-import { describe, it, before, after, beforeEach, afterEach } from 'mocha';
 
 describe('SSE + POST API Integration Tests', () => {
 	let testUser;
 	let authToken;
 	let conversationId;
 
-	before(async () => {
+	beforeAll(async () => {
 		console.log('🧪 Setting up SSE + POST API integration tests...');
 		// TODO: Set up test user and authentication
 		// This would typically involve creating a test user in the database
 	});
 
-	after(async () => {
+	afterAll(async () => {
 		console.log('🧹 Cleaning up SSE + POST API integration tests...');
 		// TODO: Clean up test data
 	});

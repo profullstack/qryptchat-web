@@ -3,7 +3,6 @@
  * Ensures existing users can login with just phone number without username requirement
  */
 
-import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 import fetch from 'node-fetch';
 

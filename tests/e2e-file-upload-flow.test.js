@@ -1,5 +1,4 @@
 // tests/e2e-file-upload-flow.test.js - End-to-end tests for complete file upload flow
-import { describe, it, beforeEach, afterEach } from 'mocha';
 import { expect } from 'chai';
 
 describe('End-to-End File Upload Flow', () => {

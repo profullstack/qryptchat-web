@@ -4,7 +4,6 @@
  */
 
 import { expect } from 'chai';
-import { describe, it, beforeEach } from 'mocha';
 
 describe('SMS Notification System Integration', () => {
   let mockSupabase;

@@ -7,7 +7,6 @@
  */
 
 import { expect } from 'chai';
-import { describe, it, before, after, beforeEach, afterEach } from 'mocha';
 
 describe('Chat Store Unit Tests', () => {
 	// Note: These tests require a browser environment or JSDOM
