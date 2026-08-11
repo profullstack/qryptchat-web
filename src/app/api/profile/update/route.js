@@ -53,11 +53,11 @@ export async function POST(request, { params } = {}) {
 		console.log('Authenticated user from JWT:', { id: user.id, email: user.email, phone: user.phone });
 
 		// Validate input
-		if (bio && typeof bio !== 'string') {
+		if (bio !== undefined && typeof bio !== 'string') {
 			return NextResponse.json({ error: 'Bio must be a string' }, { status: 400 });
 		}
 
-		if (website && typeof website !== 'string') {
+		if (website !== undefined && typeof website !== 'string') {
 			return NextResponse.json({ error: 'Website must be a string' }, { status: 400 });
 		}
 

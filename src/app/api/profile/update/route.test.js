@@ -32,11 +32,11 @@ vi.mock('@/lib/supabase.js', () => ({
 	createSupabaseServerClient: mocks.createSupabaseServerClient
 }));
 
-function profileRequest(authorization) {
+function profileRequest(authorization, body = { bio: 'hello' }) {
 	return new Request('https://example.com/api/profile/update', {
 		method: 'POST',
 		headers: authorization ? { authorization } : {},
-		body: JSON.stringify({ bio: 'hello' })
+		body: JSON.stringify(body)
 	});
 }
 
@@ -91,4 +91,24 @@ describe('profile update bearer authentication', () => {
 		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
 		expect(mocks.getUser).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		['bio', null, 'Bio must be a string'],
+		['bio', false, 'Bio must be a string'],
+		['bio', 0, 'Bio must be a string'],
+		['website', null, 'Website must be a string'],
+		['website', false, 'Website must be a string'],
+		['website', 0, 'Website must be a string']
+	])(
+		'rejects falsy non-string %s values instead of throwing',
+		async (field, value, expectedError) => {
+			const { POST } = await import('./route.js');
+
+			const response = await POST(profileRequest('Bearer access-token-123', { [field]: value }));
+			const body = await response.json();
+
+			expect(response.status).toBe(400);
+			expect(body.error).toBe(expectedError);
+		}
+	);
 });
