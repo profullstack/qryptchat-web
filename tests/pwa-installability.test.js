@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import sharp from 'sharp';
 
 const ROOT = resolve(process.cwd());
 const readText = (p) => readFileSync(resolve(ROOT, p), 'utf8');
@@ -127,7 +128,15 @@ describe('PWA installability', () => {
       expect(installer).not.toMatch(/\.\/static\//);
     });
 
-    const generated = [...generator.matchAll(/name:\s*'([^']+)'/g)].map((m) => m[1]);
+    // ICON_SIZES entries carry a literal `name:`; the maskable family is built
+    // from MASKABLE_SIZES with a templated filename, so collect both.
+    const maskableSizes = [
+      ...(generator.match(/MASKABLE_SIZES\s*=\s*\[([^\]]*)\]/)?.[1] ?? '').matchAll(/\d+/g)
+    ].map((m) => `icon-maskable-${m[0]}x${m[0]}.png`);
+    const generated = [
+      ...[...generator.matchAll(/name:\s*'([^']+)'/g)].map((m) => m[1]),
+      ...maskableSizes
+    ];
 
     it('regenerates every icon the manifest points at', () => {
       for (const icon of manifest.icons) {
@@ -152,6 +161,76 @@ describe('PWA installability', () => {
       for (const name of copied) {
         expect(existsSync(resolve(ROOT, 'public/icons', name))).toBe(true);
       }
+    });
+  });
+
+  // Android masks these to a circle/squircle/teardrop of its choosing and only
+  // guarantees the central circle of 80% diameter survives. Both properties
+  // below were violated when the manifest aimed `purpose: "maskable"` at the
+  // same full-bleed transparent PNGs it used for `purpose: "any"`.
+  describe('maskable icons', () => {
+    const manifest = JSON.parse(readText('public/manifest.json'));
+    const maskable = manifest.icons.filter((icon) =>
+      String(icon.purpose ?? '').split(/\s+/).includes('maskable')
+    );
+
+    it('does not reuse an `any` icon for `maskable`', () => {
+      const anySources = new Set(
+        manifest.icons
+          .filter((icon) => !String(icon.purpose ?? '').split(/\s+/).includes('maskable'))
+          .map((icon) => icon.src)
+      );
+
+      expect(maskable.length).toBeGreaterThan(0);
+      for (const icon of maskable) {
+        expect(anySources.has(icon.src)).toBe(false);
+      }
+    });
+
+    it.each(maskable.map((icon) => icon.src))('%s is fully opaque', async (src) => {
+      const { data, info } = await sharp(resolve(ROOT, 'public', src.replace(/^\//, '')))
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      let minAlpha = 255;
+      for (let i = 3; i < data.length; i += info.channels) {
+        if (data[i] < minAlpha) minAlpha = data[i];
+      }
+
+      // A transparent maskable icon lets the platform mask show through, so the
+      // launcher draws the logo over bare wallpaper instead of a solid tile.
+      expect(minAlpha).toBe(255);
+    });
+
+    it.each(maskable.map((icon) => icon.src))('%s keeps its artwork inside the safe zone', async (src) => {
+      const { data, info } = await sharp(resolve(ROOT, 'public', src.replace(/^\//, '')))
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const { width, height, channels } = info;
+
+      // Corner pixel is background by construction; anything differing from it
+      // is artwork that the mask could clip.
+      const bg = [data[0], data[1], data[2]];
+      const cx = width / 2;
+      const cy = height / 2;
+      const safeRadius = 0.4 * width;
+      let maxRadius = 0;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * channels;
+          const delta =
+            Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]);
+          if (delta < 24) continue;
+          const radius = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+          if (radius > maxRadius) maxRadius = radius;
+        }
+      }
+
+      expect(maxRadius).toBeGreaterThan(0);
+      expect(maxRadius).toBeLessThanOrEqual(safeRadius);
     });
   });
 });

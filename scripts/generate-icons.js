@@ -63,6 +63,86 @@ const ICON_SIZES = [
 const SVG_PATH = './public/favicon.svg';
 const ICONS_DIR = './public/icons';
 
+// Maskable icons are a separate family from the ones above, not a re-label of
+// them. Android applies a platform mask (circle, squircle, teardrop...) and
+// guarantees only the central circle of 80% diameter survives, so a maskable
+// icon needs two things the `any` icons must NOT have: an opaque background,
+// and the artwork pulled inside that safe circle. The manifest used to point
+// both purposes at the same full-bleed transparent file, which meant Android
+// cropped 4.3% of the logo and showed the mask through the transparent pixels.
+const MASKABLE_SIZES = [192, 512];
+
+// The spec's safe circle has radius 0.40 of the icon width. Targeting 0.39
+// leaves a hair of slack: scaling to exactly 0.40 lands antialiased edge
+// pixels a fraction over the line once the artwork is downscaled to integer
+// dimensions, which the generated-icon test then flags.
+const SAFE_ZONE_RATIO = 0.39;
+
+// Matches manifest.json's `background_color`, so the installed icon and the
+// splash screen it launches into share a background.
+const MASKABLE_BACKGROUND = { r: 255, g: 255, b: 255, alpha: 1 };
+
+/**
+ * Distance from the centre of `buffer` to its farthest non-transparent pixel.
+ *
+ * Scaling by this rather than by the bounding box matters because the artwork
+ * is an irregular glyph: its bounding-box corners are empty, so the box-based
+ * rule would shrink it further than the mask actually requires.
+ */
+async function contentRadius(buffer) {
+  const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+  const cx = width / 2;
+  const cy = height / 2;
+  let maxRadius = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * channels + 3] < 16) continue;
+      const radius = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      if (radius > maxRadius) maxRadius = radius;
+    }
+  }
+
+  return maxRadius;
+}
+
+/**
+ * Render one maskable icon: trim the artwork to its opaque bounds, scale it so
+ * nothing escapes the safe circle, centre it, and flatten onto a solid colour.
+ *
+ * Trimming also re-centres the glyph — it sits off-centre in favicon.svg's
+ * viewBox (82px of padding on the left, 50px on the right), which a plain
+ * resize preserves and the mask then crops unevenly.
+ */
+async function generateMaskableIcon(svgBuffer, size) {
+  // Render at 2x so the trim finds precise edges before anything is downscaled.
+  const rendered = await sharp(svgBuffer, { density: 600 })
+    .resize(size * 2, size * 2, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+
+  const trimmed = await sharp(rendered).trim({ threshold: 1 }).png().toBuffer();
+  const { width, height } = await sharp(trimmed).metadata();
+  const scale = (SAFE_ZONE_RATIO * size) / (await contentRadius(trimmed));
+  const artWidth = Math.max(1, Math.round(width * scale));
+  const artHeight = Math.max(1, Math.round(height * scale));
+
+  const art = await sharp(trimmed).resize(artWidth, artHeight, { fit: 'fill' }).png().toBuffer();
+
+  return sharp({
+    create: { width: size, height: size, channels: 4, background: MASKABLE_BACKGROUND }
+  })
+    .composite([{
+      input: art,
+      left: Math.round((size - artWidth) / 2),
+      top: Math.round((size - artHeight) / 2)
+    }])
+    .flatten({ background: MASKABLE_BACKGROUND })
+    .png({ quality: 95, compressionLevel: 9 })
+    .toBuffer();
+}
+
 async function generateIcons() {
   try {
     console.log('🎨 Generating PNG icons from SVG...');
@@ -81,14 +161,10 @@ async function generateIcons() {
       const w = width ?? size;
       const h = height ?? size;
 
-      // `background` only paints the letterbox `fit: 'contain'` adds, and
-      // favicon.svg is square, so for every square icon here it paints nothing.
-      // The old `needsSolidBackground` branch that set an opaque background for
-      // PWA icons was therefore a no-op — the committed icons have always had
-      // transparent pixels. Giving the manifest's maskable 192/512 icons a
-      // genuinely opaque background needs `.flatten()` plus safe-zone padding,
-      // which changes how the installed icon looks; that's a deliberate design
-      // change rather than something to fold into the generator silently.
+      // These stay transparent on purpose. `background` only paints the
+      // letterbox `fit: 'contain'` adds, and favicon.svg is square, so it
+      // paints nothing here — which is right for `purpose: "any"`, favicons
+      // and Windows tiles. Only the maskable family below is flattened.
       await sharp(svgBuffer)
         .resize(w, h, {
           fit: 'contain',
@@ -103,10 +179,17 @@ async function generateIcons() {
       console.log(`✅ Generated ${name} (${w}x${h})`);
     }
     
+    for (const size of MASKABLE_SIZES) {
+      const name = `icon-maskable-${size}x${size}.png`;
+      const buffer = await generateMaskableIcon(svgBuffer, size);
+      await fs.writeFile(path.join(ICONS_DIR, name), buffer);
+      console.log(`✅ Generated ${name} (${size}x${size}, opaque, safe-zone padded)`);
+    }
+
     // favicon-16x16 / favicon-32x32 are part of ICON_SIZES above now; the old
     // extra pass wrote them to static/favicon-{16,32}.png, a path nothing reads.
     console.log('\n🎉 Icon generation complete!');
-    console.log(`📁 Generated ${ICON_SIZES.length} PNG icons in ${ICONS_DIR}/`);
+    console.log(`📁 Generated ${ICON_SIZES.length + MASKABLE_SIZES.length} PNG icons in ${ICONS_DIR}/`);
     
   } catch (error) {
     console.error('❌ Error generating icons:', error);
