@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
 
 
-export async function GET(request, { params } = {}) {
+export async function GET() {
 	try {
 		const supabase = await createSupabaseServerClient();
 		
@@ -12,9 +12,19 @@ export async function GET(request, { params } = {}) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
+		const { data: userProfile, error: profileError } = await supabase
+			.from('users')
+			.select('id')
+			.eq('auth_user_id', user.id)
+			.single();
+
+		if (profileError || !userProfile) {
+			return NextResponse.json({ error: 'User not found' }, { status: 404 });
+		}
+
 		// Call the user groups function
 		const { data, error } = await supabase.rpc('get_user_groups', {
-			user_uuid: user.id
+			user_uuid: userProfile.id
 		});
 
 		if (error) {
