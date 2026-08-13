@@ -142,4 +142,24 @@ describe('settings disappearing messages authentication', () => {
 		expect(mocks.from).not.toHaveBeenCalled();
 		expect(mocks.updateEq).not.toHaveBeenCalled();
 	});
+
+	it('rejects malformed JSON before updating settings', async () => {
+		const { PUT } = await import('./route.js');
+		const malformed = new Request('https://qrypt.chat/api/settings/disappearing-messages', {
+			method: 'PUT',
+			headers: {
+				authorization: 'Bearer valid-token',
+				'content-type': 'application/json'
+			},
+			body: '{"default_message_retention_days":'
+		});
+
+		const response = await PUT(malformed);
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body.error).toBe('Invalid JSON body');
+		expect(mocks.from).not.toHaveBeenCalled();
+		expect(mocks.updateEq).not.toHaveBeenCalled();
+	});
 });
