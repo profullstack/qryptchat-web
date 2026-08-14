@@ -226,9 +226,16 @@ export async function handleSendMessage(ws, message, context) {
 			onlineUsers: roomManager.getOnlineUsers()
 		});
 
-		// Send SMS notifications to inactive participants
+		// Send SMS notifications to inactive participants.
+		// Uses the service-role client, not the caller's: this path reads other
+		// participants' phone numbers and writes sms_notifications rows on their
+		// behalf, which is server-side work. Passing the caller's client here is
+		// what forced get_inactive_participants and log_sms_notification to stay
+		// executable by `authenticated`, and log_sms_notification cannot take an
+		// auth.uid() binding because it is legitimately cross-user. Both are
+		// locked to service_role in 20260814033*.
 		try {
-			const smsService = await createSMSNotificationService(supabase);
+			const smsService = await createSMSNotificationService(getServiceRoleClient());
 			const senderName = user.display_name || user.username || 'Someone';
 			
 			console.log('📨 [SMS] Checking for inactive participants to notify:', {
