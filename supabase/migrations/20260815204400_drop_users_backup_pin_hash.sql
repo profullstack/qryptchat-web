@@ -1,7 +1,11 @@
 -- Step 4b of the 2026-08 security remediation.
 -- Advisory: GHSA-jpfm-vrpc-p6rr
 --
--- Second half of 20260815120000_move_backup_pins_to_service_role_table.sql.
+-- Second half of 20260815204334_move_backup_pins_to_service_role_table.sql.
+--
+-- NOTE: when this is applied via the Supabase MCP, the ledger will restamp it
+-- with its own timestamp. Rename this file to match afterwards, or
+-- `supabase db push` will rerun it.
 -- That migration created the service-role-only `user_backup_pins` table and
 -- carried across which users have a PIN set. This one removes the column that
 -- every logged-in account could read via `users_select_authenticated`.
