@@ -67,7 +67,7 @@ ON CONFLICT (user_id) DO NOTHING;
 
 -- --------------------------------------------------------------------------
 -- The `users.backup_pin_hash` column itself is dropped by the NEXT migration,
--- 20260815204400_drop_users_backup_pin_hash.sql. It is deliberately a separate
+-- 20260815210532_drop_users_backup_pin_hash.sql. It is deliberately a separate
 -- step: this migration is additive and safe to apply to a running deployment,
 -- whereas the drop must not land until the application code that stopped
 -- reading that column has shipped.
