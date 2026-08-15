@@ -2,8 +2,15 @@
 // Handles setting and checking the user's backup PIN hash
 
 import { NextResponse } from 'next/server';
+import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
+import { promisify } from 'node:util';
 import { createClient } from '@supabase/supabase-js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
+
+// node:crypto is required for scrypt, so pin this route to the Node runtime.
+export const runtime = 'nodejs';
+
+const scrypt = promisify(scryptCallback);
 
 let supabaseServiceRole = null;
 function getServiceRoleClient() {
@@ -94,17 +101,53 @@ async function authenticateUser(request) {
 	}
 }
 
+// scrypt work factors. N=16384/r=8/p=1 is the Node default and costs ~16MB and
+// tens of milliseconds per derivation -- enough to make an offline sweep of the
+// 6-12 digit PIN keyspace impractical per user, and the per-user salt means
+// there is no shared work across users.
+const SCRYPT_N = 16384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_SALT_BYTES = 16;
+export const PIN_ALGORITHM = `scrypt-n${SCRYPT_N}-r${SCRYPT_R}-p${SCRYPT_P}`;
+
 /**
- * Hash a PIN using SHA-256
+ * Derive a PIN hash using scrypt and a per-user random salt.
+ *
+ * Replaces the previous unsalted `crypto.subtle.digest('SHA-256', pin)`, which
+ * a rainbow table over the numeric PIN keyspace reversed instantly once the
+ * hash column was readable (GHSA-jpfm-vrpc-p6rr).
+ *
  * @param {string} pin
- * @returns {Promise<string>} hex-encoded hash
+ * @param {string} [saltHex] existing salt, hex-encoded; a new one is generated when omitted
+ * @returns {Promise<{hash: string, salt: string, algorithm: string}>}
  */
-async function hashPin(pin) {
-	const encoder = new TextEncoder();
-	const data = encoder.encode(pin);
-	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+async function hashPin(pin, saltHex) {
+	const salt = saltHex ?? randomBytes(SCRYPT_SALT_BYTES).toString('hex');
+	const derived = /** @type {Buffer} */ (
+		await scrypt(pin, salt, SCRYPT_KEYLEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P })
+	);
+	return { hash: derived.toString('hex'), salt, algorithm: PIN_ALGORITHM };
+}
+
+/**
+ * Resolve the internal users.id for a Supabase Auth user.
+ * @param {{id: string}} user
+ * @returns {Promise<{userId?: string, error?: string}>}
+ */
+async function resolveInternalUserId(user) {
+	const { data, error } = await getServiceRoleClient()
+		.from('users')
+		.select('id')
+		.eq('auth_user_id', user.id)
+		.single();
+
+	if (error || !data?.id) {
+		return { error: error?.message ?? 'User record not found' };
+	}
+
+	return { userId: data.id };
 }
 
 /**
@@ -118,18 +161,27 @@ export async function GET(request) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
+		const { userId, error: lookupError } = await resolveInternalUserId(user);
+		if (lookupError || !userId) {
+			console.error('Error checking backup PIN:', lookupError);
+			return NextResponse.json({ error: 'Failed to check backup PIN' }, { status: 500 });
+		}
+
+		// PIN material lives in user_backup_pins, which only the service role can
+		// reach. A row's existence is what marks a PIN as set -- rows migrated from
+		// the old unsalted column carry NULL hashes on purpose.
 		const { data, error } = await getServiceRoleClient()
-			.from('users')
-			.select('backup_pin_hash')
-			.eq('auth_user_id', user.id)
-			.single();
+			.from('user_backup_pins')
+			.select('user_id')
+			.eq('user_id', userId)
+			.maybeSingle();
 
 		if (error) {
 			console.error('Error checking backup PIN:', error);
 			return NextResponse.json({ error: 'Failed to check backup PIN' }, { status: 500 });
 		}
 
-		return NextResponse.json({ hasPin: !!data?.backup_pin_hash });
+		return NextResponse.json({ hasPin: !!data });
 	} catch (error) {
 		console.error('Error in GET /api/auth/backup-pin:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -164,12 +216,23 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'PIN must contain only digits' }, { status: 400 });
 		}
 
-		const pinHash = await hashPin(pin);
+		const { userId, error: lookupError } = await resolveInternalUserId(user);
+		if (lookupError || !userId) {
+			console.error('Error setting backup PIN:', lookupError);
+			return NextResponse.json({ error: 'Failed to set backup PIN' }, { status: 500 });
+		}
+
+		const { hash, salt, algorithm } = await hashPin(pin);
 
 		const { error } = await getServiceRoleClient()
-			.from('users')
-			.update({ backup_pin_hash: pinHash })
-			.eq('auth_user_id', user.id);
+			.from('user_backup_pins')
+			.upsert({
+				user_id: userId,
+				pin_hash: hash,
+				pin_salt: salt,
+				algorithm,
+				updated_at: new Date().toISOString()
+			}, { onConflict: 'user_id' });
 
 		if (error) {
 			console.error('Error setting backup PIN:', error);

@@ -13,7 +13,8 @@ export async function GET(request, { params } = {}) {
     // read cannot rely on the caller's session. RLS on `users` is restricted to
     // the `authenticated` role, so use the service role and keep the explicit
     // column list below as the boundary — never widen it to `*`, and never add
-    // phone_number / backup_pin_hash / salt.
+    // phone_number / salt. (backup_pin_hash no longer lives on `users`; PIN
+    // material moved to the service-role-only user_backup_pins table.)
     const supabase = getServiceRoleClient();
 
     const { data, error } = await supabase
