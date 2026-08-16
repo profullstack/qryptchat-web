@@ -128,6 +128,10 @@ CREATE POLICY users_select_authenticated ON public.users
 DROP POLICY IF EXISTS "Users can read conversations for participation check" ON public.conversations;
 DROP POLICY IF EXISTS conversations_select_policy                            ON public.conversations;
 DROP POLICY IF EXISTS "Users can read own conversations"                     ON public.conversations;
+-- Production already carries a hand-applied `conversations_select_participant` (the same
+-- out-of-band patching that produced the drift in QRY-01), so this has to drop before it
+-- creates or the migration aborts with 42710 against prod while succeeding on a fresh DB.
+DROP POLICY IF EXISTS conversations_select_participant                       ON public.conversations;
 
 CREATE POLICY conversations_select_participant ON public.conversations
     FOR SELECT TO authenticated
@@ -140,8 +144,9 @@ CREATE POLICY conversations_select_participant ON public.conversations
 -- NEW-02: `conversation_participants` was `USING (true)`, exposing the whole
 -- social graph. Restrict reads to conversations the caller is actually in.
 -- --------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Users can read all participants"        ON public.conversation_participants;
+DROP POLICY IF EXISTS "Users can read all participants"          ON public.conversation_participants;
 DROP POLICY IF EXISTS "Users can read conversation participants" ON public.conversation_participants;
+DROP POLICY IF EXISTS conversation_participants_select_scoped    ON public.conversation_participants;
 
 CREATE POLICY conversation_participants_select_scoped ON public.conversation_participants
     FOR SELECT TO authenticated
@@ -159,8 +164,9 @@ CREATE POLICY conversation_participants_select_scoped ON public.conversation_par
 -- someone already in it -- which still covers the create-then-add-participants
 -- flow, since the creator is the one doing the adding.
 -- --------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Authenticated users can add participants"      ON public.conversation_participants;
-DROP POLICY IF EXISTS "Users can add participants to conversations"   ON public.conversation_participants;
+DROP POLICY IF EXISTS "Authenticated users can add participants"    ON public.conversation_participants;
+DROP POLICY IF EXISTS "Users can add participants to conversations" ON public.conversation_participants;
+DROP POLICY IF EXISTS conversation_participants_insert_scoped       ON public.conversation_participants;
 
 CREATE POLICY conversation_participants_insert_scoped ON public.conversation_participants
     FOR INSERT TO authenticated
