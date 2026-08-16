@@ -27,7 +27,17 @@ export default async function AdminPage() {
   const [{ data: integrations }, { data: posts }] = await Promise.all([
     svc.from('autoblog_integrations')
       .select('id, name, kind, access_token, request_count, last_used_at, created_at')
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => ({
+        // The raw bearer token must never reach the browser: anything handed to a client
+        // component is serialised into the RSC payload, where masking in JSX is cosmetic.
+        // Only a non-reversible hint travels over the wire.
+        data: data?.map(({ access_token, ...rest }) => ({
+          ...rest,
+          token_hint: access_token ? `${access_token.slice(0, 4)}…${access_token.slice(-4)}` : '',
+        })),
+        error,
+      })),
     svc.from('blog_posts')
       .select('id, slug, title, source, published_at')
       .order('published_at', { ascending: false })

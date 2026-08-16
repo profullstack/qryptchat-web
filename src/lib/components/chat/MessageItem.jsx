@@ -16,7 +16,10 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
   const detectedFormat = detectTextFormat(content);
   const isAsciiArt = message.metadata?.isAsciiArt === true || detectedFormat.type === 'ascii-art';
   const isCodeBlock = detectedFormat.type === 'code' || detectedFormat.language !== null;
-  const contentWithLinks = detectedFormat.type === 'plain' ? convertUrlsToLinks(content) : content;
+  // Message content is attacker-controlled. It only ever reaches the HTML sink below through
+  // convertUrlsToLinks(), which escapes every character it did not generate itself. Never pass
+  // `content` here directly, whatever the detected format says.
+  const contentWithLinks = convertUrlsToLinks(content);
 
   function formatTime(ts) {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

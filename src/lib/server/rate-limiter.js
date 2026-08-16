@@ -97,8 +97,17 @@ export const smsGlobalDailyLimiter = new RateLimiter({
 	windowMs: 24 * 60 * 60 * 1000
 });
 
+/**
+ * Hops in front of this process that are ours and therefore trustworthy.
+ *
+ * Defaults to 1 because every shipped deployment of this app (railway.toml, Dockerfile)
+ * runs behind exactly one platform proxy that overwrites X-Forwarded-For. A
+ * direct-to-internet deployment must set TRUSTED_PROXY_COUNT=0 explicitly, which makes
+ * the forwarding headers untrusted rather than merely undocumented.
+ */
 export function parseTrustedProxyCount(value = process.env.TRUSTED_PROXY_COUNT) {
-	const raw = String(value ?? '0').trim();
+	if (value === undefined || value === null || String(value).trim() === '') return 1;
+	const raw = String(value).trim();
 	if (!/^\d+$/.test(raw)) return 0;
 	const count = Number(raw);
 	return Number.isSafeInteger(count) ? count : 0;
@@ -141,16 +150,17 @@ export function getClientIp(request) {
 				return parts[parts.length - trustedProxyCount];
 			}
 		}
+
+		// X-Real-IP is only meaningful once a trusted hop has set it (nginx real_ip and
+		// similar); it is otherwise just another attacker-controlled header.
+		const realIp = request.headers.get('x-real-ip');
+		if (realIp) return realIp;
 	}
 
-	// Fallback: use X-Real-IP (set by nginx real_ip module after trusted proxy
-	// processing) or fall through to 'unknown'.  When TRUSTED_PROXY_COUNT is 0
-	// (default / direct internet deployment) we deliberately skip the potentially
-	// spoofed X-Forwarded-For header and rely on X-Real-IP only.
-	return (
-		request.headers.get('x-real-ip') ??
-		'unknown'
-	);
+	// No trusted proxy: every forwarding header is attacker-controlled, and honouring one
+	// would turn IP rate limiting into a no-op — rotate the header, get a fresh bucket.
+	// Fall back to the peer address the runtime observed, which no client can set.
+	return request.ip ?? 'unknown';
 }
 
 /**

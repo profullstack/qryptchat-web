@@ -263,7 +263,7 @@ export class EncryptedKeyBackup {
 				
 				// Key derivation parameters
 				salt,
-				iterations: 100000,
+				iterations: 600000,
 				
 				// Metadata
 				phoneNumber,

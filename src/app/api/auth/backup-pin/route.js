@@ -101,13 +101,15 @@ async function authenticateUser(request) {
 	}
 }
 
-// scrypt work factors. N=16384/r=8/p=1 is the Node default and costs ~16MB and
-// tens of milliseconds per derivation -- enough to make an offline sweep of the
-// 6-12 digit PIN keyspace impractical per user, and the per-user salt means
-// there is no shared work across users.
-const SCRYPT_N = 16384;
+// scrypt work factors. N=2^17/r=8/p=1 is OWASP's recommended minimum; the previous
+// N=16384 (Node's default) cost only ~16MB per derivation, which left the 6-12 digit
+// PIN keyspace within reach of an offline GPU sweep. The per-user salt means there is
+// no shared work across users on top of that.
+const SCRYPT_N = 131072;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
+// scrypt needs roughly 128 * N * r bytes; Node's default 32MB cap would reject N=2^17.
+const SCRYPT_MAXMEM = 192 * 1024 * 1024;
 const SCRYPT_KEYLEN = 64;
 const SCRYPT_SALT_BYTES = 16;
 export const PIN_ALGORITHM = `scrypt-n${SCRYPT_N}-r${SCRYPT_R}-p${SCRYPT_P}`;
@@ -126,7 +128,12 @@ export const PIN_ALGORITHM = `scrypt-n${SCRYPT_N}-r${SCRYPT_R}-p${SCRYPT_P}`;
 async function hashPin(pin, saltHex) {
 	const salt = saltHex ?? randomBytes(SCRYPT_SALT_BYTES).toString('hex');
 	const derived = /** @type {Buffer} */ (
-		await scrypt(pin, salt, SCRYPT_KEYLEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P })
+		await scrypt(pin, salt, SCRYPT_KEYLEN, {
+			N: SCRYPT_N,
+			r: SCRYPT_R,
+			p: SCRYPT_P,
+			maxmem: SCRYPT_MAXMEM
+		})
 	);
 	return { hash: derived.toString('hex'), salt, algorithm: PIN_ALGORITHM };
 }
