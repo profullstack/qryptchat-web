@@ -25,6 +25,10 @@ export default function PrivateKeyManager() {
   const [importPassword, setImportPassword] = useState('');
   const [importLoading, setImportLoading] = useState(false);
   const [importAndBackup, setImportAndBackup] = useState(false);
+  const [exportPassword, setExportPassword] = useState('');
+  const [confirmExportPassword, setConfirmExportPassword] = useState('');
+  const [showExportPassword, setShowExportPassword] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   useEffect(() => {
     if (user) { checkKeys(); checkPin(); checkBackup(); }
@@ -109,6 +113,20 @@ export default function PrivateKeyManager() {
     } finally { setImportLoading(false); }
   }
 
+  async function downloadKeys() {
+    if (exportPassword.length < 6) { setError('Export password must be at least 6 characters'); return; }
+    if (exportPassword !== confirmExportPassword) { setError('Export passwords do not match'); return; }
+    setExportLoading(true); setError(''); setSuccess('');
+    try {
+      const encrypted = await privateKeyManager.exportPrivateKeys(exportPassword);
+      const filename = privateKeyManager.generateExportFilename();
+      privateKeyManager.downloadExportedKeys(encrypted, filename);
+      setExportPassword(''); setConfirmExportPassword('');
+      setSuccess(`Downloaded ${filename} — store it somewhere safe. Without this password the file cannot be recovered.`);
+    } catch (err) { setError(err.message || 'Export failed'); }
+    finally { setExportLoading(false); }
+  }
+
   async function setNewPin() {
     if (!pin || pin !== confirmPin || !/^\d{6,12}$/.test(pin)) { setError('PIN must be 6–12 digits and match'); return; }
     setLoading(true); setError(''); setSuccess('');
@@ -185,6 +203,48 @@ export default function PrivateKeyManager() {
                 <button className="btn btn-primary btn-sm" onClick={restoreKeys} disabled={loading || !restorePin}>{loading ? 'Restoring...' : 'Restore Keys'}</button>
               </div>
             )}
+          </>
+        )}
+      </div>
+
+      <div className="pkm-card">
+        <h4>Download Keys to File</h4>
+        {!hasKeys ? (
+          <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)' }}>
+            No keys on this device yet — generate or restore keys before exporting.
+          </p>
+        ) : (
+          <>
+            <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)', marginBottom: '.75rem' }}>
+              Save an encrypted copy of your private keys as a JSON file. The file is encrypted with the
+              password you choose here — nobody, including us, can recover it if you lose that password.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+              <input
+                type={showExportPassword ? 'text' : 'password'}
+                value={exportPassword}
+                onChange={(e) => setExportPassword(e.target.value)}
+                placeholder="Password to encrypt the file (min 6 characters)"
+                className="pkm-input"
+              />
+              <input
+                type={showExportPassword ? 'text' : 'password'}
+                value={confirmExportPassword}
+                onChange={(e) => setConfirmExportPassword(e.target.value)}
+                placeholder="Confirm password"
+                className="pkm-input"
+              />
+              <label className="pkm-label">
+                <input type="checkbox" checked={showExportPassword} onChange={(e) => setShowExportPassword(e.target.checked)} /> Show password
+              </label>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={downloadKeys}
+                disabled={exportLoading || !exportPassword || !confirmExportPassword}
+              >
+                {exportLoading ? 'Preparing download...' : 'Download Encrypted Keys'}
+              </button>
+            </div>
           </>
         )}
       </div>
