@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { detectImageType } from '@/lib/server/detect-image-type.js';
 
 const supabaseAuth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -46,39 +47,34 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 		}
 
-		// Validate file type
-		const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-		if (!allowedTypes.includes(file.type)) {
-			return NextResponse.json({ 
-				error: 'Invalid file type. Please upload JPEG, PNG, WebP, or GIF images only.' 
-			}, { status: 400 });
-		}
-
 		// Validate file size (5MB limit)
 		if (file.size > 5 * 1024 * 1024) {
-			return NextResponse.json({ 
-				error: 'File size too large. Please upload files smaller than 5MB.' 
+			return NextResponse.json({
+				error: 'File size too large. Please upload files smaller than 5MB.'
 			}, { status: 400 });
 		}
 
-		// Generate unique filename
-		const fileExtByType = {
-			'image/jpeg': 'jpg',
-			'image/png': 'png',
-			'image/webp': 'webp',
-			'image/gif': 'gif'
-		};
-		const fileExt = fileExtByType[file.type];
-		const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-
-		// Convert file to buffer for upload
+		// Convert file to buffer so the contents -- not the caller's claim about them --
+		// decide what this is.
 		const fileBuffer = await file.arrayBuffer();
+
+		// `file.type` is just a header the uploader chose, so an attacker could store
+		// arbitrary content under an image content-type and have it served back from the
+		// avatars bucket. Sniff the magic bytes and use only what they say.
+		const detected = detectImageType(new Uint8Array(fileBuffer));
+		if (!detected) {
+			return NextResponse.json({
+				error: 'Invalid file type. Please upload JPEG, PNG, WebP, or GIF images only.'
+			}, { status: 400 });
+		}
+
+		const fileName = `${user.id}/${Date.now()}.${detected.ext}`;
 
 		// Upload to Supabase Storage
 		const { error: uploadError } = await supabase.storage
 			.from('avatars')
 			.upload(fileName, fileBuffer, {
-				contentType: file.type,
+				contentType: detected.mime,
 				cacheControl: '3600',
 				upsert: false
 			});
