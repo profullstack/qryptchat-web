@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { FeedbackWidget } from '@profullstack/stack/feedback';
 import { useThemeStore, themeUtils } from '@/lib/stores/theme.js';
 import { useI18n } from '@/lib/hooks/useI18n.js';
 import { i18nUtils, languages } from '@/lib/stores/i18n.js';
@@ -62,6 +63,14 @@ export default function ClientLayout({ children }) {
           <ActiveCallInterface />
         </>
       )}
+      {/* pathname is passed explicitly so hideOnRoutes tracks client-side
+          navigation — the widget's own detection only reads window.location
+          on first render, which never re-runs from a root layout. */}
+      <FeedbackWidget
+        property="qrypt.chat"
+        pathname={pathname}
+        hideOnRoutes={['/chat', '/chats', '/u', '/anon']}
+      />
       <style>{`
         .app {
           min-height: 100vh;
