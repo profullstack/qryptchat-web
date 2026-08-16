@@ -128,31 +128,40 @@ export class KeySyncService {
 				return false;
 			}
 
-			// Check if key exists in database by trying to fetch it
-			// This is a simple check - if the API returns our own key, it's synced
-			const response = await fetch('/api/crypto/public-keys/all', {
-				method: 'GET',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				console.log('🔑 Cannot check database keys, assuming sync needed');
-				return true;
-			}
-
-			const data = await response.json();
 			const currentUserId = this.getCurrentUserId();
-			
+
 			if (!currentUserId) {
 				console.log('🔑 No current user ID, cannot determine sync status');
 				return false;
 			}
 
-			// Check if our key exists in the database AND matches the local key.
-			// Presence alone isn't enough: after switching browsers / rotating keys
-			// the DB still holds the OLD public key, so a presence-only check would
-			// skip the sync and leave everyone encrypting to a dead key.
-			const dbKey = data.public_keys && data.public_keys[currentUserId];
+			// Ask for our own key specifically rather than scanning the all-keys list.
+			//
+			// The list endpoint returns a bare array of {user_id, public_key} keyed by the
+			// *auth* user id, while getCurrentUserId() returns the internal `users.id`. The
+			// previous code read `data.public_keys[currentUserId]` off that array, which is
+			// undefined twice over -- wrong shape and wrong identity domain -- so this check
+			// reported "not found" on every single login and re-uploaded the local key each
+			// time. On a browser whose keypair had been regenerated that silently replaced
+			// the good published key, and every message anyone sent afterwards was encrypted
+			// to a key the recipient could no longer decrypt with.
+			//
+			// This endpoint takes the internal id and resolves it to auth_user_id server-side,
+			// so there is one identity domain and no list to mis-index.
+			const response = await fetch(
+				`/api/crypto/public-keys?user_id=${encodeURIComponent(currentUserId)}`,
+				{ method: 'GET', credentials: 'include' }
+			);
+
+			if (!response.ok) {
+				// Fail closed: re-uploading is the destructive direction, so an unreadable
+				// answer must not be treated as "the database has nothing".
+				console.log('🔑 Cannot check database keys, leaving the published key alone');
+				return false;
+			}
+
+			const data = await response.json();
+			const dbKey = data?.public_key ?? null;
 
 			if (!dbKey) {
 				console.log('🔑 Public key not found in database, sync needed');
@@ -169,8 +178,10 @@ export class KeySyncService {
 
 		} catch (error) {
 			console.error('🔑 Error checking key sync status:', error);
-			// If we can't check, assume sync is needed to be safe
-			return true;
+			// Publishing is the side with consequences -- it replaces the key everyone
+			// encrypts to. Not knowing the answer is a reason to leave it alone, not to
+			// overwrite it.
+			return false;
 		}
 	}
 
