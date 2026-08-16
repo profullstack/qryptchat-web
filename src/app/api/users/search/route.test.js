@@ -7,11 +7,16 @@ const mocks = vi.hoisted(() => ({
 	or: vi.fn(),
 	neq: vi.fn(),
 	limit: vi.fn(),
-	createSupabaseServerClient: vi.fn()
+	createSupabaseServerClient: vi.fn(),
+	getServiceRoleClient: vi.fn()
 }));
 
 vi.mock('@/lib/supabase.js', () => ({
 	createSupabaseServerClient: mocks.createSupabaseServerClient
+}));
+
+vi.mock('@/lib/supabase/service-role.js', () => ({
+	getServiceRoleClient: mocks.getServiceRoleClient
 }));
 
 describe('user search', () => {
@@ -29,9 +34,11 @@ describe('user search', () => {
 		mocks.neq.mockReturnValue({ limit: mocks.limit });
 		mocks.limit.mockResolvedValue({ data: [], error: null });
 		mocks.createSupabaseServerClient.mockResolvedValue({
-			auth: { getUser: mocks.getUser },
-			from: mocks.from
+			auth: { getUser: mocks.getUser }
 		});
+		// The directory lookup has to outrun the narrowed `users` SELECT policy, so it
+		// runs as the service role once the session has been verified.
+		mocks.getServiceRoleClient.mockReturnValue({ from: mocks.from });
 	});
 
 	it('excludes the authenticated user with the auth_user_id column', async () => {
@@ -41,6 +48,27 @@ describe('user search', () => {
 
 		expect(response.status).toBe(200);
 		expect(mocks.neq).toHaveBeenCalledWith('auth_user_id', 'auth-user-1');
+	});
+
+	// A one-character query matched against phone_number turned this endpoint into an
+	// existence oracle for registered numbers.
+	it('only matches phone numbers once the query is long enough to not be an oracle', async () => {
+		const { GET } = await import('./route.js');
+
+		await GET(new Request('https://example.com/api/users/search?q=555'));
+		expect(mocks.or.mock.calls[0][0]).not.toContain('phone_number');
+
+		vi.clearAllMocks();
+		mocks.getUser.mockResolvedValue({ data: { user: { id: 'auth-user-1' } }, error: null });
+		mocks.from.mockReturnValue({ select: mocks.select });
+		mocks.select.mockReturnValue({ or: mocks.or });
+		mocks.or.mockReturnValue({ neq: mocks.neq });
+		mocks.neq.mockReturnValue({ limit: mocks.limit });
+		mocks.limit.mockResolvedValue({ data: [], error: null });
+		mocks.getServiceRoleClient.mockReturnValue({ from: mocks.from });
+
+		await GET(new Request('https://example.com/api/users/search?q=5551234'));
+		expect(mocks.or.mock.calls[0][0]).toContain('phone_number');
 	});
 
 	it('does not query users when sanitized search text is empty', async () => {

@@ -13,6 +13,19 @@ import { postQuantumEncryption } from './post-quantum-encryption.js';
 const EXPORT_VERSION = '3.0'; // Post-quantum: ChaCha20-Poly1305 + HKDF
 
 /**
+ * PBKDF2-HMAC-SHA256 work factor for newly written exports. OWASP's guidance is
+ * 600,000 iterations; the previous 100,000 left a password-protected key export
+ * cheap enough to attack offline on a GPU.
+ */
+const PBKDF2_ITERATIONS = 600000;
+
+/**
+ * Exports written before the uplift carry no `kdfIterations` field. They must keep
+ * deriving at the count they were written with, or they stop importing entirely.
+ */
+const LEGACY_PBKDF2_ITERATIONS = 100000;
+
+/**
  * Private key import/export manager
  */
 export class PrivateKeyManager {
@@ -77,7 +90,8 @@ export class PrivateKeyManager {
 				encryptedKeys: Base64.encode(ciphertext),
 				pbkdfSalt: Base64.encode(pbkdfSalt),
 				hkdfSalt: Base64.encode(hkdfSalt),
-				nonce: Base64.encode(nonce)
+				nonce: Base64.encode(nonce),
+				kdfIterations: PBKDF2_ITERATIONS
 			};
 
 			// Clear sensitive data from memory
@@ -132,7 +146,8 @@ export class PrivateKeyManager {
 				const hkdfSalt = new Uint8Array(Base64.decode(parsedData.hkdfSalt));
 				const nonce = new Uint8Array(Base64.decode(parsedData.nonce));
 
-				const passwordKey = await this._deriveKeyFromPassword(password, pbkdfSalt);
+				const kdfIterations = parsedData.kdfIterations ?? LEGACY_PBKDF2_ITERATIONS;
+				const passwordKey = await this._deriveKeyFromPassword(password, pbkdfSalt, kdfIterations);
 				const chachaKey = await HKDF.derive(passwordKey, hkdfSalt, 'QryptChat-KeyBackup-ChaCha20', 32);
 
 				let plaintext;
@@ -164,7 +179,11 @@ export class PrivateKeyManager {
 
 				let decryptedBuffer;
 				// Attempt 1: PBKDF2 (current derivation)
-				const pbkdf2Key = await this._deriveKeyFromPassword(password, salt);
+				const pbkdf2Key = await this._deriveKeyFromPassword(
+					password,
+					salt,
+					parsedData.kdfIterations ?? LEGACY_PBKDF2_ITERATIONS
+				);
 				try {
 					decryptedBuffer = await tryDecrypt(pbkdf2Key);
 				} catch {
@@ -240,7 +259,7 @@ export class PrivateKeyManager {
 	 * @returns {Promise<Uint8Array>} Derived key
 	 * @private
 	 */
-	async _deriveKeyFromPassword(password, salt) {
+	async _deriveKeyFromPassword(password, salt, iterations = PBKDF2_ITERATIONS) {
 		// Convert password to bytes
 		const passwordBytes = new TextEncoder().encode(password);
 		
@@ -253,12 +272,13 @@ export class PrivateKeyManager {
 			['deriveKey']
 		);
 
-		// Derive key using PBKDF2 with 100,000+ iterations (OWASP recommendation)
+		// Derive key using PBKDF2; the caller supplies the count recorded with the export
+		// so that older files keep importing at the work factor they were written with.
 		const derivedCryptoKey = await crypto.subtle.deriveKey(
 			{
 				name: 'PBKDF2',
 				salt: salt,
-				iterations: 100000,
+				iterations: iterations,
 				hash: 'SHA-256'
 			},
 			keyMaterial,

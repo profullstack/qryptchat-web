@@ -13,7 +13,6 @@ export function IntegrationsManager({ initial }) {
   const [kind, setKind] = useState("crawlproof");
   const [name, setName] = useState("Crawlproof");
   const [origin, setOrigin] = useState("");
-  const [revealed, setRevealed] = useState({});
   const [copied, setCopied] = useState(null);
   const [error, setError] = useState(null);
   const [justCreatedToken, setJustCreatedToken] = useState(null);
@@ -114,8 +113,6 @@ export function IntegrationsManager({ initial }) {
         ) : (
           <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {items.map((it) => {
-              const show = !!revealed[it.id];
-              const masked = `${it.access_token.slice(0, 8)}…${it.access_token.slice(-4)}`;
               return (
                 <li key={it.id} style={{ borderRadius: "0.375rem", border: `1px solid ${borderColor}`, padding: "0.75rem", fontSize: "0.875rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start" }}>
@@ -132,16 +129,11 @@ export function IntegrationsManager({ initial }) {
                       </div>
                       <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <code style={{ flex: 1, wordBreak: "break-all", borderRadius: "0.25rem", border: `1px solid ${borderColor}`, background: "var(--color-bg-secondary)", padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}>
-                          {show ? it.access_token : masked}
+                          {it.token_hint}
                         </code>
-                        <button type="button" onClick={() => setRevealed((p) => ({ ...p, [it.id]: !p[it.id] }))}
-                          style={{ fontSize: "0.75rem", color: mutedColor, background: "none", border: "none", cursor: "pointer" }}>
-                          {show ? "Hide" : "Reveal"}
-                        </button>
-                        <button type="button" onClick={() => copy(it.id, it.access_token)}
-                          style={{ fontSize: "0.75rem", color: mutedColor, background: "none", border: "none", cursor: "pointer" }}>
-                          {copied === it.id ? "Copied" : "Copy"}
-                        </button>
+                        <span style={{ fontSize: "0.75rem", color: mutedColor }}>
+                          shown once at creation
+                        </span>
                       </div>
                     </div>
                     <button type="button" onClick={() => onRevoke(it)} disabled={pending}

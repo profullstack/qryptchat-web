@@ -12,10 +12,10 @@ export class MasterKeyDerivation {
 	 * Derive master key from phone number and PIN
 	 * @param {string} phoneNumber - User's phone number
 	 * @param {string} pin - User's PIN or password
-	 * @param {number} iterations - PBKDF2 iterations (default: 100000)
+	 * @param {number} iterations - PBKDF2 iterations (default: 600000)
 	 * @returns {Promise<Uint8Array>} 256-bit master key
 	 */
-	static async deriveFromCredentials(phoneNumber, pin, iterations = 100000) {
+	static async deriveFromCredentials(phoneNumber, pin, iterations = 600000) {
 		if (typeof window === 'undefined') {
 			throw new Error('Master key derivation only available in browser');
 		}
@@ -74,7 +74,7 @@ export class MasterKeyDerivation {
 	 * @param {number} iterations - PBKDF2 iterations
 	 * @returns {Promise<Uint8Array>} 256-bit master key
 	 */
-	static async deriveWithSalt(phoneNumber, pin, salt, iterations = 100000) {
+	static async deriveWithSalt(phoneNumber, pin, salt, iterations = 600000) {
 		if (typeof window === 'undefined') {
 			throw new Error('Master key derivation only available in browser');
 		}

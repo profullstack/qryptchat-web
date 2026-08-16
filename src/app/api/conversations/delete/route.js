@@ -1,8 +1,11 @@
 /**
  * @fileoverview Delete Conversation API Endpoint
- * Handles removing a user's participation and their data from a conversation
- * For direct messages: deletes the entire conversation if user is a participant
- * For groups: only removes the user's participation and their messages/files
+ * Handles removing a user's participation and their data from a conversation.
+ *
+ * A participant may only destroy rows they own — their own messages, their own file
+ * attachments and their own participation — whatever the conversation type. The shared
+ * conversation row and anything still belonging to other people is removed only once the
+ * last active participant has left, at which point there is nobody left to lose data.
  */
 
 import { NextResponse } from 'next/server';
@@ -84,42 +87,63 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return NextResponse.json({ error: 'Failed to fetch conversation details' }, { status: 500 });
 		}
 
-		const isDirectMessage = conversation.type === 'direct';
+		// Every participant — direct or group — may only remove what belongs to them.
+		// Dependent rows (deliveries, message_recipients, message_status, encrypted_files)
+		// are ON DELETE CASCADE from messages, so deleting the sender's own messages is enough.
+		const { error: ownMessagesError } = await supabase
+			.from('messages')
+			.delete()
+			.eq('conversation_id', conversationId)
+			.eq('sender_id', internalUserId);
 
-		if (isDirectMessage) {
-			// For direct messages, delete everything for all participants
-			console.log(`Deleting direct message conversation ${conversationId} for all participants`);
+		if (ownMessagesError) {
+			console.error('Error deleting user messages:', ownMessagesError);
+			return NextResponse.json({ error: 'Failed to delete your messages' }, { status: 500 });
+		}
 
-			// Use service role client to bypass RLS policies for deletion
-			const serviceClient = getServiceRoleClient();
-			console.log('🔑 Using service role client to bypass RLS for deletion');
+		const { error: ownFilesError } = await supabase
+			.from('file_attachments')
+			.delete()
+			.eq('conversation_id', conversationId)
+			.eq('uploaded_by', internalUserId);
 
-			// Step 1: Get all message IDs for this conversation
-			const { data: messages, error: messagesQueryError } = await serviceClient
-				.from('messages')
-				.select('id')
-				.eq('conversation_id', conversationId);
+		if (ownFilesError) {
+			console.error('Error deleting user file attachments:', ownFilesError);
+		}
 
-			if (messagesQueryError) {
-				console.error('Error querying messages:', messagesQueryError);
-				return NextResponse.json({ error: 'Failed to query messages' }, { status: 500 });
-			}
+		const { error: leaveError } = await supabase
+			.from('conversation_participants')
+			.delete()
+			.eq('conversation_id', conversationId)
+			.eq('user_id', internalUserId);
 
-			const messageIds = messages?.map(m => m.id) || [];
+		if (leaveError) {
+			console.error('Error removing user participation:', leaveError);
+			return NextResponse.json({ error: 'Failed to leave conversation' }, { status: 500 });
+		}
 
-			// Step 2: Delete SMS notifications (references conversation_id and message_id)
-			if (messageIds.length > 0) {
-				const { error: smsError } = await serviceClient
-					.from('sms_notifications')
-					.delete()
-					.in('message_id', messageIds);
+		// Garbage-collect the shared conversation only once nobody is left in it.
+		const serviceClient = getServiceRoleClient();
+		const { data: remaining, error: remainingError } = await serviceClient
+			.from('conversation_participants')
+			.select('id')
+			.eq('conversation_id', conversationId)
+			.is('left_at', null)
+			.limit(1);
 
-				if (smsError) {
-					console.error('Error deleting SMS notifications:', smsError);
-				}
-			}
+		if (remainingError) {
+			console.error('Error counting remaining participants:', remainingError);
+			return NextResponse.json({ error: 'Failed to finalise deletion' }, { status: 500 });
+		}
 
-			// Also delete SMS notifications by conversation_id
+		const isOrphaned = (remaining?.length ?? 0) === 0;
+		console.log(
+			`🗑️ ${conversation.type} conversation ${conversationId}: caller removed, orphaned=${isOrphaned}`
+		);
+
+		if (isOrphaned) {
+			// Nobody is left in this conversation, so the leftovers belong to no one. Rows that
+			// hang off messages cascade; the rest are cleaned up explicitly.
 			const { error: smsConvError } = await serviceClient
 				.from('sms_notifications')
 				.delete()
@@ -129,55 +153,6 @@ export const POST = withAuth(async ({ request, locals }) => {
 				console.error('Error deleting SMS notifications by conversation:', smsConvError);
 			}
 
-			// Step 3: Delete deliveries (references message_id)
-			if (messageIds.length > 0) {
-				const { error: deliveriesError } = await serviceClient
-					.from('deliveries')
-					.delete()
-					.in('message_id', messageIds);
-
-				if (deliveriesError) {
-					console.error('Error deleting deliveries:', deliveriesError);
-				}
-			}
-
-			// Step 4: Delete message_recipients (references message_id)
-			if (messageIds.length > 0) {
-				const { error: recipientsError } = await serviceClient
-					.from('message_recipients')
-					.delete()
-					.in('message_id', messageIds);
-
-				if (recipientsError) {
-					console.error('Error deleting message recipients:', recipientsError);
-				}
-			}
-
-			// Step 5: Delete message_status (references message_id)
-			if (messageIds.length > 0) {
-				const { error: statusError } = await serviceClient
-					.from('message_status')
-					.delete()
-					.in('message_id', messageIds);
-
-				if (statusError) {
-					console.error('Error deleting message status:', statusError);
-				}
-			}
-
-			// Step 6: Delete encrypted_files (references message_id)
-			if (messageIds.length > 0) {
-				const { error: encryptedFilesError } = await serviceClient
-					.from('encrypted_files')
-					.delete()
-					.in('message_id', messageIds);
-
-				if (encryptedFilesError) {
-					console.error('Error deleting encrypted files:', encryptedFilesError);
-				}
-			}
-
-			// Step 7: Delete all messages
 			const { error: messagesError } = await serviceClient
 				.from('messages')
 				.delete()
@@ -188,7 +163,6 @@ export const POST = withAuth(async ({ request, locals }) => {
 				return NextResponse.json({ error: 'Failed to delete messages' }, { status: 500 });
 			}
 
-			// Step 8: Delete typing_indicators
 			const { error: typingError } = await serviceClient
 				.from('typing_indicators')
 				.delete()
@@ -198,7 +172,6 @@ export const POST = withAuth(async ({ request, locals }) => {
 				console.error('Error deleting typing indicators:', typingError);
 			}
 
-			// Step 9: Delete all participants
 			const { error: participantsError } = await serviceClient
 				.from('conversation_participants')
 				.delete()
@@ -209,7 +182,6 @@ export const POST = withAuth(async ({ request, locals }) => {
 				return NextResponse.json({ error: 'Failed to delete participants' }, { status: 500 });
 			}
 
-			// Step 10: Delete the conversation
 			const { error: conversationError } = await serviceClient
 				.from('conversations')
 				.delete()
@@ -220,50 +192,10 @@ export const POST = withAuth(async ({ request, locals }) => {
 				return NextResponse.json({ error: 'Failed to delete conversation' }, { status: 500 });
 			}
 
-			console.log(`✅ Successfully deleted direct message conversation ${conversationId}`);
-		} else {
-			// For group conversations, only delete user's own data
-			console.log(`Removing user ${internalUserId} from group conversation ${conversationId}`);
-
-			// Delete only the user's messages
-			const { error: messagesError } = await supabase
-				.from('messages')
-				.delete()
-				.eq('conversation_id', conversationId)
-				.eq('sender_id', internalUserId);
-
-			if (messagesError) {
-				console.error('Error deleting user messages:', messagesError);
-				return NextResponse.json({ error: 'Failed to delete your messages' }, { status: 500 });
-			}
-
-			// Delete only the user's file attachments
-			const { error: filesError } = await supabase
-				.from('file_attachments')
-				.delete()
-				.eq('conversation_id', conversationId)
-				.eq('uploaded_by', internalUserId);
-
-			if (filesError) {
-				console.error('Error deleting user file attachments:', filesError);
-			}
-
-			// Remove user's participation
-			const { error: participantError } = await supabase
-				.from('conversation_participants')
-				.delete()
-				.eq('conversation_id', conversationId)
-				.eq('user_id', internalUserId);
-
-			if (participantError) {
-				console.error('Error removing user participation:', participantError);
-				return NextResponse.json({ error: 'Failed to leave conversation' }, { status: 500 });
-			}
-
-			console.log(`✅ Successfully removed user ${internalUserId} from group conversation ${conversationId}`);
+			console.log(`✅ Garbage-collected orphaned conversation ${conversationId}`);
 		}
 
-		return NextResponse.json({ success: true });
+		return NextResponse.json({ success: true, conversationRemoved: isOrphaned });
 	} catch (error) {
 		console.error('Delete conversation error:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

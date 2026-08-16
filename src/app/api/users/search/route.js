@@ -1,5 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
+
+// Directory search has to reach across every user, which is the one thing the narrowed
+// `users` SELECT policy no longer allows the caller's own role to do. The lookup therefore
+// runs as the service role *after* the session has been verified, and only the masked
+// projection at the bottom of this handler ever leaves the server.
+
+// A one-character query against `phone_number` turns this endpoint into an existence
+// oracle: type a prefix, learn whether that number is registered. Phone matching is
+// therefore only offered once the caller has supplied enough digits to already know the
+// number they are asking about.
+const MIN_PHONE_QUERY_LENGTH = 7;
 
 
 export async function GET(request, { params } = {}) {
@@ -36,10 +48,19 @@ export async function GET(request, { params } = {}) {
 		
 		// Enhanced fuzzy search across multiple fields with relevance scoring
 		// Search by username, display_name (full name), phone_number, and unique_identifier
-		const { data, error } = await supabase
+		const filters = [
+			`username.ilike.%${sanitizedQuery}%`,
+			`display_name.ilike.%${sanitizedQuery}%`,
+			`unique_identifier.ilike.%${sanitizedQuery}%`
+		];
+		if (sanitizedQuery.length >= MIN_PHONE_QUERY_LENGTH) {
+			filters.push(`phone_number.ilike.%${sanitizedQuery}%`);
+		}
+
+		const { data, error } = await getServiceRoleClient()
 			.from('users')
 			.select('id, username, display_name, avatar_url, phone_number, unique_identifier')
-			.or(`username.ilike.%${sanitizedQuery}%,display_name.ilike.%${sanitizedQuery}%,phone_number.ilike.%${sanitizedQuery}%,unique_identifier.ilike.%${sanitizedQuery}%`)
+			.or(filters.join(','))
 			.neq('auth_user_id', user.id) // Exclude current user by the auth UUID
 			.limit(50); // Get more results for better sorting
 	

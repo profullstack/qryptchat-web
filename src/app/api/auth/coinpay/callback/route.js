@@ -182,6 +182,15 @@ export async function GET(request) {
 			return redirectError(appOrigin, 'coinpay_no_email');
 		}
 
+		// The email is what binds this OIDC identity to a QryptChat account, so an unverified
+		// one would let whoever controls the provider-side address take over that account.
+		// Only an explicit affirmative counts — a missing claim is not a verified claim.
+		const emailVerified = claims.email_verified === true || claims.email_verified === 'true';
+		if (!emailVerified) {
+			console.error('coinpay/callback: refusing to link an unverified email');
+			return redirectError(appOrigin, 'coinpay_email_unverified');
+		}
+
 		const serviceSupabase = createServiceClient();
 
 		// --- a) Find-or-create Supabase auth user by email ---
