@@ -1,0 +1,29 @@
+{
+  "openaccess": "0.1",
+  "name": "qrypt.chat",
+  "url": "https://qrypt.chat",
+  "operator": "https://logicsrc.com/.well-known/openprofile.md",
+  "redirect_uris": [
+    "https://qrypt.chat/api/v1/openaccess/callback"
+  ],
+  "jwks": {
+    "keys": [
+      {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "kid": "cMWj8v7C7qXb",
+        "x": "ZYsPPB5CLz-IlcpW_PhxM9dqbEdLICOua-GzLm6dalQ",
+        "alg": "EdDSA",
+        "use": "sig"
+      }
+    ]
+  },
+  "scopes": {},
+  "honours": [
+    "profullstack.com/all-access"
+  ],
+  "webhooks": "https://qrypt.chat/api/v1/openaccess/events",
+  "hubs": [
+    "https://openaccess.logicsrc.com"
+  ]
+}
