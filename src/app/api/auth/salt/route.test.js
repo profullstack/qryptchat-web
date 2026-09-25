@@ -1,3 +1,4 @@
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -71,7 +72,7 @@ describe('salt cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/auth/salt', {
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')};session=ignored`
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')};session=ignored`
 				}
 			})
 		);
@@ -104,7 +105,7 @@ describe('salt cookie authentication', () => {
 			new Request('https://qrypt.chat/api/auth/salt', {
 				headers: {
 					authorization: 'Bearer   ',
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('cookie-token')}`
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('cookie-token')}`
 				}
 			})
 		);

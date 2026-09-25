@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createClient } from '@supabase/supabase-js';
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 // node:crypto is required for scrypt, so pin this route to the Node runtime.
@@ -65,9 +66,9 @@ async function authenticateUser(request) {
 
 		let accessToken = null;
 
-		if (cookies['sb-xydzwxwsbgmznthiiscl-auth-token']) {
+		if (cookies[supabaseAuthCookieName()]) {
 			try {
-				let tokenData = cookies['sb-xydzwxwsbgmznthiiscl-auth-token'];
+				let tokenData = cookies[supabaseAuthCookieName()];
 				if (tokenData.startsWith('base64-')) {
 					tokenData = Buffer.from(tokenData.substring(7), 'base64').toString('utf-8');
 				}

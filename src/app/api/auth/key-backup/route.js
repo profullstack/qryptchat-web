@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 // Lazy service role client creation
@@ -61,9 +62,9 @@ async function authenticateUser(request) {
 		let accessToken = null;
 
 		// Try Supabase-specific cookies first
-		if (cookies['sb-xydzwxwsbgmznthiiscl-auth-token']) {
+		if (cookies[supabaseAuthCookieName()]) {
 			try {
-				let tokenData = cookies['sb-xydzwxwsbgmznthiiscl-auth-token'];
+				let tokenData = cookies[supabaseAuthCookieName()];
 				if (tokenData.startsWith('base64-')) {
 					tokenData = Buffer.from(tokenData.substring(7), 'base64').toString('utf-8');
 				}

@@ -1,3 +1,4 @@
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -76,7 +77,7 @@ describe('public key cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/crypto/public-keys?user_id=target-user-id', {
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')};session=ignored`
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')};session=ignored`
 				}
 			})
 		);
@@ -92,7 +93,7 @@ describe('public key cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/crypto/public-keys?user_id=target-user-id', {
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${paddedCookieValue()}`
+					cookie: `${supabaseAuthCookieName()}=${paddedCookieValue()}`
 				}
 			})
 		);
@@ -107,7 +108,7 @@ describe('public key cookie authentication', () => {
 			new Request('https://qrypt.chat/api/crypto/public-keys', {
 				method: 'PUT',
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`,
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')}`,
 					'content-type': 'application/json'
 				},
 				body: JSON.stringify({
@@ -128,7 +129,7 @@ describe('public key cookie authentication', () => {
 			new Request('https://qrypt.chat/api/crypto/public-keys', {
 				method: 'POST',
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`,
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')}`,
 					'content-type': 'application/json'
 				},
 				body: JSON.stringify({
@@ -147,7 +148,7 @@ describe('public key cookie authentication', () => {
 	it('rejects malformed and invalid public key batches', async () => {
 		const { POST } = await import('./route.js');
 		const headers = {
-			cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`,
+			cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')}`,
 			'content-type': 'application/json'
 		};
 		const malformedResponse = await POST(
@@ -176,7 +177,7 @@ describe('public key cookie authentication', () => {
 			new Request('https://qrypt.chat/api/crypto/public-keys', {
 				method: 'POST',
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')}`,
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')}`,
 					'content-type': 'application/json'
 				},
 				body: JSON.stringify({ user_ids: [' user-one ', 'user-one', 'user-two'] })

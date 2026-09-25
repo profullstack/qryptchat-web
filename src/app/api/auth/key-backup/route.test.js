@@ -1,3 +1,4 @@
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -85,7 +86,7 @@ describe('key backup cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/auth/key-backup', {
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')};session=ignored`
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')};session=ignored`
 				}
 			})
 		);
@@ -107,7 +108,7 @@ describe('key backup cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/auth/key-backup', {
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${paddedCookieValue()}`
+					cookie: `${supabaseAuthCookieName()}=${paddedCookieValue()}`
 				}
 			})
 		);
@@ -136,7 +137,7 @@ describe('key backup cookie authentication', () => {
 			new Request('https://qrypt.chat/api/auth/key-backup', {
 				headers: {
 					authorization: 'Bearer   ',
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('cookie-token')}`
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('cookie-token')}`
 				}
 			})
 		);

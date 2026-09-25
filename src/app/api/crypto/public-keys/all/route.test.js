@@ -1,3 +1,4 @@
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -32,7 +33,7 @@ describe('all public keys cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/crypto/public-keys/all', {
 				headers: {
-					cookie: 'sb-xydzwxwsbgmznthiiscl-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJhYmMiLCJwYWRkaW5nIjoieCJ9==',
+					cookie: `${supabaseAuthCookieName()}=base64-eyJhY2Nlc3NfdG9rZW4iOiJhYmMiLCJwYWRkaW5nIjoieCJ9==`,
 				},
 			}),
 		);
