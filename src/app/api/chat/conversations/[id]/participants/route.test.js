@@ -1,3 +1,4 @@
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -126,7 +127,7 @@ describe('GET /api/chat/conversations/[id]/participants', () => {
 		const { GET } = await import('./route.js');
 		const response = await GET(
 			new Request('https://qrypt.chat/api/chat/conversations/conversation-1/participants', {
-				headers: { cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${paddedCookieValue()}` }
+				headers: { cookie: `${supabaseAuthCookieName()}=${paddedCookieValue()}` }
 			}),
 			{ params: Promise.resolve({ id: 'conversation-1' }) }
 		);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 
 // Regular (anon) client used ONLY to validate the caller's JWT. Never use the
 // service-role key for auth checks.
@@ -33,9 +34,9 @@ async function authenticateUser(request) {
 		let accessToken = null;
 
 		// Supabase-specific auth cookie first
-		if (cookies['sb-xydzwxwsbgmznthiiscl-auth-token']) {
+		if (cookies[supabaseAuthCookieName()]) {
 			try {
-				let tokenData = cookies['sb-xydzwxwsbgmznthiiscl-auth-token'];
+				let tokenData = cookies[supabaseAuthCookieName()];
 				if (tokenData.startsWith('base64-')) {
 					tokenData = Buffer.from(tokenData.substring(7), 'base64').toString('utf-8');
 				}

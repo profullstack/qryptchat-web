@@ -1,3 +1,4 @@
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -102,7 +103,7 @@ describe('DELETE /api/user/nuclear-delete bearer authentication', () => {
 		const response = await DELETE(
 			deleteRequest({
 				authorization: 'Bearer   ',
-				cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('cookie-token')}`,
+				cookie: `${supabaseAuthCookieName()}=${cookieValue('cookie-token')}`,
 				'content-type': 'application/json'
 			})
 		);

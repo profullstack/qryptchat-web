@@ -1,3 +1,4 @@
+import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createHash } from 'node:crypto';
@@ -83,7 +84,7 @@ describe('backup PIN cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/auth/backup-pin', {
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('access-token')};session=ignored`
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('access-token')};session=ignored`
 				}
 			})
 		);
@@ -99,7 +100,7 @@ describe('backup PIN cookie authentication', () => {
 		const response = await GET(
 			new Request('https://qrypt.chat/api/auth/backup-pin', {
 				headers: {
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${paddedCookieValue()}`
+					cookie: `${supabaseAuthCookieName()}=${paddedCookieValue()}`
 				}
 			})
 		);
@@ -130,7 +131,7 @@ describe('backup PIN cookie authentication', () => {
 			new Request('https://qrypt.chat/api/auth/backup-pin', {
 				headers: {
 					authorization: 'Bearer   ',
-					cookie: `sb-xydzwxwsbgmznthiiscl-auth-token=${cookieValue('cookie-token')}`
+					cookie: `${supabaseAuthCookieName()}=${cookieValue('cookie-token')}`
 				}
 			})
 		);
