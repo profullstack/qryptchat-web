@@ -127,9 +127,10 @@ echo "PORT: ${PORT}"
 echo "=========================="
 
 # Ensure production environment and start app in background
-echo "Starting Node.js application on ${HOST}:${PORT} in production mode"
-echo "Forcing NODE_ENV=production (Railway may have set it to development)"
-NODE_ENV=production HOST="${HOST}" PORT="${PORT}" pnpm next start -p "${PORT}" &
+echo "Starting the Next.js standalone server under Bun on ${HOST}:${PORT} in production mode"
+# HOSTNAME is what Next's standalone server binds to; Docker sets it to the
+# container id, so pin it to every interface.
+NODE_ENV=production HOSTNAME=0.0.0.0 PORT="${PORT}" bun server.js &
 APP_PID=$!
 
 # Wait for either the app or Tor to exit

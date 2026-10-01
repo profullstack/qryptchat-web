@@ -67,8 +67,7 @@ A secure, privacy-focused chat application built with post-quantum cryptography 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 20+ (recommended)
-- pnpm (recommended) or npm
+- Bun 1.4 (package manager and runtime)
 - Supabase account
 - Twilio account (for SMS verification)
 
@@ -80,7 +79,7 @@ git clone https://github.com/yourusername/qryptchat.git
 cd qryptchat
 
 # Install dependencies
-pnpm install
+bun install
 
 # Set up environment variables
 cp .env.example .env
@@ -90,7 +89,7 @@ cp .env.example .env
 pnpx supabase db reset
 
 # Start development server
-pnpm dev
+bun dev
 ```
 
 The app will be available at `http://localhost:8080` (or the PORT specified in your .env file).
@@ -167,7 +166,7 @@ TWILIO_PHONE_NUMBER=your_production_twilio_phone
 Start your development server:
 
 ```bash
-pnpm dev
+bun dev
 ```
 
 The app should now connect to your production Supabase instance. You can verify by:
@@ -211,16 +210,16 @@ QryptChat implements a **zero-knowledge post-quantum architecture** where:
 
 ```bash
 # Start development server
-pnpm dev
+bun dev
 
 # Run tests
-pnpm test
+bun run test
 
 # Run tests with UI
-pnpm test:ui
+bun run test:ui
 
 # Build for production
-pnpm build
+bun run build
 
 # Preview production build
 pnpm preview

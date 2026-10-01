@@ -13,19 +13,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      # The version comes from packageManager in package.json, the same Bun the
+      # image pins.
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: 10.32.1
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
+          bun-version-file: package.json
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
-      # The suite runs with the quarantine list in vitest.config.js applied —
-      # see tests/QUARANTINE.md for what is excluded and why.
+      # vitest runs on the Bun runtime (`bun --bun vitest run`). The suite runs
+      # with the quarantine list in vitest.config.js applied; see
+      # tests/QUARANTINE.md for what is excluded and why.
       - name: Run tests
-        run: pnpm test:ci
+        run: bun run test:ci
+
+  build:
+    name: build and boot under Bun
+    runs-on: ubuntu-latest
+    env:
+      # Placeholders: the build only needs the public values to exist.
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Standalone server answers under Bun
+        run: |
+          cp -r public .next/standalone/
+          cp -r .next/static .next/standalone/.next/
+          (cd .next/standalone && PORT=8080 HOSTNAME=127.0.0.1 bun server.js > /tmp/server.log 2>&1 &)
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ || true)
+            [ "$code" = 200 ] && { echo "/ -> $code"; exit 0; }
+            sleep 1
+          done
+          cat /tmp/server.log; exit 1
