@@ -7,28 +7,25 @@
     "qryptchat": "./bin/qryptchat-cli.js",
     "qryptchat-agent": "./bin/qryptchat-agent.js"
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "packageManager": "pnpm@10.32.1",
+  "packageManager": "bun@1.4.0",
   "scripts": {
     "lint:oxlint": "oxlint",
     "lint:oxlint:fix": "oxlint --fix",
-    "cli": "node bin/qryptchat-cli.js",
-    "agent": "node bin/qryptchat-agent.js",
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "test": "vitest",
-    "test:ci": "vitest run",
-    "test:quarantined": "vitest run --config vitest.quarantine.config.js",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage",
+    "cli": "bun bin/qryptchat-cli.js",
+    "agent": "bun bin/qryptchat-agent.js",
+    "dev": "bun --bun next dev",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start",
+    "test": "bun --bun vitest",
+    "test:ci": "bun --bun vitest run",
+    "test:quarantined": "bun --bun vitest run --config vitest.quarantine.config.js",
+    "test:ui": "bun --bun vitest --ui",
+    "test:coverage": "bun --bun vitest --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "icons:generate": "node scripts/generate-icons.js",
+    "icons:generate": "bun scripts/generate-icons.js",
     "icons:install": "scripts/install-desktop-icons.sh",
     "postinstall": "command -v pnpm && pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm || true",
     "dependencies": "command -v pnpm && pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm || true"
@@ -85,8 +82,13 @@
     "js-yaml": ">=4.1.1",
     "cookie": "1.1.1",
     "diff": "8.0.4",
-    "serialize-javascript": ">=7.0.5",
+    "serialize-javascript": "7.0.5",
     "postcss": ">=8.5.10",
     "axios": ">=1.8.2"
-  }
+  },
+  "trustedDependencies": [
+    "esbuild",
+    "msw",
+    "sharp"
+  ]
 }

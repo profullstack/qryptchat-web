@@ -17,6 +17,16 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // The image runs the standalone server under Bun (`bun server.js` from
+  // entrypoint.sh): server.js plus only the dependencies it imports.
+  output: 'standalone',
+  // Trace from this directory, never a lockfile further up the disk.
+  outputFileTracingRoot: new URL('.', import.meta.url).pathname,
+  // /api/plugins lists community-plugins/*/plugin.json from process.cwd() at
+  // request time; the tracer only follows imports, so name the files.
+  outputFileTracingIncludes: {
+    '/api/plugins': ['./community-plugins/**/*'],
+  },
   // Linting is a dev/CI concern — don't let an ESLint error (e.g. a parse
   // error in an unused util) fail the production build / Railway deploy.
   eslint: {
