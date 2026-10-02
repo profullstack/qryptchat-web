@@ -1,42 +1,40 @@
-import Mailgun from 'mailgun.js';
-import formData from 'form-data';
-
 /**
- * Mailgun Email Service
- * Handles sending emails via Mailgun API
+ * SMS alert email service.
+ *
+ * Forwards inbound Telnyx SMS webhooks (in practice: OTP codes) to an inbox
+ * by email, through Resend's HTTP API. Was Mailgun until 2026-10; the fleet
+ * sends everything through Resend now, and qrypt.chat is a Resend domain.
  */
-export class MailgunEmailService {
-  constructor({ apiKey, domain }) {
-    if (!apiKey) {
-      throw new Error('Mailgun API key is required');
-    }
-    if (!domain) {
-      throw new Error('Mailgun domain is required');
-    }
+const RESEND_URL = 'https://api.resend.com/emails';
 
+export class SMSAlertEmailService {
+  /**
+   * @param {Object} opts
+   * @param {string} opts.apiKey - Resend API key
+   * @param {string} [opts.domain] - Sending domain, verified on Resend
+   * @param {typeof fetch} [opts.fetchImpl] - Injected in tests
+   */
+  constructor({ apiKey, domain = 'qrypt.chat', fetchImpl } = {}) {
+    if (!apiKey) {
+      throw new Error('Resend API key is required');
+    }
+    this.apiKey = apiKey;
     this.domain = domain;
-    
-    // Initialize Mailgun client
-    const mailgun = new Mailgun(formData);
-    this.mg = mailgun.client({
-      username: 'api',
-      key: apiKey
-    });
+    this.fetch = fetchImpl ?? ((...args) => fetch(...args));
   }
 
   /**
-   * Send an email via Mailgun
-   * @param {Object} emailData - Email data
+   * Send an email.
+   * @param {Object} emailData
    * @param {string} emailData.to - Recipient email
    * @param {string} emailData.subject - Email subject
    * @param {string} emailData.text - Plain text content
-   * @param {string} [emailData.html] - HTML content (optional)
-   * @param {string} [emailData.from] - Sender email (defaults to noreply@domain)
+   * @param {string} [emailData.html] - HTML content
+   * @param {string} [emailData.from] - Sender (defaults to noreply@domain)
    * @returns {Promise<Object>} Result object with success status
    */
   async sendEmail(emailData) {
     try {
-      // Validate required fields
       if (!emailData?.to || !emailData?.subject || !emailData?.text) {
         return {
           success: false,
@@ -44,26 +42,30 @@ export class MailgunEmailService {
         };
       }
 
-      // Prepare email data with defaults
-      const messageData = {
+      const message = {
         from: emailData.from || `noreply@${this.domain}`,
-        to: emailData.to,
+        to: [emailData.to],
         subject: emailData.subject,
         text: emailData.text,
         ...(emailData.html && { html: emailData.html })
       };
 
-      // Send email via Mailgun
-      const response = await this.mg.messages.create(this.domain, messageData);
+      const res = await this.fetch(RESEND_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(message)
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(`resend ${res.status}: ${body?.message ?? 'request failed'}`);
+      }
 
-      return {
-        success: true,
-        messageId: response.id,
-        response
-      };
-
+      return { success: true, messageId: body.id, response: body };
     } catch (error) {
-      console.error('[MAILGUN] Error sending email:', error);
+      console.error('[SMS-ALERT-EMAIL] Error sending email:', error);
       return {
         success: false,
         error: `Failed to send email: ${error.message}`,
@@ -86,20 +88,14 @@ export class MailgunEmailService {
         };
       }
 
-      // Format the webhook payload for email content
-      const emailContent = this.formatWebhookPayloadEmail(webhookPayload);
-
-      const emailData = {
+      return await this.sendEmail({
         to: process.env.OTP_TO_EMAIL || 'otp@qrypt.chat',
         subject: `SMS Webhook Alert - ${new Date().toISOString()}`,
-        text: emailContent,
+        text: this.formatWebhookPayloadEmail(webhookPayload),
         from: process.env.FROM_EMAIL || `webhook-alerts@${this.domain}`
-      };
-
-      return await this.sendEmail(emailData);
-
+      });
     } catch (error) {
-      console.error('[MAILGUN] Error sending SMS webhook alert:', error);
+      console.error('[SMS-ALERT-EMAIL] Error sending SMS webhook alert:', error);
       return {
         success: false,
         error: `Failed to send SMS webhook alert: ${error.message}`,
@@ -130,7 +126,7 @@ export class MailgunEmailService {
       content += `- To: ${messageData.to?.[0]?.phone_number || 'N/A'}\n`;
       content += `- Text: ${messageData.text || 'N/A'}\n`;
       content += `- Direction: ${messageData.direction || 'N/A'}\n`;
-      
+
       if (messageData.media?.length > 0) {
         content += `- Media Count: ${messageData.media.length}\n`;
       }
@@ -145,29 +141,21 @@ export class MailgunEmailService {
 
 /**
  * Create SMS webhook email service from environment variables
- * @returns {MailgunEmailService|null} Service instance or null if env vars missing
+ * @returns {SMSAlertEmailService|null} Service instance or null if not configured
  */
 export function createSMSWebhookEmailService() {
-  const apiKey = process.env.MAILGUN_API_KEY;
-  const domain = process.env.MAILGUN_DOMAIN || 'mg.qrypt.chat';
+  const apiKey = process.env.RESEND_API_KEY;
+  const domain = process.env.EMAIL_DOMAIN || 'qrypt.chat';
 
   if (!apiKey) {
-    console.warn('[MAILGUN] MAILGUN_API_KEY not configured, email alerts disabled');
+    console.warn('[SMS-ALERT-EMAIL] RESEND_API_KEY not configured, email alerts disabled');
     return null;
   }
 
-  if (!process.env.OTP_TO_EMAIL) {
-    console.warn('[MAILGUN] OTP_TO_EMAIL not configured, using default otp@qrypt.chat');
-  }
-
-  if (!process.env.FROM_EMAIL) {
-    console.warn('[MAILGUN] FROM_EMAIL not configured, using default webhook-alerts@domain');
-  }
-
   try {
-    return new MailgunEmailService({ apiKey, domain });
+    return new SMSAlertEmailService({ apiKey, domain });
   } catch (error) {
-    console.error('[MAILGUN] Failed to initialize email service:', error);
+    console.error('[SMS-ALERT-EMAIL] Failed to initialize email service:', error);
     return null;
   }
 }

@@ -61,7 +61,6 @@ export const quarantined = [
   'tests/sms-auth.test.js',
   'tests/sms-config-diagnostic.test.js',
   'tests/sms-notification-service.test.js',
-  'tests/sms-webhook-email-integration.test.js',
   'tests/twilio-validator.test.js',
   'tests/unique-identifier-flow.test.js',
   'tests/unread-message-system.test.js',

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
-import { createSMSWebhookEmailService } from '@/lib/services/mailgun-email-service.js';
+import { createSMSWebhookEmailService } from '@/lib/services/sms-alert-email-service.js';
 import crypto from 'crypto';
 
 // Lazy service role client creation
