@@ -9,7 +9,7 @@ vi.mock('@/lib/supabase/service-role.js', () => ({
 	createServiceRoleClient: mocks.createServiceRoleClient
 }));
 
-vi.mock('@/lib/services/mailgun-email-service.js', () => ({
+vi.mock('@/lib/services/sms-alert-email-service.js', () => ({
 	createSMSWebhookEmailService: mocks.createSMSWebhookEmailService
 }));
 

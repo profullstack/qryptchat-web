@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure Supabase Auth SMTP settings via Management API (Mailgun)
+# Configure Supabase Auth SMTP settings via Management API (Resend)
 # Loads .env first so SUPABASE_ACCESS_TOKEN and PROJECT_REF can be set there.
 # Usage:
 #   chmod +x scripts/supabase-email.sh
@@ -31,12 +31,11 @@ if [ -z "${PROJECT_REF}" ]; then
   exit 1
 fi
 
-# Mailgun SMTP (provided via env or .env). No secrets defaulted here.
-# Ports supported by Mailgun: 25, 587, 2525, 465 (SSL/TLS). 587 recommended.
-SMTP_HOST="${SMTP_HOST:-smtp.mailgun.org}"
+# Resend SMTP (provided via env or .env). No secrets defaulted here.
+SMTP_HOST="${SMTP_HOST:-smtp.resend.com}"
 SMTP_PORT="${SMTP_PORT:-587}"
-SMTP_USER="${SMTP_USER:-}"            # Full email address as username, e.g. admin@mg.example.com
-SMTP_PASS="${SMTP_PASS:-}"            # SMTP password from provider
+SMTP_USER="${SMTP_USER:-resend}"      # Resend's SMTP username is literally "resend"
+SMTP_PASS="${SMTP_PASS:-}"            # A Resend API key
 SMTP_ADMIN_EMAIL="${SMTP_ADMIN_EMAIL:-${SMTP_USER}}"
 SMTP_SENDER_NAME="${SMTP_SENDER_NAME:-FirstPayingUser}"
 
