@@ -75,6 +75,11 @@ export default function Footer() {
 
       <div className="footer-bottom">
         <p>© {currentYear} QryptChat. All rights reserved.</p>
+        <nav className="webring" aria-label="Profullstack webring">
+          <a href="https://rssamplifier.com/ring/profullstack/previous?from=https%3A%2F%2Fqrypt.chat%2F" rel="prev">{"<<"}</a>
+          <a href="https://rssamplifier.com/ring/profullstack">Profullstack</a>
+          <a href="https://rssamplifier.com/ring/profullstack/next?from=https%3A%2F%2Fqrypt.chat%2F" rel="next">{">>"}</a>
+        </nav>
       </div>
 
       <style>{`
@@ -96,6 +101,9 @@ export default function Footer() {
         .social-link:hover { color: var(--color-brand-primary); }
         .footer-bottom { max-width: 1200px; margin: var(--space-8) auto 0; padding: var(--space-6) var(--space-6) 0; border-top: 1px solid var(--color-border-primary); }
         .footer-bottom p { color: var(--color-text-secondary); font-size: 0.875rem; }
+        .footer-bottom .webring { display: flex; gap: var(--space-3); margin-top: var(--space-2); font-size: 0.75rem; }
+        .footer-bottom .webring a { color: var(--color-text-secondary); text-decoration: none; transition: color .2s; }
+        .footer-bottom .webring a:hover { color: var(--color-brand-primary); }
         @media (max-width: 768px) {
           .footer-content { grid-template-columns: 1fr; }
           .footer-links { flex-direction: column; }
