@@ -4,6 +4,7 @@ import { useAuthStore } from '@/lib/stores/auth.js';
 import { convertUrlsToLinks } from '@/lib/utils/url-link-converter.js';
 import { detectTextFormat } from '@profullstack/text-type-detection';
 import MessageAttachments from './MessageAttachments.jsx';
+import { renderOpenEmoji, isEmojiOnly } from '@/lib/emoji/openemoji.js';
 
 export default function MessageItem({ message, showAvatar = true, showTimestamp = true }) {
   const user = useAuthStore((s) => s.user);
@@ -18,8 +19,10 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
   const isCodeBlock = detectedFormat.type === 'code' || detectedFormat.language !== null;
   // Message content is attacker-controlled. It only ever reaches the HTML sink below through
   // convertUrlsToLinks(), which escapes every character it did not generate itself. Never pass
-  // `content` here directly, whatever the detected format says.
-  const contentWithLinks = convertUrlsToLinks(content);
+  // `content` here directly, whatever the detected format says. renderOpenEmoji() runs on that
+  // escaped output and only adds <img> tags for emoji it has artwork for.
+  const contentWithLinks = renderOpenEmoji(convertUrlsToLinks(content));
+  const jumbo = isEmojiOnly(content);
 
   function formatTime(ts) {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -53,7 +56,7 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
         {!isOwn && <div className="message-sender">{displayName}</div>}
 
         {showText && (
-          <div className={`message-bubble${isOwn ? ' own' : ''}${isAsciiArt ? ' ascii-art' : ''}${isCodeBlock ? ' code-block' : ''}`}>
+          <div className={`message-bubble${isOwn ? ' own' : ''}${isAsciiArt ? ' ascii-art' : ''}${isCodeBlock ? ' code-block' : ''}${jumbo ? ' jumbo' : ''}`}>
             {isAsciiArt || isCodeBlock ? (
               <pre className="message-pre">{content}</pre>
             ) : (
@@ -83,6 +86,9 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
         .message-bubble { padding: .5rem .875rem; border-radius: 1rem; background: var(--color-bg-secondary); color: var(--color-text-primary); font-size: .9375rem; line-height: 1.5; word-break: break-word; }
         .message-bubble.own { background: var(--color-brand-primary); color: white; }
         .message-bubble.ascii-art, .message-bubble.code-block { background: var(--color-bg-tertiary); }
+        .message-bubble img.openemoji { width: 1.25em; height: 1.25em; vertical-align: -.25em; margin: 0 .05em; }
+        .message-bubble.jumbo { background: transparent; padding: .125rem .25rem; }
+        .message-bubble.jumbo img.openemoji { width: 2.75em; height: 2.75em; }
         .message-pre { white-space: pre-wrap; font-family: monospace; font-size: .8125rem; margin: 0; }
         .message-time { font-size: .75rem; color: var(--color-text-muted); padding: 0 .25rem; }
         .message-time.own { text-align: right; }

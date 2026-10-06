@@ -33,7 +33,15 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    // OpenEmoji/OpenIcon files change only when scripts/sync-openemoji.js runs
+    // against a new set release; a week of caching keeps a busy chat from
+    // re-fetching every emoji on every repaint.
+    const assetCache = [{ key: 'Cache-Control', value: 'public, max-age=604800' }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      { source: '/openemoji/:path*', headers: assetCache },
+      { source: '/openicon/:path*', headers: assetCache },
+    ];
   },
 };
 

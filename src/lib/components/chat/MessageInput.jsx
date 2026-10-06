@@ -7,6 +7,8 @@ import { useAuthStore } from '@/lib/stores/auth.js';
 import { detectTextFormat } from '@profullstack/text-type-detection';
 import { trackMessageSent } from '@/lib/utils/analytics.js';
 import { multiRecipientEncryption } from '@/lib/crypto/multi-recipient-encryption.js';
+import { insertAtCursor } from '@/lib/emoji/openemoji.js';
+import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
@@ -41,6 +43,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadError, setUploadError] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -75,6 +78,17 @@ export default function MessageInput({ conversationId, disabled = false }) {
     if (conversationId && user?.id) {
       setTyping(conversationId);
     }
+  }
+
+  function insertEmoji(char) {
+    const el = textareaRef.current;
+    const { value, caret } = insertAtCursor(messageText, el?.selectionStart, el?.selectionEnd, char);
+    setMessageText(value);
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) return;
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(caret, caret);
+    });
   }
 
   function handleFileInput(e) {
@@ -244,7 +258,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
         <div className="file-preview-list">
           {selectedFiles.map((file, i) => (
             <div key={`${file.name}-${i}`} className={`file-chip${isUploadingFiles ? ' uploading' : ''}`}>
-              {isUploadingFiles ? <span className="file-spinner" /> : <span className="file-icon">📎</span>}
+              {isUploadingFiles ? <span className="file-spinner" /> : <span className="file-icon"><Icon name="paperclip" size={14} /></span>}
               <span className="file-name" title={file.name}>{file.name}</span>
               <span className="file-size">{formatFileSize(file.size)}</span>
               {!isUploadingFiles && (
@@ -256,6 +270,8 @@ export default function MessageInput({ conversationId, disabled = false }) {
         </div>
       )}
 
+      {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
+
       <div className="message-input-wrapper">
         <button
           className="attach-btn"
@@ -263,9 +279,17 @@ export default function MessageInput({ conversationId, disabled = false }) {
           disabled={disabled || isUploadingFiles}
           title="Attach file"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-          </svg>
+          <Icon name="paperclip" size={20} />
+        </button>
+        <button
+          type="button"
+          className={`emoji-btn${showEmoji ? ' active' : ''}`}
+          onClick={() => setShowEmoji((v) => !v)}
+          disabled={disabled || isSending}
+          title="Emoji"
+          aria-expanded={showEmoji}
+        >
+          <Icon name="smile" size={20} />
         </button>
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileInput} />
         <textarea
@@ -287,9 +311,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
           {isSending ? (
             <div className="send-spinner" />
           ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
+            <Icon name="send" size={20} />
           )}
         </button>
       </div>
@@ -311,10 +333,11 @@ export default function MessageInput({ conversationId, disabled = false }) {
         .message-input-wrapper { display: flex; align-items: flex-end; gap: .5rem; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: 1.5rem; padding: .375rem .375rem .375rem .75rem; }
         .message-textarea { flex: 1; border: none; background: transparent; resize: none; font-size: .9375rem; line-height: 1.5; max-height: 120px; padding: .25rem 0; color: var(--color-text-primary); outline: none; font-family: inherit; }
         .message-textarea::placeholder { color: var(--color-text-muted); }
-        .attach-btn, .send-btn { flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; }
-        .attach-btn { background: transparent; color: var(--color-text-secondary); }
-        .attach-btn:hover:not(:disabled) { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
-        .attach-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .attach-btn, .emoji-btn, .send-btn { flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; }
+        .attach-btn, .emoji-btn { background: transparent; color: var(--color-text-secondary); }
+        .attach-btn:hover:not(:disabled), .emoji-btn:hover:not(:disabled), .emoji-btn.active { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+        .attach-btn:disabled, .emoji-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .file-icon { display: inline-flex; }
         .send-btn { background: var(--color-brand-primary); color: white; }
         .send-btn:hover:not(:disabled) { background: var(--color-brand-secondary); }
         .send-btn:disabled { opacity: .5; cursor: not-allowed; }
