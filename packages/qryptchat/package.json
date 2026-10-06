@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/qryptchat",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "qc: qrypt.chat in your terminal. A full-screen end-to-end encrypted chat client (ML-KEM-1024), plus a scriptable CLI and an MCP server.",
   "type": "module",
   "bin": {

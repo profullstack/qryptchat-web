@@ -52,6 +52,8 @@ describe('authenticateRequest bearer token parsing', () => {
     expect(auth.user).toEqual({ id: 'user-1' });
     expect(mocks.createSupabaseServerClientWithToken).toHaveBeenCalledWith('access-token-123');
     expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
+    // The token client holds no session, so the JWT must be named explicitly.
+    expect(mocks.tokenClient.auth.getUser).toHaveBeenCalledWith('access-token-123');
   });
 
   it('falls back to cookies when the authorization header has no token', async () => {

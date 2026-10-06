@@ -278,12 +278,9 @@ export async function runTui(client, { initialChat } = {}) {
 			} else {
 				state.selected = Math.max(0, state.conversations.findIndex((c) => c.id === before));
 			}
+			// The events stream joins every chat's live room itself, so unread
+			// counts arrive without loading each chat (which tripped the rate limit).
 			redraw();
-			// Loading a conversation's messages joins its live room on the server,
-			// so warm every room: that is what makes unread counts arrive.
-			for (const c of state.conversations.slice(0, 40)) {
-				if (c.id !== state.activeId && !state.messages[c.id]) await loadMessages(c.id);
-			}
 		} catch (err) {
 			state.loading = false;
 			note(err.status === 401 ? 'Session ended: run qc login' : `Could not load chats: ${err.message}`);

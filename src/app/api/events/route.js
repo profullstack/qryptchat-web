@@ -40,6 +40,14 @@ export async function GET(request, { params } = {}) {
 		const userId = userData.id;
 		console.log(`📡 [SSE] Internal user ID: ${userId}`);
 
+		// Join every live conversation up front, so news from any chat arrives
+		// without the client first loading each one's messages.
+		const { data: memberships } = await supabase
+			.from('conversation_participants')
+			.select('conversation_id')
+			.eq('user_id', userId)
+			.is('left_at', null);
+
 		// Create a readable stream for SSE
 		const stream = new ReadableStream({
 			start(controller) {
@@ -63,6 +71,7 @@ export async function GET(request, { params } = {}) {
 
 				// Add connection to SSE manager with internal user ID
 				sseManager.addConnection(responseWriter, userId);
+				for (const m of memberships || []) sseManager.joinRoom(userId, m.conversation_id);
 
 				// Send initial connection success message
 				const welcomeMessage = sseManager.formatSSEMessage('CONNECTED', {

@@ -55,7 +55,9 @@ class SSEManager {
 
 		this.connectionUsers.delete(response);
 
-		// Remove from all rooms
+		// Leave the rooms only with the user's last connection: a closing qc
+		// session must not silence the same user's open browser tab.
+		if (this.userConnections.has(userId)) return;
 		for (const [conversationId, users] of this.conversationRooms.entries()) {
 			users.delete(userId);
 			if (users.size === 0) {

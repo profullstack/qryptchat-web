@@ -9,7 +9,7 @@ const keyBackupRateLimiter = new RateLimiter({ maxRequests: 10, windowMs: 15 * 6
 function rateLimitedResponse() {
   return NextResponse.json(
     { error: 'Too many requests. Please try again later.' },
-    { status: 429 }
+    { status: 429, headers: { 'Retry-After': '10' } }
   );
 }
 
