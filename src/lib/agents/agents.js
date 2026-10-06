@@ -118,8 +118,30 @@ export async function redeemInvite(db, token, { username, displayName, publicKey
 	if (!claimed?.length) throw new AgentError('invite_invalid', 'This invite was just used', 410);
 
 	let authUserId = null;
+	let userId = null;
+	let conversationId = null;
+	// Everything made here is removed again on failure: deleting the auth user
+	// does not cascade to public.users, and a trigger gives every new user a
+	// note-to-self conversation.
 	const undo = async () => {
-		if (authUserId) await db.auth.admin.deleteUser(authUserId).catch(() => {});
+		const quietly = (p) => Promise.resolve(p).catch(() => {});
+		if (conversationId) {
+			await quietly(db.from('conversation_participants').delete().eq('conversation_id', conversationId));
+			await quietly(db.from('conversations').delete().eq('id', conversationId));
+		}
+		if (userId) {
+			const { data: own } = await db.from('conversations').select('id').eq('created_by', userId).then((r) => r, () => ({ data: [] }));
+			for (const c of own ?? []) {
+				await quietly(db.from('conversation_participants').delete().eq('conversation_id', c.id));
+				await quietly(db.from('conversations').delete().eq('id', c.id));
+			}
+			await quietly(db.from('conversation_participants').delete().eq('user_id', userId));
+			await quietly(db.from('users').delete().eq('id', userId));
+		}
+		if (authUserId) {
+			await quietly(db.from('user_public_keys').delete().eq('user_id', authUserId));
+			await quietly(db.auth.admin.deleteUser(authUserId));
+		}
 		await db.from('agent_invites').update({ redeemed_at: null, redeemed_by: null }).eq('id', invite.id);
 	};
 
@@ -148,17 +170,30 @@ export async function redeemInvite(db, token, { username, displayName, publicKey
 			if (userError?.code === '23505') throw new AgentError('username_taken', 'That username is taken', 409);
 			throw new AgentError('server_error', 'Could not create the agent account', 500);
 		}
+		userId = user.id;
 
 		const { error: keyError } = await db
 			.from('user_public_keys')
 			.insert({ user_id: authUserId, public_key: keyBytes.toString('base64'), key_type: 'ML-KEM-1024' });
 		if (keyError) throw new AgentError('server_error', 'Could not store the agent key', 500);
 
-		const { data: conversationId, error: convError } = await db.rpc('create_direct_conversation', {
-			user1_id: invite.inviter_user_id,
-			user2_id: user.id,
-		});
-		if (convError || !conversationId) throw new AgentError('server_error', 'Could not open the conversation', 500);
+		// The direct conversation with the operator. (create_direct_conversation()
+		// collides with the trigger that already adds the creator as a participant.)
+		const { data: conv, error: convError } = await db
+			.from('conversations')
+			.insert({ type: 'direct', created_by: invite.inviter_user_id })
+			.select('id')
+			.single();
+		if (convError || !conv?.id) throw new AgentError('server_error', 'Could not open the conversation', 500);
+		conversationId = conv.id;
+		const { error: partError } = await db.from('conversation_participants').upsert(
+			[
+				{ conversation_id: conversationId, user_id: invite.inviter_user_id },
+				{ conversation_id: conversationId, user_id: user.id },
+			],
+			{ onConflict: 'conversation_id,user_id', ignoreDuplicates: true },
+		);
+		if (partError) throw new AgentError('server_error', 'Could not open the conversation', 500);
 
 		await db.from('agent_invites').update({ redeemed_by: user.id }).eq('id', invite.id);
 
