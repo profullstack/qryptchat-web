@@ -17,6 +17,24 @@ const EXPORT_VERSION = '3.0'; // Post-quantum: ChaCha20-Poly1305 + HKDF
  * 600,000 iterations; the previous 100,000 left a password-protected key export
  * cheap enough to attack offline on a GPU.
  */
+/**
+ * A readable message for a failed backup/restore call.
+ * @param {{error?: string, code?: string, remaining?: number, retryAfter?: number}} data
+ * @param {number} status
+ */
+export function pinErrorMessage(data, status) {
+	if (data?.code === 'PIN_LOCKED') {
+		const minutes = Math.max(1, Math.ceil((data.retryAfter || 60) / 60));
+		return `Too many wrong PINs. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+	}
+	if (data?.code === 'PIN_WRONG') {
+		return typeof data.remaining === 'number'
+			? `Wrong PIN. ${data.remaining} attempt${data.remaining === 1 ? '' : 's'} left before a lockout.`
+			: 'Wrong PIN.';
+	}
+	return data?.error || `Server returned ${status}`;
+}
+
 const PBKDF2_ITERATIONS = 600000;
 
 /**
@@ -587,8 +605,23 @@ export class PrivateKeyManager {
 	}
 
 	/**
-	 * Backup encrypted keys to the server
-	 * @param {string} password - Password to encrypt the keys
+	 * Auth for the backup endpoints. Passkey, CoinPay and phone sessions live in
+	 * localStorage and have no cookie, so cookies alone are not enough.
+	 * @returns {Record<string, string>}
+	 */
+	_authHeaders() {
+		try {
+			const token = JSON.parse(localStorage.getItem('qrypt_session') || 'null')?.access_token;
+			return token ? { Authorization: `Bearer ${token}` } : {};
+		} catch {
+			return {};
+		}
+	}
+
+	/**
+	 * Backup encrypted keys to the server. The password must be the account's
+	 * backup PIN; the server checks it (or adopts it when none is set yet).
+	 * @param {string} password - Backup PIN that encrypts the keys
 	 * @returns {Promise<void>}
 	 */
 	async backupKeysToServer(password) {
@@ -603,13 +636,14 @@ export class PrivateKeyManager {
 			// Push to server
 			const response = await fetch('/api/auth/key-backup', {
 				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ encrypted_keys: encryptedData })
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+				body: JSON.stringify({ encrypted_keys: encryptedData, pin: password })
 			});
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.error || `Server returned ${response.status}`);
+				throw new Error(pinErrorMessage(errorData, response.status));
 			}
 
 			console.log('🔑 ✅ Keys backed up to server successfully');
@@ -629,8 +663,13 @@ export class PrivateKeyManager {
 		}
 
 		try {
-			// Fetch encrypted backup from server
-			const response = await fetch('/api/auth/key-backup');
+			// The server hands the encrypted backup over only for the right PIN.
+			const response = await fetch('/api/auth/key-backup', {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+				body: JSON.stringify({ pin: password })
+			});
 
 			if (response.status === 404) {
 				throw new Error('No key backup found on server');
@@ -638,16 +677,27 @@ export class PrivateKeyManager {
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.error || `Server returned ${response.status}`);
+				throw new Error(pinErrorMessage(errorData, response.status));
 			}
 
-			const { backup } = await response.json();
+			const { backup, legacy } = await response.json();
 			if (!backup || !backup.encrypted_keys) {
 				throw new Error('No key backup found on server');
 			}
 
 			// Decrypt and import using existing method
 			await this.importPrivateKeys(backup.encrypted_keys, password);
+
+			// The PIN just decrypted the backup, so it is the right one: register it,
+			// which puts this older backup behind the server-side PIN check too.
+			if (legacy) {
+				await fetch('/api/auth/backup-pin', {
+					method: 'POST',
+					credentials: 'include',
+					headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+					body: JSON.stringify({ pin: password })
+				}).catch(() => {});
+			}
 
 			console.log('🔑 ✅ Keys restored from server successfully');
 		} catch (error) {
@@ -663,7 +713,7 @@ export class PrivateKeyManager {
 		if (typeof window === 'undefined') return false;
 
 		try {
-			const response = await fetch('/api/auth/key-backup');
+			const response = await fetch('/api/auth/key-backup', { credentials: 'include', headers: this._authHeaders() });
 			return response.ok;
 		} catch {
 			return false;

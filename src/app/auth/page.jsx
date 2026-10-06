@@ -288,7 +288,7 @@ export default function AuthPage() {
 
   async function setBackupPinFn(e) {
     e?.preventDefault();
-    if (!backupPin || !/^\d+$/.test(backupPin) || backupPin.length < 6 || backupPin.length > 12) { msgStore.error('PIN must be 6-12 digits'); return; }
+    if (!backupPin || !/^\d{4,12}$/.test(backupPin)) { msgStore.error('PIN must be 4-12 digits'); return; }
     if (backupPin !== confirmBackupPin) { msgStore.error('PINs do not match'); return; }
     try {
       const headers = { 'Content-Type': 'application/json' };
@@ -298,7 +298,7 @@ export default function AuthPage() {
       const encryptedData = await privateKeyManager.exportPrivateKeys(backupPin);
       const backupHeaders = { 'Content-Type': 'application/json' };
       if (verifiedSession?.access_token) backupHeaders['Authorization'] = `Bearer ${verifiedSession.access_token}`;
-      const backupRes = await fetch('/api/auth/key-backup', { method: 'PUT', headers: backupHeaders, body: JSON.stringify({ encrypted_keys: encryptedData }) });
+      const backupRes = await fetch('/api/auth/key-backup', { method: 'PUT', headers: backupHeaders, body: JSON.stringify({ encrypted_keys: encryptedData, pin: backupPin }) });
       if (!backupRes.ok) { const e = await backupRes.json().catch(() => ({})); throw new Error(e.error || 'Key backup failed'); }
       msgStore.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
       router.push('/chat');
@@ -314,11 +314,15 @@ export default function AuthPage() {
       msgStore.success('Encryption keys restored successfully!');
       setRestorePin(''); setRestoreAttempts(0);
       router.push('/chat');
-    } catch {
+    } catch (err) {
+      // The server counts wrong PINs and locks restore; its message says how
+      // many tries are left or how long to wait.
+      const message = String(err?.message || '').replace(/^Failed to restore keys from server: /, '');
       const remaining = MAX_RESTORE - restoreAttempts - 1;
       setRestoreAttempts((a) => a + 1);
       setRestorePin('');
-      if (remaining <= 0) msgStore.error('Too many failed attempts.');
+      if (/wrong pin|too many/i.test(message)) msgStore.error(message);
+      else if (remaining <= 0) msgStore.error('Too many failed attempts.');
       else msgStore.error(`Wrong PIN. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
     } finally { setIsRestoring(false); }
   }
@@ -443,9 +447,9 @@ export default function AuthPage() {
             <div className="backup-warning"><p><strong>Important:</strong> Remember this PIN! Without it, you cannot restore your encryption keys.</p></div>
             <form onSubmit={setBackupPinFn}>
               <div className="input-group">
-                <label>Backup PIN (6-12 digits) *</label>
+                <label>Backup PIN (4-12 digits) *</label>
                 <div className="password-input">
-                  <input type={showBackupPin ? 'text' : 'password'} inputMode="numeric" value={backupPin} onChange={(e) => setBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Enter 6-12 digit PIN" required disabled={loading} className="code-input" />
+                  <input type={showBackupPin ? 'text' : 'password'} inputMode="numeric" value={backupPin} onChange={(e) => setBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Enter 4-12 digit PIN" required disabled={loading} className="code-input" />
                   <button type="button" className="toggle-password" onClick={() => setShowBackupPin(!showBackupPin)}>{showBackupPin ? '👁️' : '👁️‍🗨️'}</button>
                 </div>
               </div>

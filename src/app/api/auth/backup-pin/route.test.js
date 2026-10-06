@@ -205,4 +205,40 @@ describe('backup PIN cookie authentication', () => {
 		expect(body.error).toBe('Invalid JSON body');
 		expect(mocks.serviceFrom).not.toHaveBeenCalled();
 	});
+
+	it('accepts a 4-digit PIN', async () => {
+		const { POST } = await import('./route.js');
+		const response = await POST({
+			headers: new Headers({ authorization: 'Bearer access-token' }),
+			json: vi.fn().mockResolvedValue({ pin: '4821' })
+		});
+		expect(response.status).toBe(200);
+	});
+
+	it('will not replace a verifiable PIN without the current one', async () => {
+		const { hashPin } = await import('@/lib/auth/backup-pin.js');
+		const existing = await hashPin('4821');
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'user_backup_pins') {
+				const query = createBackupPinsQuery();
+				query.maybeSingle = vi.fn(() =>
+					Promise.resolve({
+						data: { user_id: 'internal-user-id', pin_hash: existing.hash, pin_salt: existing.salt, algorithm: existing.algorithm, failed_attempts: 0 },
+						error: null
+					})
+				);
+				return query;
+			}
+			throw new Error(`Unexpected table: ${table}`);
+		});
+		const { POST } = await import('./route.js');
+		const response = await POST({
+			headers: new Headers({ authorization: 'Bearer access-token' }),
+			json: vi.fn().mockResolvedValue({ pin: '1111' })
+		});
+		expect(response.status).toBe(403);
+		expect((await response.json()).code).toBe('PIN_REQUIRED');
+		expect(mocks.pinUpsert).not.toHaveBeenCalled();
+	});
 });
