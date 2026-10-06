@@ -250,10 +250,12 @@ export async function runTui(client, { initialChat } = {}) {
 	const app = await createApp({ quitKeys: ['ctrl+c'], focusNavigation: false });
 	const redraw = () => app.invalidate();
 	// HD: our OpenEmoji/OpenIcon PNGs as real images where the terminal can show
-	// them. Kitty/Ghostty are detected; over SSH or in tmux say so with QC_HD=1
-	// (or HQTUI_IMAGES=1). Everywhere else the characters are drawn as before.
+	// them. Kitty, Ghostty, WezTerm and iTerm2 are detected locally; over SSH or
+	// in tmux say which: QC_HD=1 (Kitty/Ghostty) or QC_HD=wezterm (WezTerm/iTerm2).
 	const env = process.env.QC_HD && !process.env.HQTUI_IMAGES ? { ...process.env, HQTUI_IMAGES: process.env.QC_HD } : process.env;
 	state.images = createImageStore({ write: (seq) => app.terminal.write(seq), onReady: redraw, env });
+	// WezTerm/iTerm2 (QC_HD=wezterm) draw images after each frame; a no-op for Kitty.
+	state.images.attach(app);
 	const note = (msg, { sticky = false } = {}) => {
 		state.notice = msg;
 		redraw();
