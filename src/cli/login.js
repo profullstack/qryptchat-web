@@ -25,10 +25,40 @@ const PAGE = (title, body) => `<!doctype html><meta charset="utf-8"><title>${tit
 <main><h1>${title}</h1><p>${body}</p></main>`;
 
 /** Open a URL in the default browser; false when there is nothing to open it with. */
-export function openBrowser(url, { platform = process.platform, env = process.env } = {}) {
-	if (env.QC_NO_BROWSER || ((env.SSH_CONNECTION || env.SSH_TTY) && !env.DISPLAY && !env.WAYLAND_DISPLAY && platform === 'linux')) {
-		return false;
+/**
+ * True when no browser can come back to this machine: an SSH session with no
+ * display, or QC_NO_BROWSER. A loopback redirect would then land on the
+ * browser's OWN 127.0.0.1 (your laptop), where nothing is listening.
+ */
+export function isRemote({ platform = process.platform, env = process.env } = {}) {
+	if (env.QC_NO_BROWSER) return true;
+	return !!(env.SSH_CONNECTION || env.SSH_TTY) && !env.DISPLAY && !env.WAYLAND_DISPLAY && platform !== 'darwin' && platform !== 'win32';
+}
+
+/**
+ * A code from what the user pasted: the URL the browser ended up on
+ * (…/callback?code=…&state=…) or the bare code. A URL whose state does not
+ * match this login is refused.
+ */
+export function parsePasted(input, state) {
+	const text = String(input || '').trim();
+	if (!text) return null;
+	if (/^https?:\/\//i.test(text)) {
+		let url;
+		try {
+			url = new URL(text);
+		} catch {
+			return null;
+		}
+		const got = url.searchParams.get('state');
+		if (got && got !== state) throw new Error('That link belongs to a different login. Run qc login again.');
+		return url.searchParams.get('code');
 	}
+	return /^[A-Za-z0-9_-]{20,}$/.test(text) ? text : null;
+}
+
+export function openBrowser(url, { platform = process.platform, env = process.env } = {}) {
+	if (isRemote({ platform, env })) return false;
 	const [cmd, args] =
 		platform === 'darwin' ? ['open', [url]] : platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : ['xdg-open', [url]];
 	try {
@@ -85,7 +115,9 @@ export async function login(options = {}) {
 
 	let server;
 	let redirectUri = 'oob';
-	if (!options.oob) {
+	// Over SSH the browser is on another machine: a loopback redirect cannot reach us.
+	const oob = options.oob || isRemote({ env });
+	if (!oob) {
 		server = createServer();
 		await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 		redirectUri = `http://127.0.0.1:${server.address().port}/callback`;
@@ -109,21 +141,47 @@ export async function login(options = {}) {
 	print(`  Confirmation code: ${match}`);
 	print('  Check that the browser shows the same code before you approve.');
 	print('');
-	const opened = !options.oob && openBrowser(url.toString(), { env });
+	const opened = !oob && openBrowser(url.toString(), { env });
 	print(opened ? '  Opened your browser. If it did not, open:' : '  Open this link in a browser where you are signed in to qrypt.chat:');
 	print(`  ${url.toString()}`);
 	print('');
 
 	let code;
+	let rl;
 	try {
 		if (server) {
-			code = await waitForCallback(server, state);
+			// The redirect normally comes straight back. If the browser is somewhere
+			// else after all, the page it lands on (or the code) can be pasted here.
+			const waits = [waitForCallback(server, state)];
+			if (process.stdin.isTTY) {
+				rl = createInterface({ input: process.stdin, output: process.stderr });
+				waits.push(
+					(async () => {
+						for (;;) {
+							let line;
+							try {
+								line = await rl.question('  Waiting for the browser… or paste the URL it ended up on: ');
+							} catch {
+								return new Promise(() => {}); // prompt closed: the callback won
+							}
+							const pasted = parsePasted(line, state);
+							if (pasted) return pasted;
+							print('  That is not a qc login code or callback URL.');
+						}
+					})(),
+				);
+			}
+			code = await Promise.race(waits);
 		} else {
-			const rl = createInterface({ input: process.stdin, output: process.stderr });
-			code = (await rl.question('  Paste the code from the browser: ')).trim();
-			rl.close();
+			rl = createInterface({ input: process.stdin, output: process.stderr });
+			for (;;) {
+				code = parsePasted(await rl.question('  Paste the code (or the URL) from the browser: '), state);
+				if (code) break;
+				print('  That is not a qc login code.');
+			}
 		}
 	} finally {
+		rl?.close();
 		server?.close();
 	}
 	if (!code) throw new Error('No code came back from the browser.');

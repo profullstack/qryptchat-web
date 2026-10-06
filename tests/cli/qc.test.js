@@ -156,3 +156,24 @@ describe('qc mcp', () => {
 		expect(await handle(fake, { method: 'notifications/initialized' }, { version: '1' })).toBeUndefined();
 	});
 });
+
+describe('qc login on a remote box', () => {
+	it('treats SSH without a display as remote (no loopback redirect)', async () => {
+		const { isRemote } = await import('../../src/cli/login.js');
+		expect(isRemote({ platform: 'linux', env: { SSH_CONNECTION: '1 2 3 4' } })).toBe(true);
+		expect(isRemote({ platform: 'linux', env: { SSH_CONNECTION: '1 2 3 4', DISPLAY: ':0' } })).toBe(false);
+		expect(isRemote({ platform: 'linux', env: {} })).toBe(false);
+		expect(isRemote({ platform: 'darwin', env: { SSH_TTY: '/dev/pts/1' } })).toBe(false);
+		expect(isRemote({ platform: 'linux', env: { QC_NO_BROWSER: '1' } })).toBe(true);
+	});
+
+	it('takes a pasted callback URL or a bare code, and refuses another login’s URL', async () => {
+		const { parsePasted } = await import('../../src/cli/login.js');
+		const code = '35_r7KgyhCrrz2JNWUpYJFFN8sCOSjQhuQm0NZe8Oi4';
+		expect(parsePasted(`http://127.0.0.1:35839/callback?code=${code}&state=abc`, 'abc')).toBe(code);
+		expect(parsePasted(`  ${code}  `, 'abc')).toBe(code);
+		expect(() => parsePasted(`http://127.0.0.1:1/callback?code=${code}&state=zzz`, 'abc')).toThrow(/different login/);
+		expect(parsePasted('nope', 'abc')).toBeNull();
+		expect(parsePasted('', 'abc')).toBeNull();
+	});
+});
