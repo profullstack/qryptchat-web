@@ -13,7 +13,7 @@ import { createServer } from 'node:http';
 import { hostname } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
-import { baseUrl, saveSession } from './config.js';
+import { baseUrl, storeSession } from './config.js';
 import { ephemeralKeypair, openKeyBlob } from './crypto.js';
 import { matchCode } from '../lib/auth/cli-match.js';
 
@@ -204,6 +204,7 @@ export async function login(options = {}) {
 		keys,
 		created_at: new Date().toISOString(),
 	};
-	saveSession(session, env);
-	return session;
+	// Sealed before anything touches disk: keys and tokens are never plaintext at rest.
+	const save = await storeSession(session, env, options.vault);
+	return { session, save };
 }

@@ -4,7 +4,7 @@
  * stream for live updates. Sessions refresh themselves (rotating refresh
  * tokens, POST /api/cli/token) and every refresh is written back to disk.
  */
-import { baseUrl, saveSession } from './config.js';
+import { baseUrl } from './config.js';
 import { keyring } from './crypto.js';
 import { foldMessages, reactionEnvelope, REACTION_TYPE } from '../lib/chat/reactions.js';
 
@@ -24,7 +24,8 @@ export class QcClient {
 	constructor(session, options = {}) {
 		this.session = session;
 		this.base = baseUrl(session, options.env);
-		this.save = options.save ?? ((s) => saveSession(s, options.env));
+		// Re-seals the session (see config.unlockSession); a client without one keeps refreshes in memory only.
+		this.save = options.save ?? (() => {});
 		this.fetch = options.fetch ?? globalThis.fetch;
 		this.ring = keyring(session.keys);
 		this.refreshing = null;

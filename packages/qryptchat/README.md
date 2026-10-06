@@ -73,7 +73,12 @@ claude mcp add qryptchat -- qc mcp
 
 Over SSH, `qc login --oob` shows a code in the browser for you to paste instead of redirecting back.
 
-The session and keys are kept in `~/.config/qc/session.json` (or `$QC_HOME`), mode 0600. Sessions refresh themselves; `qc logout` deletes them. Point at another server with `--url` or `QC_URL`.
+Your keys and tokens are **never stored in plaintext**. `~/.config/qc/session.json` (or `$QC_HOME`) keeps only your username and the server URL in the clear. Everything else is sealed with ChaCha20-Poly1305 under a key from:
+
+- your OS keychain (macOS Keychain, or libsecret's `secret-tool` on a Linux desktop), so you're never asked; or
+- a passphrase, stretched with scrypt. qc asks for it once per run; scripts and `qc mcp` read it from `QC_PASSPHRASE`.
+
+Sessions refresh themselves and are re-sealed each time. `qc logout` deletes them. Point at another server with `--url` or `QC_URL`.
 
 ## Licence
 

@@ -3,7 +3,7 @@
  * scripts and agents and prints plain text (or JSON with --json).
  */
 import { QcClient } from './api.js';
-import { clearSession, loadSession, sessionPath } from './config.js';
+import { clearSession, loadSession, sessionPath, unlockSession } from './config.js';
 import { login } from './login.js';
 
 export const HELP = `qc: qrypt.chat in your terminal (end-to-end encrypted, ML-KEM-1024)
@@ -21,7 +21,8 @@ Usage:
   qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message)
 
 <chat> is a chat id or part of its name. Options: --json, --url <server> (or QC_URL).
-Keys and session live in ${'$'}QC_HOME or ~/.config/qc (mode 0600).`;
+Keys and tokens are sealed (ChaCha20-Poly1305) in ${'$'}QC_HOME or ~/.config/qc; the key is in your
+OS keychain, or comes from a passphrase (QC_PASSPHRASE for scripts and qc mcp).`;
 
 export function parseArgs(argv) {
 	const args = { _: [], flags: {} };
@@ -64,12 +65,13 @@ export function findChat(chats, query) {
 
 async function client(flags, { interactive = false } = {}) {
 	if (flags.url) process.env.QC_URL = flags.url;
-	let session = loadSession();
-	if (!session) {
+	// The session on disk is sealed: unlocking may ask for the passphrase (or read QC_PASSPHRASE / the keychain).
+	let opened = await unlockSession();
+	if (!opened) {
 		if (!interactive) throw new Error('Not signed in. Run qc login.');
-		session = await login({ oob: !!flags.oob });
+		opened = await login({ oob: !!flags.oob });
 	}
-	return new QcClient(session);
+	return new QcClient(opened.session, { save: opened.save });
 }
 
 const stamp = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
@@ -98,8 +100,8 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			return runTui(c, { initialChat: rest[0] });
 		}
 		case 'login': {
-			const session = await login({ oob: !!flags.oob });
-			return out(`Signed in as @${session.user?.username ?? 'unknown'} on ${session.base}. Keys saved to ${sessionPath()}.`);
+			const { session } = await login({ oob: !!flags.oob });
+			return out(`Signed in as @${session.user?.username ?? 'unknown'} on ${session.base}. Keys sealed (ChaCha20-Poly1305) in ${sessionPath()}.`);
 		}
 		case 'logout':
 			clearSession();
