@@ -93,6 +93,16 @@ describe('POST /api/conversations/load', () => {
 		expect(mocks.conversationsIn).toHaveBeenCalledWith('id', ['conversation-1']);
 	});
 
+	it('embeds participants from users (there is no profiles table) without private columns', async () => {
+		const { POST } = await import('./route.js');
+		await POST(new Request('https://qrypt.chat/api/conversations/load', { method: 'POST' }));
+		const conversationsQuery = mocks.from.mock.results[mocks.from.mock.calls.findIndex(([t]) => t === 'conversations')].value;
+		const select = conversationsQuery.select.mock.calls[0][0];
+		expect(select).toContain('user:users!conversation_participants_user_id_fkey(');
+		expect(select).not.toContain('profiles');
+		expect(select).not.toMatch(/phone_number|salt|\*\)/);
+	});
+
 	it('returns 404 when the authenticated user has no internal profile', async () => {
 		mocks.from.mockImplementation((table) => {
 			if (table === 'users') {
