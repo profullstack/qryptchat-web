@@ -117,6 +117,29 @@ export async function mintSession(service, authUserId) {
 	return sessionPayload(data.session);
 }
 
+/**
+ * Refuse to hand a terminal keys that cannot read the account's messages.
+ * Everyone encrypts to the public key in user_public_keys; a browser that lost
+ * its keys (or made fresh ones) would otherwise give qc a keypair that decrypts
+ * nothing. With no key on file yet there is nothing to compare against.
+ */
+export async function assertAccountKey(service, authUserId, publicKey) {
+	if (typeof publicKey !== 'string' || !publicKey) return;
+	const { data } = await service
+		.from('user_public_keys')
+		.select('public_key')
+		.eq('user_id', authUserId)
+		.eq('key_type', 'ML-KEM-1024')
+		.maybeSingle();
+	if (data?.public_key && data.public_key !== publicKey) {
+		throw new CliAuthError(
+			'key_mismatch',
+			"This browser's encryption keys are not your account's current keys, so a terminal signed in with them could not read your messages. Restore your keys (Settings > Keys, backup PIN) or approve from the device you normally chat on.",
+			409
+		);
+	}
+}
+
 /** Store a one-time code for an approved request; returns the code itself. */
 export async function issueCode(service, { authUserId, codeChallenge, redirectUri, clientName, keyBlob }) {
 	if (!validChallenge(codeChallenge)) throw new CliAuthError('invalid_request', 'code_challenge must be an S256 challenge');

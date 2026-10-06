@@ -41,8 +41,18 @@ function Authorize() {
     setStatus('working');
     setError('');
     try {
-      await postQuantumEncryption.initialize();
-      const keys = await postQuantumEncryption.exportUserKeys();
+      // Load, never generate: initialize() would quietly make a fresh keypair
+      // for a browser without keys, and qc would get keys that read nothing.
+      await Promise.all([postQuantumEncryption.loadUserKeys(), postQuantumEncryption.loadUserKeys768()]);
+      const k1024 = postQuantumEncryption.userKeys;
+      const k768 = postQuantumEncryption.userKeys768;
+      if (!k1024?.publicKey || !k1024?.privateKey) {
+        throw new Error('This browser has no encryption keys. Restore them first (Settings > Keys, backup PIN), then run qc login again.');
+      }
+      const keys = {
+        keys1024: { ...k1024, algorithm: postQuantumEncryption.kemName },
+        ...(k768?.publicKey && k768?.privateKey ? { keys768: { ...k768, algorithm: postQuantumEncryption.kemName768 } } : {}),
+      };
       const keyBlob = await postQuantumEncryption.encryptForRecipient(JSON.stringify({ v: 1, ...keys }), kem);
       const session = JSON.parse(localStorage.getItem('qrypt_session') || '{}');
       const res = await fetch('/api/cli/authorize', {
@@ -57,6 +67,7 @@ function Authorize() {
           redirect_uri: redirectUri,
           client_name: client,
           key_blob: keyBlob,
+          public_key: k1024.publicKey,
         }),
       });
       const body = await res.json().catch(() => ({}));

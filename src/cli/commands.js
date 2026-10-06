@@ -101,7 +101,11 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 		}
 		case 'login': {
 			const { session } = await login({ oob: !!flags.oob });
-			return out(`Signed in as @${session.user?.username ?? 'unknown'} on ${session.base}. Keys sealed (ChaCha20-Poly1305) in ${sessionPath()}.`);
+			out(`Signed in as @${session.user?.username ?? 'unknown'} on ${session.base}. Keys sealed (ChaCha20-Poly1305) in ${sessionPath()}.`);
+			if ((await new QcClient(session).keyCheck()) === 'mismatch') {
+				out("Warning: the browser handed over keys that are not your account's current keys, so messages will not decrypt here. Restore your keys in that browser (Settings > Keys) or approve from the device you chat on, then run qc login again.");
+			}
+			return;
 		}
 		case 'logout':
 			clearSession();

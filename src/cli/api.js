@@ -93,6 +93,24 @@ export class QcClient {
 		return data;
 	}
 
+	/**
+	 * Whether this terminal's keys are the account's current keys: 'ok',
+	 * 'mismatch' (everything sent to you is encrypted to a key qc does not hold,
+	 * so nothing will decrypt) or 'unknown' (no key on file, or the check failed).
+	 */
+	async keyCheck() {
+		try {
+			const me = this.me?.id;
+			const mine = this.session.keys?.keys1024?.publicKey;
+			if (!me || !mine) return 'unknown';
+			const { public_keys: keys = {} } = await this.request('/api/crypto/public-keys', { method: 'POST', body: { user_ids: [me] } });
+			if (!keys[me]) return 'unknown';
+			return keys[me] === mine ? 'ok' : 'mismatch';
+		} catch {
+			return 'unknown';
+		}
+	}
+
 	/** Conversations, newest activity first, each with a display title. */
 	async conversations() {
 		const { conversations = [] } = await this.request('/api/conversations/load', { method: 'POST', body: {} });

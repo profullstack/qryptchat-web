@@ -147,3 +147,24 @@ describe('refresh', () => {
 		await expect(refresh('r1')).rejects.toMatchObject({ code: 'invalid_grant' });
 	});
 });
+
+describe('assertAccountKey', () => {
+	const service = (publicKey) => ({
+		from: () => {
+			const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: publicKey ? { public_key: publicKey } : null, error: null }) };
+			return q;
+		}
+	});
+
+	it('refuses keys that are not the account key, so qc never gets keys that read nothing', async () => {
+		const { assertAccountKey } = await import('../../src/lib/auth/cli-auth.js');
+		await expect(assertAccountKey(service('server-key'), 'u', 'fresh-browser-key')).rejects.toMatchObject({ code: 'key_mismatch', status: 409 });
+	});
+
+	it('passes the account key, an account with no key yet, and an old page that sends none', async () => {
+		const { assertAccountKey } = await import('../../src/lib/auth/cli-auth.js');
+		await expect(assertAccountKey(service('server-key'), 'u', 'server-key')).resolves.toBeUndefined();
+		await expect(assertAccountKey(service(null), 'u', 'any')).resolves.toBeUndefined();
+		await expect(assertAccountKey(service('server-key'), 'u', undefined)).resolves.toBeUndefined();
+	});
+});

@@ -57,3 +57,22 @@ describe('qc under rate limits and token rotation', () => {
 		expect(refreshes).toBe(1);
 	});
 });
+
+describe('keyCheck', () => {
+	const withServerKey = (publicKey) => vi.fn(async () => json({ public_keys: { a: publicKey } }));
+
+	it('says ok when the terminal holds the account key', async () => {
+		const client = new QcClient(session(), { fetch: withServerKey(keys.keys1024.publicKey) });
+		expect(await client.keyCheck()).toBe('ok');
+	});
+
+	it('says mismatch when messages are encrypted to a key qc does not hold', async () => {
+		const client = new QcClient(session(), { fetch: withServerKey('someone-else') });
+		expect(await client.keyCheck()).toBe('mismatch');
+	});
+
+	it('says unknown when there is nothing to compare', async () => {
+		const client = new QcClient(session(), { fetch: withServerKey(undefined) });
+		expect(await client.keyCheck()).toBe('unknown');
+	});
+});
