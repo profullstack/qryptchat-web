@@ -1,7 +1,7 @@
 {
   "name": "qryptchat-web",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "bin": {
     "qc": "./bin/qc.js",
@@ -60,6 +60,7 @@
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
     "@profullstack/autoblog": "github:profullstack/autoblog#75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f",
+    "@profullstack/pairux-embed": "^0.1.0",
     "@profullstack/stack": "^0.1.3",
     "@profullstack/text-type-detection": "^1.0.0",
     "@simplewebauthn/browser": "^14.0.0",
