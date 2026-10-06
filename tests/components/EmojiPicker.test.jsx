@@ -3,9 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+const store = vi.hoisted(() => ({ state: {} }));
 vi.mock('@/lib/stores/chat.js', () => ({
-  useChatStore: (select) =>
-    select({ sendMessage: vi.fn(), setTyping: vi.fn(), stopTyping: vi.fn(), loadMessages: vi.fn() }),
+  useChatStore: (select) => select(store.state),
 }));
 vi.mock('@/lib/stores/auth.js', () => ({ useAuthStore: (select) => select({ user: { id: 'u1' } }) }));
 
@@ -15,6 +15,14 @@ const index = JSON.parse(readFileSync(resolve(__dirname, '..', '..', 'public', '
 
 beforeEach(() => {
   globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => index }));
+  store.state = {
+    sendMessage: vi.fn(async () => ({ success: true })),
+    setTyping: vi.fn(),
+    stopTyping: vi.fn(),
+    loadMessages: vi.fn(),
+    replyingTo: null,
+    clearReplyingTo: vi.fn(),
+  };
 });
 
 describe('emoji picker in the composer', () => {
@@ -47,5 +55,18 @@ describe('emoji picker in the composer', () => {
     expect(await screen.findByRole('dialog', { name: 'Emoji' })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Emoji' })).toBeNull());
+  });
+
+  it('shows the reply bar and sends the reply with replyToId', async () => {
+    store.state.replyingTo = { id: 'm1', conversation_id: 'c1', sender_id: 'u2', sender: { display_name: 'Bob' }, content: 'ship it?' };
+    render(<MessageInput conversationId="c1" />);
+    expect(screen.getByText('Replying to Bob')).toBeInTheDocument();
+    expect(screen.getByText('ship it?')).toBeInTheDocument();
+    const editor = screen.getByRole('textbox', { name: 'Message' });
+    editor.textContent = 'yes';
+    fireEvent.input(editor);
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    await waitFor(() => expect(store.state.sendMessage).toHaveBeenCalledWith('c1', 'yes', 'text', null, 'm1'));
+    await waitFor(() => expect(store.state.clearReplyingTo).toHaveBeenCalled());
   });
 });

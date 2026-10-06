@@ -15,7 +15,8 @@ Usage:
   qc whoami               who this terminal is signed in as
   qc chats                list your chats
   qc read <chat> [-n 20]  print the last messages of a chat
-  qc send <chat> <text>   send a message (text "-" reads stdin)
+  qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply)
+  qc react <chat> <message-id> <emoji> [--remove]   react to a message
   qc listen               print new messages as they arrive (NDJSON with --json)
   qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message)
 
@@ -33,7 +34,7 @@ export function parseArgs(argv) {
 		if (a.startsWith('--')) {
 			const [k, v] = a.slice(2).split('=', 2);
 			if (v !== undefined) args.flags[k] = v;
-			else if (['url', 'n', 'limit'].includes(k) && argv[i + 1] !== undefined) args.flags[k] = argv[++i];
+			else if (['url', 'n', 'limit', 'reply'].includes(k) && argv[i + 1] !== undefined) args.flags[k] = argv[++i];
 			else args.flags[k] = true;
 		} else if (a === '-n' && argv[i + 1] !== undefined) {
 			args.flags.n = argv[++i];
@@ -122,8 +123,24 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			const { messages } = await c.messages(chat.id, { limit: 100 });
 			const last = messages.slice(-Math.max(1, Number(flags.n || flags.limit || 20)));
 			if (flags.json) return json(last);
-			for (const m of last) out(`[${stamp(m.at)}] ${m.mine ? 'you' : m.sender}: ${m.text}`);
+			for (const m of last) {
+				if (m.replyTo) out(`    ┃ ${m.replyTo.name ? `${m.replyTo.name}: ` : ''}${m.replyTo.snippet}`);
+				const reactions = m.reactions?.length ? `  [${m.reactions.map((r) => `${r.emoji}${r.count > 1 ? r.count : ''}`).join(' ')}]` : '';
+				out(`[${stamp(m.at)}] ${m.mine ? 'you' : m.sender}: ${m.text}${reactions}  (${m.id.slice(0, 8)})`);
+			}
 			return;
+		}
+		case 'react': {
+			const [chatQuery, messageId, emoji] = rest;
+			if (!chatQuery || !messageId || !emoji) throw new Error('Usage: qc react <chat> <message-id> <emoji> [--remove]');
+			const c = await client(flags);
+			const chat = findChat(await c.conversations(), chatQuery);
+			// A message id or its first characters, as qc read prints them.
+			const { messages } = await c.messages(chat.id);
+			const target = messages.filter((m) => m.id === messageId || m.id.startsWith(messageId));
+			if (target.length !== 1) throw new Error(target.length ? `"${messageId}" matches ${target.length} messages` : `No message "${messageId}" in ${chat.title}`);
+			await c.react(chat.id, target[0].id, emoji, !!flags.remove);
+			return out(`${flags.remove ? 'Removed' : 'Reacted'} ${emoji} on ${chat.title}.`);
 		}
 		case 'send': {
 			if (!rest[0] || rest.length < 2) throw new Error('Usage: qc send <chat> <text>   (text "-" reads stdin)');
@@ -131,7 +148,7 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			if (!text) throw new Error('Nothing to send.');
 			const c = await client(flags);
 			const chat = findChat(await c.conversations(), rest[0]);
-			const { message, skipped } = await c.send(chat.id, text);
+			const { message, skipped } = await c.send(chat.id, text, { replyTo: flags.reply || undefined });
 			if (flags.json) return json({ id: message?.id, conversation: chat.id, skipped });
 			return out(`Sent to ${chat.title}${skipped ? ` (${skipped} participant(s) have no key yet)` : ''}.`);
 		}

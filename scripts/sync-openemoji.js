@@ -35,7 +35,7 @@ const iconDir = arg('openicon', resolve(root, '..', 'openicon'));
 /** OpenIcon keys used by the composer, the picker tabs and the file chips. */
 export const ICONS = [
   'smile', 'paperclip', 'send', 'search', 'close', 'clock', 'users', 'leaf', 'coffee',
-  'globe', 'trophy', 'lightbulb', 'hash', 'flag',
+  'globe', 'trophy', 'lightbulb', 'hash', 'flag', 'reply', 'heart', 'plus-circle',
 ];
 
 for (const [label, dir, file] of [

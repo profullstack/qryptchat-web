@@ -33,8 +33,24 @@ const TOOLS = [
 			properties: {
 				chat: { type: 'string', description: 'Conversation id or part of its name' },
 				text: { type: 'string', description: 'The message' },
+				reply_to: { type: 'string', description: 'Optional: id of the message this replies to (from read_chat)' },
 			},
 			required: ['chat', 'text'],
+			additionalProperties: false,
+		},
+	},
+	{
+		name: 'react_to_message',
+		description: 'React to a message with an emoji (Signal-style: one reaction per person; a new one replaces yours). End-to-end encrypted.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				chat: { type: 'string', description: 'Conversation id or part of its name' },
+				message_id: { type: 'string', description: 'The message id, from read_chat' },
+				emoji: { type: 'string', description: 'The emoji, e.g. ❤️' },
+				remove: { type: 'boolean', description: 'Withdraw this reaction instead' },
+			},
+			required: ['chat', 'message_id', 'emoji'],
 			additionalProperties: false,
 		},
 	},
@@ -49,13 +65,29 @@ export async function callTool(client, name, args = {}) {
 		const chat = findChat(await client.conversations(), args.chat);
 		const { messages } = await client.messages(chat.id, { limit: 100 });
 		const limit = Math.min(100, Math.max(1, Number(args.limit) || 20));
-		return { chat: { id: chat.id, title: chat.title }, messages: messages.slice(-limit).map(({ sender, mine, text, at }) => ({ from: mine ? 'me' : sender, text, at })) };
+		return {
+			chat: { id: chat.id, title: chat.title },
+			messages: messages.slice(-limit).map(({ id, sender, mine, text, at, reactions, replyTo }) => ({
+				id,
+				from: mine ? 'me' : sender,
+				text,
+				at,
+				...(reactions?.length ? { reactions: reactions.map(({ emoji, count, mine: m }) => ({ emoji, count, mine: m })) } : {}),
+				...(replyTo ? { reply_to: { id: replyTo.id, from: replyTo.name, text: replyTo.snippet } } : {}),
+			})),
+		};
 	}
 	if (name === 'send_message') {
 		if (!args.text || typeof args.text !== 'string') throw new Error('text is required');
 		const chat = findChat(await client.conversations(), args.chat);
-		const { message, skipped } = await client.send(chat.id, args.text);
+		const { message, skipped } = await client.send(chat.id, args.text, { replyTo: typeof args.reply_to === 'string' ? args.reply_to : undefined });
 		return { sent: true, id: message?.id, chat: chat.title, skipped };
+	}
+	if (name === 'react_to_message') {
+		if (!args.emoji || typeof args.emoji !== 'string') throw new Error('emoji is required');
+		const chat = findChat(await client.conversations(), args.chat);
+		await client.react(chat.id, String(args.message_id), args.emoji, !!args.remove);
+		return { reacted: !args.remove, emoji: args.emoji, chat: chat.title };
 	}
 	throw new Error(`Unknown tool ${name}`);
 }

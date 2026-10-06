@@ -6,6 +6,7 @@
  */
 import { baseUrl, saveSession } from './config.js';
 import { keyring } from './crypto.js';
+import { foldMessages, reactionEnvelope, REACTION_TYPE } from '../lib/chat/reactions.js';
 
 export class QcError extends Error {
 	constructor(message, status) {
@@ -82,39 +83,49 @@ export class QcClient {
 	}
 
 	/** Decrypted messages, oldest first. */
-	async messages(conversationId, { limit = 100, before } = {}) {
+	/**
+	 * Decrypted messages, oldest first. Reactions (encrypted messages of their
+	 * own) are folded into their targets as `reactions`, and replies carry a
+	 * `replyTo` quote, exactly as the web app shows them.
+	 */
+	async messages(conversationId, { limit = 200, before } = {}) {
 		const { messages = [], hasMore = false } = await this.request('/api/messages/load', {
 			method: 'POST',
 			body: { conversationId, limit, ...(before ? { before } : {}) },
 		});
-		const out = [];
+		const raw = [];
 		for (const m of messages) {
-			let text;
+			let content = m.encrypted_content ? await this.ring.decrypt(m.encrypted_content) : '';
 			if (m.message_type === 'file' || m.has_attachments) {
-				text = m.encrypted_content ? await this.ring.decrypt(m.encrypted_content) : '';
-				text = `📎 ${text && text !== '[File attachment]' ? `${text} ` : ''}(attachment: open qrypt.chat to download)`;
-			} else {
-				text = m.encrypted_content ? await this.ring.decrypt(m.encrypted_content) : '';
+				content = `📎 ${content && content !== '[File attachment]' ? `${content} ` : ''}(attachment: open qrypt.chat to download)`;
 			}
-			out.push({
-				id: m.id,
-				conversationId: m.conversation_id,
-				senderId: m.sender_id,
-				sender: m.sender?.display_name || m.sender?.username || 'unknown',
-				username: m.sender?.username || '',
-				mine: m.sender_id === this.me?.id,
-				text,
-				at: m.created_at,
-			});
+			raw.push({ ...m, content });
 		}
+		const out = foldMessages(raw, this.me?.id).map((m) => ({
+			id: m.id,
+			conversationId: m.conversation_id,
+			senderId: m.sender_id,
+			sender: m.sender?.display_name || m.sender?.username || 'unknown',
+			username: m.sender?.username || '',
+			mine: m.sender_id === this.me?.id,
+			text: m.content,
+			at: m.created_at,
+			reactions: m.reactions.map(({ emoji, count, mine, names }) => ({ emoji, count, mine, names })),
+			...(m.replyTo ? { replyTo: m.replyTo } : {}),
+		}));
 		return { messages: out, hasMore };
+	}
+
+	/** React to a message (one per person; remove=true withdraws it). Encrypted like any message. */
+	async react(conversationId, messageId, emoji, remove = false) {
+		return this.send(conversationId, reactionEnvelope(messageId, emoji, remove), { messageType: REACTION_TYPE });
 	}
 
 	/**
 	 * Encrypt the text once per participant (their public key, ML-KEM-1024) and
 	 * send every copy. The server stores ciphertext only.
 	 */
-	async send(conversationId, text) {
+	async send(conversationId, text, { replyTo, messageType = 'text' } = {}) {
 		const { participants = [] } = await this.request(`/api/chat/conversations/${encodeURIComponent(conversationId)}/participants`);
 		const userIds = participants.map((p) => p.user_id);
 		if (!userIds.length) throw new QcError('This conversation has no participants');
@@ -131,7 +142,7 @@ export class QcClient {
 		if (!Object.keys(encryptedContents).length) throw new QcError('No participant has a public key yet');
 		const { message } = await this.request('/api/messages/send', {
 			method: 'POST',
-			body: { conversationId, encryptedContents, messageType: 'text' },
+			body: { conversationId, encryptedContents, messageType, ...(replyTo ? { replyToId: replyTo } : {}) },
 		});
 		return { message, skipped: missing.length };
 	}

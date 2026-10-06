@@ -5,6 +5,7 @@ import { multiRecipientEncryption } from '@/lib/crypto/multi-recipient-encryptio
 import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '@/lib/crypto/public-key-service.js';
 import * as conversationUtils from '@/lib/utils/conversation-utils.js';
+import { reactionEnvelope, REACTION_TYPE } from '@/lib/chat/reactions.js';
 
 export const useChatStore = create((set, get) => {
   let eventSource = null;
@@ -150,6 +151,8 @@ export const useChatStore = create((set, get) => {
     loading: false,
     error: null,
     typingUsers: [],
+    /** The message the composer is replying to, or null. */
+    replyingTo: null,
     connected: false,
     authenticated: false,
     user: null,
@@ -257,6 +260,31 @@ export const useChatStore = create((set, get) => {
         }
         return { success: false, error: errorMessage };
       }
+    },
+
+    setReplyingTo(message) {
+      set({ replyingTo: message || null });
+    },
+
+    clearReplyingTo() {
+      set({ replyingTo: null });
+    },
+
+    /**
+     * React to a message (Signal-style: one emoji per person per message; a new
+     * one replaces yours, remove=true withdraws it). The reaction is an
+     * encrypted message of its own, so the server never sees target or emoji.
+     */
+    async sendReaction(conversationId, targetId, emoji, remove = false) {
+      const result = await get().sendMessage(conversationId, reactionEnvelope(targetId, emoji, remove), REACTION_TYPE);
+      if (result?.success && result.data) {
+        // Show it at once; the SSE reload that follows replaces the list anyway.
+        const { messages, activeConversation } = get();
+        if (activeConversation === conversationId && !messages.some((m) => m.id === result.data.id)) {
+          set({ messages: [...messages, result.data] });
+        }
+      }
+      return result;
     },
 
     async startTyping(conversationId) {

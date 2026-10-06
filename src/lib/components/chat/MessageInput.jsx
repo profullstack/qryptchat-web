@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '@/lib/stores/chat.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '@/lib/stores/auth.js';
@@ -8,6 +8,7 @@ import { detectTextFormat } from '@profullstack/text-type-detection';
 import { trackMessageSent } from '@/lib/utils/analytics.js';
 import { multiRecipientEncryption } from '@/lib/crypto/multi-recipient-encryption.js';
 import EmojiEditor from './EmojiEditor.jsx';
+import { snippet } from '@/lib/chat/reactions.js';
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
@@ -49,14 +50,26 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const typingTimeoutRef = useRef(null);
 
   const user = useAuthStore((s) => s.user);
-  const { sendMessage, setTyping, stopTyping, loadMessages } = useChatStore(
+  const { sendMessage, setTyping, stopTyping, loadMessages, replyingTo, clearReplyingTo } = useChatStore(
     useShallow((s) => ({
       sendMessage: s.sendMessage,
       setTyping: s.setTyping,
       stopTyping: s.stopTyping,
       loadMessages: s.loadMessages,
+      replyingTo: s.replyingTo,
+      clearReplyingTo: s.clearReplyingTo,
     }))
   );
+
+  // Choosing Reply on a message puts the caret straight in the composer.
+  useEffect(() => {
+    if (replyingTo) editorRef.current?.focus();
+  }, [replyingTo]);
+
+  // A reply belongs to one conversation; switching chats drops it.
+  useEffect(() => {
+    clearReplyingTo();
+  }, [conversationId]);
 
   function handleChange(val) {
     setMessageText(val);
@@ -209,9 +222,11 @@ export default function MessageInput({ conversationId, disabled = false }) {
       } else {
         const detection = detectTextFormat(content);
         const metadata = detection.text_format === 'ascii' ? { isAsciiArt: true } : null;
-        const result = await sendMessage(conversationId, content, 'text', metadata);
+        const replyToId = replyingTo?.conversation_id === conversationId ? replyingTo.id : null;
+        const result = await sendMessage(conversationId, content, 'text', metadata, replyToId);
         if (result?.success) {
           setMessageText('');
+          clearReplyingTo();
           trackMessageSent({ conversationId, type: 'text' });
         } else {
           setUploadError(result?.error || 'Failed to send message');
@@ -251,6 +266,17 @@ export default function MessageInput({ conversationId, disabled = false }) {
 
       {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
 
+      {replyingTo && (
+        <div className="reply-bar" role="status">
+          <Icon name="reply" size={16} />
+          <div className="reply-bar-text">
+            <span className="reply-bar-name">Replying to {replyingTo.sender_id === user?.id ? 'yourself' : replyingTo.sender?.display_name || replyingTo.sender?.username || 'message'}</span>
+            <span className="reply-bar-snippet">{snippet(replyingTo)}</span>
+          </div>
+          <button type="button" className="reply-bar-close" onClick={clearReplyingTo} aria-label="Cancel reply" title="Cancel reply">×</button>
+        </div>
+      )}
+
       <div className="message-input-wrapper">
         <button
           className="attach-btn"
@@ -277,6 +303,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
           value={messageText}
           onChange={handleChange}
           onSubmit={handleSend}
+          onEscape={replyingTo ? clearReplyingTo : undefined}
           placeholder="Type a message..."
           disabled={disabled || isSending}
         />
@@ -310,6 +337,11 @@ export default function MessageInput({ conversationId, disabled = false }) {
         .send-spinner { border-top-color: white; }
         .message-input-wrapper { display: flex; align-items: flex-end; gap: .5rem; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: 1.5rem; padding: .375rem .375rem .375rem .75rem; }
         .message-textarea { flex: 1; border: none; background: transparent; resize: none; font-size: .9375rem; line-height: 1.5; max-height: 120px; padding: .25rem 0; color: var(--color-text-primary); outline: none; font-family: inherit; }
+        .reply-bar { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; padding: .4rem .6rem; border-left: 3px solid var(--color-brand-primary); border-radius: .5rem; background: var(--color-bg-secondary); color: var(--color-text-secondary); font-size: .8125rem; }
+        .reply-bar-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .reply-bar-name { font-weight: 600; color: var(--color-text-primary); font-size: .75rem; }
+        .reply-bar-snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .reply-bar-close { background: none; border: none; font-size: 1.2rem; line-height: 1; color: var(--color-text-secondary); cursor: pointer; padding: 0 .25rem; }
         .message-textarea { overflow-y: auto; white-space: pre-wrap; word-break: break-word; min-height: 1.5em; cursor: text; }
         .message-textarea[data-empty="true"]::before { content: attr(data-placeholder); color: var(--color-text-muted); pointer-events: none; }
         .message-textarea[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }

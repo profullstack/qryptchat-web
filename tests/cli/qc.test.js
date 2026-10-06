@@ -74,6 +74,22 @@ describe('QcClient', () => {
 		expect(messages[0]).toMatchObject({ text: 'hello', mine: true, sender: 'alice' });
 	}, 20000);
 
+	it('folds encrypted reactions into their target and quotes replies', async () => {
+		const me = await account();
+		const enc = (t) => keyring(me).encrypt(t, me.keys1024.publicKey);
+		const { reactionEnvelope } = await import('../../src/lib/chat/reactions.js');
+		const rows = [
+			{ id: 'm1', conversation_id: 'c', sender_id: 'b', sender: { display_name: 'Bob' }, message_type: 'text', encrypted_content: await enc('ship it?'), created_at: '2026-10-06T10:00:00Z' },
+			{ id: 'r1', conversation_id: 'c', sender_id: 'a', sender: { username: 'me' }, message_type: 'reaction', encrypted_content: await enc(reactionEnvelope('m1', '🚀')), created_at: '2026-10-06T10:00:05Z' },
+			{ id: 'm2', conversation_id: 'c', sender_id: 'a', sender: { username: 'me' }, message_type: 'text', reply_to_id: 'm1', encrypted_content: await enc('yes'), created_at: '2026-10-06T10:00:10Z' },
+		];
+		const client = new QcClient({ access_token: 't', keys: me, user: { id: 'a' } }, { fetch: async () => json({ messages: rows }), save: () => {} });
+		const { messages } = await client.messages('c');
+		expect(messages.map((m) => m.id)).toEqual(['m1', 'm2']);
+		expect(messages[0].reactions).toEqual([{ emoji: '🚀', count: 1, mine: true, names: ['You'] }]);
+		expect(messages[1].replyTo).toMatchObject({ id: 'm1', name: 'Bob', snippet: 'ship it?' });
+	}, 20000);
+
 	it('refreshes once on a 401, saves the rotated session, and retries', async () => {
 		const saved = [];
 		let calls = 0;
@@ -136,7 +152,7 @@ describe('arguments and chats', () => {
 describe('qc mcp', () => {
 	const fake = {
 		conversations: async () => [{ id: 'c1', title: 'Alice', participants: [1, 2] }],
-		messages: async () => ({ messages: [{ sender: 'alice', mine: false, text: 'hi', at: 't' }] }),
+		messages: async () => ({ messages: [{ id: 'm1', sender: 'alice', mine: false, text: 'hi', at: 't', reactions: [{ emoji: '❤️', count: 1, mine: true }] }] }),
 		send: async () => ({ message: { id: 'm' }, skipped: 0 }),
 	};
 
@@ -144,12 +160,12 @@ describe('qc mcp', () => {
 		const init = await handle(fake, { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, { version: '1' });
 		expect(init.serverInfo.name).toBe('qc');
 		const { tools } = await handle(fake, { id: 2, method: 'tools/list' }, { version: '1' });
-		expect(tools.map((t) => t.name)).toEqual(['list_chats', 'read_chat', 'send_message']);
+		expect(tools.map((t) => t.name)).toEqual(['list_chats', 'read_chat', 'send_message', 'react_to_message']);
 	});
 
 	it('calls tools and reports errors as tool errors', async () => {
 		const read = await handle(fake, { id: 3, method: 'tools/call', params: { name: 'read_chat', arguments: { chat: 'alice' } } }, { version: '1' });
-		expect(read.structuredContent.messages).toEqual([{ from: 'alice', text: 'hi', at: 't' }]);
+		expect(read.structuredContent.messages).toEqual([{ id: 'm1', from: 'alice', text: 'hi', at: 't', reactions: [{ emoji: '❤️', count: 1, mine: true }] }]);
 		const bad = await handle(fake, { id: 4, method: 'tools/call', params: { name: 'send_message', arguments: { chat: 'nobody', text: 'x' } } }, { version: '1' });
 		expect(bad.isError).toBe(true);
 		await expect(handle(fake, { id: 5, method: 'nope' }, { version: '1' })).rejects.toThrow(/Method not found/);

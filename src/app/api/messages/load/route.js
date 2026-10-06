@@ -13,7 +13,7 @@ function normalizeConversationId(conversationId) {
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { conversationId: rawConversationId, limit = 50, before } = await request.json();
+		const { conversationId: rawConversationId, limit = 200, before } = await request.json();
 		const conversationId = normalizeConversationId(rawConversationId);
 
 		if (!conversationId) {
@@ -22,7 +22,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		const normalizedLimit = normalizeMessageLimit(limit);
 		if (normalizedLimit === null) {
-			return NextResponse.json({ error: 'limit must be an integer between 1 and 100' }, { status: 400 });
+			return NextResponse.json({ error: 'limit must be an integer between 1 and 500' }, { status: 400 });
 		}
 
 		const { supabase, user: authUser } = locals;
@@ -73,7 +73,9 @@ export const POST = withAuth(async ({ request, locals }) => {
 			.eq('conversation_id', conversationId)
 			.eq('message_recipients.recipient_user_id', userId)
 			.is('deleted_at', null)
-			.order('created_at', { ascending: true })
+			// Newest N first, reversed below: ascending + limit returned a chat's
+			// OLDEST messages, so anything past the limit never showed.
+			.order('created_at', { ascending: false })
 			.limit(normalizedLimit);
 
 		if (before) {
@@ -90,7 +92,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 		console.log('📨 [SSE-LOAD] Loaded', messages?.length || 0, 'messages');
 
 		// Process messages and add user-specific encrypted content
-		const processedMessages = (messages || []).map(msg => {
+		const processedMessages = (messages || []).slice().reverse().map(msg => {
 			// Check if this message has per-user encrypted content in message_recipients
 			if (msg.message_recipients && msg.message_recipients.length > 0) {
 				// Find the encrypted content for this specific user
@@ -151,5 +153,5 @@ export const POST = withAuth(async ({ request, locals }) => {
 });
 
 function normalizeMessageLimit(limit) {
-	return Number.isInteger(limit) && limit >= 1 && limit <= 100 ? limit : null;
+	return Number.isInteger(limit) && limit >= 1 && limit <= 500 ? limit : null;
 }

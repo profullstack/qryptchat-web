@@ -12,7 +12,7 @@ import { hasRawEmoji, render, selectionOffsets, serialize, setCaret, spliceValue
  *   ref.focus()
  */
 const EmojiEditor = forwardRef(function EmojiEditor(
-  { value, onChange, onSubmit, placeholder = '', disabled = false, className = '', ariaLabel = 'Message' },
+  { value, onChange, onSubmit, onEscape, placeholder = '', disabled = false, className = '', ariaLabel = 'Message' },
   ref
 ) {
   const el = useRef(null);
@@ -64,6 +64,10 @@ const EmojiEditor = forwardRef(function EmojiEditor(
   }
 
   function handleKeyDown(e) {
+    if (e.key === 'Escape' && onEscape) {
+      onEscape();
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey && !composing.current) {
       e.preventDefault();
       onSubmit?.();
