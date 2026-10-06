@@ -59,19 +59,34 @@ export class QcClient {
 		return this.session.access_token;
 	}
 
-	async request(path, { method = 'GET', body, signal, retry = true } = {}) {
+	/**
+	 * A 401 means the access token is stale, unless another request already
+	 * swapped it out while this one was in flight: then just retry with the new
+	 * one. Refresh tokens rotate, so refreshing twice for one expiry burns a token.
+	 */
+	async reauth(usedToken) {
+		if (this.session.access_token === usedToken) await this.refresh();
+	}
+
+	async request(path, { method = 'GET', body, signal, retry = true, throttled = 0 } = {}) {
+		const used = await this.token();
 		const res = await this.fetch(`${this.base}${path}`, {
 			method,
 			signal,
 			headers: {
-				Authorization: `Bearer ${await this.token()}`,
+				Authorization: `Bearer ${used}`,
 				...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
 			},
 			body: body !== undefined ? JSON.stringify(body) : undefined,
 		});
 		if (res.status === 401 && retry) {
-			await this.refresh();
-			return this.request(path, { method, body, signal, retry: false });
+			await this.reauth(used);
+			return this.request(path, { method, body, signal, retry: false, throttled });
+		}
+		// Rate limited: wait as told (or back off) and try again a few times.
+		if (res.status === 429 && throttled < 3) {
+			await sleep(retryAfterMs(res, throttled), signal);
+			return this.request(path, { method, body, signal, retry, throttled: throttled + 1 });
 		}
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) throw new QcError(data.error_description || data.error || `HTTP ${res.status}`, res.status);
@@ -162,20 +177,31 @@ export class QcClient {
 	 */
 	async events(onEvent, { signal, onStatus = () => {} } = {}) {
 		let delay = 1000;
+		let reauthed = false;
 		while (!signal?.aborted) {
 			onStatus('connecting');
 			try {
+				const used = await this.token();
 				const res = await this.fetch(`${this.base}/api/events`, {
-					headers: { Authorization: `Bearer ${await this.token()}`, Accept: 'text/event-stream' },
+					headers: { Authorization: `Bearer ${used}`, Accept: 'text/event-stream' },
 					signal,
 				});
 				if (res.status === 401) {
-					await this.refresh();
+					// One refresh per rejection. If a fresh token is refused too, stop:
+					// looping here would rotate refresh tokens until the session dies.
+					if (reauthed) throw new QcError('The server refused this session. Run qc login.', 401);
+					reauthed = true;
+					await this.reauth(used);
+					continue;
+				}
+				if (res.status === 429) {
+					await sleep(retryAfterMs(res, 2), signal);
 					continue;
 				}
 				if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 				onStatus('live');
 				delay = 1000;
+				reauthed = false;
 				await readSse(res.body, onEvent);
 			} catch (err) {
 				if (signal?.aborted) break;
@@ -215,6 +241,12 @@ export async function readSse(body, onEvent) {
 			onEvent({ type, data: parsed?.payload ?? parsed?.data ?? parsed });
 		}
 	}
+}
+
+/** How long a 429 says to wait: Retry-After seconds, else 2s, 4s, 8s ... */
+export function retryAfterMs(res, attempt = 0) {
+	const s = Number(res.headers?.get?.('retry-after'));
+	return Number.isFinite(s) && s > 0 ? Math.min(s, 60) * 1000 : 2000 * 2 ** attempt;
 }
 
 function sleep(ms, signal) {

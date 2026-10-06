@@ -20,7 +20,8 @@ export async function authenticateRequest(request) {
       ? await createSupabaseServerClientWithToken(token)
       : await createSupabaseServerClient();
 
-    const { data: { user }, error } = await supabase.auth.getUser();
+    // With a Bearer token the client holds no session, so name the JWT to verify.
+    const { data: { user }, error } = token ? await supabase.auth.getUser(token) : await supabase.auth.getUser();
 
     if (error || !user) {
       return { success: false, error: 'Unauthorized' };

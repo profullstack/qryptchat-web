@@ -1,4 +1,5 @@
 import { createBrowserClient, createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -35,12 +36,19 @@ export async function createSupabaseServerClient() {
   });
 }
 
+/**
+ * A server client that acts as the bearer of `token` (qc, MCP, passkey and
+ * CoinPay sessions, which carry no cookie). The token rides on every request,
+ * so RLS sees that user. setSession() is not an option: auth-js refuses a
+ * session without a refresh token, which silently turned every Bearer request
+ * into a 401.
+ */
 export async function createSupabaseServerClientWithToken(token) {
-  const client = await createSupabaseServerClient();
-  if (token) {
-    await client.auth.setSession({ access_token: token, refresh_token: '' });
-  }
-  return client;
+  if (!token) return createSupabaseServerClient();
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
 }
 
 export class SupabaseHelpers {
