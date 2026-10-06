@@ -46,7 +46,7 @@ describe('the qc client screen', () => {
 	it('draws emoji and the brand lock as HD images when the terminal can show them', () => {
 		const s = state();
 		// Every emoji and icon is "loaded" as image 7.
-		s.images = { enabled: true, emoji: () => 7, icon: () => 7, clear: () => {} };
+		s.images = { enabled: true, mode: 'kitty', emoji: () => 7, icon: () => 7, clear: () => {}, attach: () => {} };
 		const screen = draw(s);
 		const rocket = screen.find('shipped it');
 		const cells = screen.buffer.chars;
