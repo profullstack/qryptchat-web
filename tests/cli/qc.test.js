@@ -178,7 +178,9 @@ describe('qc login on a remote box', () => {
 		const { isRemote } = await import('../../src/cli/login.js');
 		expect(isRemote({ platform: 'linux', env: { SSH_CONNECTION: '1 2 3 4' } })).toBe(true);
 		expect(isRemote({ platform: 'linux', env: { SSH_CONNECTION: '1 2 3 4', DISPLAY: ':0' } })).toBe(false);
-		expect(isRemote({ platform: 'linux', env: {} })).toBe(false);
+		expect(isRemote({ platform: 'linux', env: {} })).toBe(true); // tmux/mosh drop SSH_*
+		expect(isRemote({ platform: 'linux', env: { WAYLAND_DISPLAY: 'wayland-0' } })).toBe(false);
+		expect(isRemote({ platform: 'win32', env: {} })).toBe(false);
 		expect(isRemote({ platform: 'darwin', env: { SSH_TTY: '/dev/pts/1' } })).toBe(false);
 		expect(isRemote({ platform: 'linux', env: { QC_NO_BROWSER: '1' } })).toBe(true);
 	});

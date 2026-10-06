@@ -26,13 +26,15 @@ const PAGE = (title, body) => `<!doctype html><meta charset="utf-8"><title>${tit
 
 /** Open a URL in the default browser; false when there is nothing to open it with. */
 /**
- * True when no browser can come back to this machine: an SSH session with no
- * display, or QC_NO_BROWSER. A loopback redirect would then land on the
- * browser's OWN 127.0.0.1 (your laptop), where nothing is listening.
+ * True when no browser can come back to this machine: a Linux/BSD shell with
+ * no display (SSH, but also tmux or mosh, which drop the SSH_* variables), or
+ * QC_NO_BROWSER. A loopback redirect would then land on the browser's OWN
+ * 127.0.0.1 (your laptop), where nothing is listening.
  */
 export function isRemote({ platform = process.platform, env = process.env } = {}) {
 	if (env.QC_NO_BROWSER) return true;
-	return !!(env.SSH_CONNECTION || env.SSH_TTY) && !env.DISPLAY && !env.WAYLAND_DISPLAY && platform !== 'darwin' && platform !== 'win32';
+	if (platform === 'darwin' || platform === 'win32') return false;
+	return !env.DISPLAY && !env.WAYLAND_DISPLAY;
 }
 
 /**
