@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/qryptchat",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "qc: qrypt.chat in your terminal. A full-screen end-to-end encrypted chat client (ML-KEM-1024), plus a scriptable CLI and an MCP server.",
   "type": "module",
   "bin": {
@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@noble/ciphers": "^2.0.0",
-    "@profullstack/hqtui": "^0.8.0",
+    "@profullstack/hqtui": "^0.9.0",
     "mlkem": "^2.5.0"
   },
   "keywords": [
