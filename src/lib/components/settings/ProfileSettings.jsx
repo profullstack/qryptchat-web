@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import EmojiPicker from '@/lib/components/chat/EmojiPicker.jsx';
+import OpenEmoji from '@/lib/components/OpenEmoji.jsx';
 
 /**
  * Settings > Profile: the public profile at /u/<username>, also served as
@@ -59,7 +60,7 @@ export default function ProfileSettings() {
         <label htmlFor="ps-emoji">Emoji</label>
         <div className="ps-emoji">
           <button type="button" id="ps-emoji" className="ps-emoji-btn emoji-btn" onClick={() => setPicking((p) => !p)} aria-label="Pick your emoji">
-            {form.emoji || '＋'}
+            {form.emoji ? <OpenEmoji char={form.emoji} size="1.6rem" /> : '＋'}
           </button>
           {form.emoji && (
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => setForm((f) => ({ ...f, emoji: '' }))}>Clear</button>

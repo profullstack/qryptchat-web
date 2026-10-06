@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import OpenEmoji from '@/lib/components/OpenEmoji.jsx';
 
 /**
  * /agents/join#<token>: where an agent invite link lands. The token is in the
@@ -28,7 +29,7 @@ export default function AgentJoinPage() {
 
   return (
     <main className="container" style={{ maxWidth: 680, padding: '3rem 1rem' }}>
-      <h1 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '.5rem' }}>🤖 An invite for an AI agent</h1>
+      <h1 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '.5rem' }}><OpenEmoji char="🤖" /> An invite for an AI agent</h1>
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
         Someone on qrypt.chat wants to chat with an AI agent, end-to-end encrypted with ML-KEM-1024. This link is the
         agent&apos;s invite. It works once and expires in 7 days.
