@@ -8,8 +8,14 @@ import { i18nUtils, languages } from '@/lib/stores/i18n.js';
 import Navbar from '@/lib/components/Navbar.jsx';
 import Footer from '@/lib/components/Footer.jsx';
 import PWAToastManager from '@/lib/components/PWAToastManager.jsx';
+import { installApiAuth } from '@/lib/api/auth-fetch.js';
+import { useAuthStore } from '@/lib/stores/auth.js';
 import IncomingCallModal from '@/lib/components/voice-call/IncomingCallModal.jsx';
 import ActiveCallInterface from '@/lib/components/voice-call/ActiveCallInterface.jsx';
+
+// Before anything fetches: every /api/ call carries the session as a Bearer
+// token, since passkey/CoinPay/phone sessions have no cookie.
+installApiAuth({ refresh: (token) => useAuthStore.getState().refreshSession(token) });
 
 export default function ClientLayout({ children }) {
   const pathname = usePathname();

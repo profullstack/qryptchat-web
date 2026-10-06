@@ -16,12 +16,16 @@ export async function authenticateRequest(request) {
     const authHeader = request.headers.get('authorization');
     const token = getBearerToken(authHeader);
 
-    const supabase = token
-      ? await createSupabaseServerClientWithToken(token)
-      : await createSupabaseServerClient();
+    if (token) {
+      // With a Bearer token the client holds no session, so name the JWT to verify.
+      const supabase = await createSupabaseServerClientWithToken(token);
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (!error && user) return { success: true, user, supabase };
+      // A stale token must not lock out a valid cookie session: fall through.
+    }
 
-    // With a Bearer token the client holds no session, so name the JWT to verify.
-    const { data: { user }, error } = token ? await supabase.auth.getUser(token) : await supabase.auth.getUser();
+    const supabase = await createSupabaseServerClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
 
     if (error || !user) {
       return { success: false, error: 'Unauthorized' };

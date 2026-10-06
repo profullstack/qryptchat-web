@@ -66,4 +66,15 @@ describe('authenticateRequest bearer token parsing', () => {
     expect(mocks.createSupabaseServerClientWithToken).not.toHaveBeenCalled();
     expect(mocks.createSupabaseServerClient).toHaveBeenCalledTimes(1);
   });
+
+  it('falls back to the cookie session when a stale Bearer token is refused', async () => {
+    mocks.tokenClient.auth.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'expired' } });
+    mocks.cookieClient.auth.getUser.mockResolvedValue({ data: { user: { id: 'cookie-user' } }, error: null });
+    const { authenticateRequest } = await import('./auth.js');
+
+    const auth = await authenticateRequest(requestWithAuthorization('Bearer stale'));
+
+    expect(auth.success).toBe(true);
+    expect(auth.user).toEqual({ id: 'cookie-user' });
+  });
 });
