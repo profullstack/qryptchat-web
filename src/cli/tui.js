@@ -237,16 +237,18 @@ function saveRecent(list) {
 }
 
 /** Run the full-screen client until Ctrl+C. */
+const KEY_MISMATCH = "Keys don't match your account, so messages can't decrypt. Run qc login and approve from a browser that can read your chats.";
+
 export async function runTui(client, { initialChat } = {}) {
 	const state = initialState(client.me);
 	state.recent = loadRecent();
 	const abort = new AbortController();
 	const app = await createApp({ quitKeys: ['ctrl+c'], focusNavigation: false });
 	const redraw = () => app.invalidate();
-	const note = (msg) => {
+	const note = (msg, { sticky = false } = {}) => {
 		state.notice = msg;
 		redraw();
-		if (msg) setTimeout(() => {
+		if (msg && !sticky) setTimeout(() => {
 			if (state.notice === msg) {
 				state.notice = '';
 				redraw();
@@ -267,6 +269,8 @@ export async function runTui(client, { initialChat } = {}) {
 		}
 	}
 
+	let keysChecked = false;
+
 	async function loadConversations() {
 		try {
 			const before = state.activeId;
@@ -281,6 +285,10 @@ export async function runTui(client, { initialChat } = {}) {
 			// The events stream joins every chat's live room itself, so unread
 			// counts arrive without loading each chat (which tripped the rate limit).
 			redraw();
+			if (!keysChecked) {
+				keysChecked = true;
+				if ((await client.keyCheck()) === 'mismatch') note(KEY_MISMATCH, { sticky: true });
+			}
 		} catch (err) {
 			state.loading = false;
 			note(err.status === 401 ? 'Session ended: run qc login' : `Could not load chats: ${err.message}`);

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api/middleware/auth.js';
-import { CliAuthError, issueCode, serviceClient } from '@/lib/auth/cli-auth.js';
+import { assertAccountKey, CliAuthError, issueCode, serviceClient } from '@/lib/auth/cli-auth.js';
 
 /**
  * POST /api/cli/authorize: the signed-in web app approves a `qc login`.
- * Body: { code_challenge, code_challenge_method: "S256", redirect_uri, client_name, key_blob }
+ * Body: { code_challenge, code_challenge_method: "S256", redirect_uri, client_name, key_blob, public_key }
  * Returns { code }. See src/lib/auth/cli-auth.js for the whole flow.
  */
 export const POST = withAuth(async ({ request, locals }) => {
@@ -18,6 +18,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 		return NextResponse.json({ error: 'invalid_request', error_description: 'Only S256 is supported' }, { status: 400 });
 	}
 	try {
+		await assertAccountKey(serviceClient(), locals.user.id, body.public_key);
 		const code = await issueCode(serviceClient(), {
 			authUserId: locals.user.id,
 			codeChallenge: body.code_challenge,
