@@ -118,7 +118,7 @@ describe('POST /api/messages/load validation', () => {
 		const body = await response.json();
 
 		expect(response.status).toBe(400);
-		expect(body.error).toBe('limit must be an integer between 1 and 100');
+		expect(body.error).toBe('limit must be an integer between 1 and 500');
 		expect(mocks.mockSupabase.from).not.toHaveBeenCalled();
 	});
 

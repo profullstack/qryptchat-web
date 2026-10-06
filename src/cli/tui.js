@@ -81,8 +81,16 @@ export function transcriptLines(messages, width, theme) {
 				],
 			});
 		}
+		if (m.replyTo) {
+			const who = m.replyTo.name ? `${m.replyTo.name}: ` : '';
+			lines.push({ text: truncate(`  ┃ ${who}${m.replyTo.snippet}`, width), fg: theme.muted });
+		}
 		for (const part of String(m.text ?? '').split('\n')) {
 			for (const line of wrap(part, Math.max(4, width - 2))) lines.push({ text: `  ${line}`, fg: theme.foreground });
+		}
+		if (m.reactions?.length) {
+			const summary = m.reactions.map((r) => `${r.emoji}${r.count > 1 ? ` ${r.count}` : ''}`).join('  ');
+			lines.push({ text: truncate(`  ${summary}`, width), fg: m.reactions.some((r) => r.mine) ? theme.accent : theme.muted });
 		}
 		last = m;
 	}

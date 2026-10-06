@@ -9,6 +9,9 @@ import { sseManager } from '@/lib/api/sse-manager.js';
 import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
+
+const SENDABLE_TYPES = new Set(['text', 'image', 'file', 'reaction']);
+
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
 		let body;
@@ -49,6 +52,15 @@ export const POST = withAuth(async ({ request, locals }) => {
 			return NextResponse.json({ error: 'metadata must be a JSON object' }, { status: 400 });
 		}
 
+		// 'reaction' messages carry an encrypted { target, emoji } envelope (see
+		// src/lib/chat/reactions.js); the server never learns what was reacted to.
+		if (!SENDABLE_TYPES.has(messageType)) {
+			return NextResponse.json({ error: `messageType must be one of ${[...SENDABLE_TYPES].join(', ')}` }, { status: 400 });
+		}
+		if (replyToId !== undefined && replyToId !== null && (typeof replyToId !== 'string' || !replyToId)) {
+			return NextResponse.json({ error: 'replyToId must be a message id' }, { status: 400 });
+		}
+
 		const { supabase, user: authUser } = locals;
 
 		// Get internal user ID from auth user ID
@@ -75,6 +87,20 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		if (participantError || !participant) {
 			return NextResponse.json({ error: 'Access denied to conversation' }, { status: 403 });
+		}
+
+		// A reply must point at a message in THIS conversation (it is shown as a
+		// quote, so a foreign id would be a way to probe other conversations).
+		if (replyToId) {
+			const { data: target } = await supabase
+				.from('messages')
+				.select('id')
+				.eq('id', replyToId)
+				.eq('conversation_id', conversationId)
+				.maybeSingle();
+			if (!target) {
+				return NextResponse.json({ error: 'replyToId is not a message in this conversation' }, { status: 400 });
+			}
 		}
 
 		// Insert message into database (without encrypted_content in main table)
