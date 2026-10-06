@@ -28,7 +28,8 @@ Keys and tokens are sealed (ChaCha20-Poly1305) in ${'$'}QC_HOME or ~/.config/qc;
 OS keychain, or comes from a passphrase (QC_PASSPHRASE for scripts and qc mcp).
 HD: emoji and icons are drawn as our OpenEmoji/OpenIcon images in Kitty, Ghostty, WezTerm and iTerm2.
 Over SSH or in tmux (set -g allow-passthrough on) say which: QC_HD=1 (Kitty/Ghostty) or
-QC_HD=wezterm (WezTerm/iTerm2). QC_HD=0 turns it off.`;
+QC_HD=wezterm (WezTerm/iTerm2). QC_HD=0 turns it off. Mosh carries only text, so behind mosh
+emoji stay characters: for images use ssh or WezTerm's multiplexer (wezterm connect).`;
 
 export function parseArgs(argv) {
 	const args = { _: [], flags: {} };

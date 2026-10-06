@@ -32,7 +32,7 @@
         "zustand": "^5.0.0",
       },
       "devDependencies": {
-        "@profullstack/hqtui": "^0.10.1",
+        "@profullstack/hqtui": "^0.10.2",
         "@testing-library/jest-dom": "^6.8.0",
         "@testing-library/react": "^16.0.0",
         "@testing-library/user-event": "^14.6.1",
@@ -416,7 +416,7 @@
 
     "@profullstack/encrypt": ["@profullstack/encrypt@0.1.0", "", { "dependencies": { "@noble/ciphers": "^2.0.0", "@noble/hashes": "^2.0.0", "mlkem": "^2.5.0" }, "bin": { "pfencrypt": "bin/pfencrypt.js" } }, "sha512-FPwim78SLavWt/j2phmFkxlH8wv6oOGamcPCei4PxgNRDaBF+j/OcSRYB7pOJqhpaU3VD1oYX0V9ReVjnWSanA=="],
 
-    "@profullstack/hqtui": ["@profullstack/hqtui@0.10.1", "", { "bin": { "hqtui": "bin/hqtui.mjs" } }, "sha512-bYP6vMtwxAhB2gr31zBHkd/ONKA1jIAXwxJABSVCpEmjXDxQEhfMKIDJ17MGOEdEpfyjnEVl2xROpRMXmkVU4Q=="],
+    "@profullstack/hqtui": ["@profullstack/hqtui@0.10.2", "", { "bin": { "hqtui": "bin/hqtui.mjs" } }, "sha512-rflKGzBWdX8xXsQgoMq9L0QhK4DP6a0+vqQu0Uq29XoB6OT4zM2QhMXXcIw2FgyoUyF43nf4dDFB0CauMSvwRg=="],
 
     "@profullstack/openprofile": ["@profullstack/openprofile@0.2.0", "", {}, "sha512-cdFsBbfRXurvy5KqHDNcKXxurK2s/YlfVgnILFRpVl2hq3860rExqDee8IfsFGxw5cPdqGv2fxUxtek1Xy2U5Q=="],
 
