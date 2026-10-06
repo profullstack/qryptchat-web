@@ -8,6 +8,7 @@ import PrivateKeyManager from '@/lib/components/settings/PrivateKeyManager.jsx';
 import SMSNotificationSettings from '@/lib/components/settings/SMSNotificationSettings.jsx';
 import WebhookSettings from '@/lib/components/settings/WebhookSettings.jsx';
 import InviteAnon from '@/lib/components/settings/InviteAnon.jsx';
+import PasskeySettings from '@/lib/components/settings/PasskeySettings.jsx';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -24,6 +25,10 @@ export default function SettingsPage() {
       <div className="container">
         <h1>Settings</h1>
         <div className="settings-grid">
+          <section className="settings-section-card">
+            <h2>Passkeys</h2>
+            <PasskeySettings />
+          </section>
           <section className="settings-section-card">
             <h2>Encryption</h2>
             <EncryptionSettings />
