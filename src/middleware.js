@@ -23,6 +23,9 @@ export function middleware(request) {
     return NextResponse.redirect(url, 301);
   }
 
+  // Health checks (status.profullstack.com) are never rate limited.
+  if (pathname === '/api/health') return NextResponse.next();
+
   const ip = getClientIp(request);
 
   // Rate limiting
