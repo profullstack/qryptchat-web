@@ -104,17 +104,20 @@ export default function AuthPage() {
     router.push('/chat');
   }
 
-  // A CoinPay redirect (popups blocked) hands the session over in the URL
-  // fragment; an error comes back as ?error=. Read both once, then clean the URL.
+  // A CoinPay redirect (popups blocked) hands the session over in a short-lived
+  // cookie only our callback can set (never the URL, which anyone could craft to
+  // sign you into their account); an error comes back as ?error=. Read once.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const err = params.get('error');
-    if (err) msgStore.error?.(AUTH_ERRORS[err] || 'Sign-in failed. Please try again.');
-    const hash = window.location.hash.match(/^#coinpay=([A-Za-z0-9_-]+)$/);
-    if (err || hash) window.history.replaceState(null, '', '/auth');
-    if (hash) {
+    const err = new URLSearchParams(window.location.search).get('error');
+    if (err) {
+      msgStore.error?.(AUTH_ERRORS[err] || 'Sign-in failed. Please try again.');
+      window.history.replaceState(null, '', '/auth');
+    }
+    const handoff = document.cookie.split('; ').find((c) => c.startsWith('qrypt_coinpay_handoff='));
+    if (handoff) {
+      document.cookie = 'qrypt_coinpay_handoff=; Max-Age=0; Path=/auth; SameSite=Lax';
       try {
-        const b64 = hash[1].replace(/-/g, '+').replace(/_/g, '/');
+        const b64 = handoff.slice('qrypt_coinpay_handoff='.length).replace(/-/g, '+').replace(/_/g, '/');
         const d = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))));
         if (d?.type === 'coinpay-session' && d.access_token) {
           completeLogin(d, d.user).catch(() => msgStore.error?.('CoinPay login failed. Please try again.'));

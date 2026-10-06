@@ -5,6 +5,9 @@
 
 const COINPAY_EMAIL_DOMAIN = process.env.COINPAY_IDENTITY_EMAIL_DOMAIN || 'coinpay.qrypt.chat';
 
+/** Redirect-mode handoff: set by the callback on /auth, read once by the page. */
+export const COINPAY_HANDOFF_COOKIE = 'qrypt_coinpay_handoff';
+
 /** The session message the /auth page understands (expires_at is required by the store). */
 export function sessionMessage(session, user) {
 	return {

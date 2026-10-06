@@ -16,7 +16,10 @@
  * The app keys "signed in" off localStorage (qrypt_session / qrypt_user), not
  * cookies, so the session always goes to the page:
  *   popup    postMessage to the opener (works inside the iframe embed)
- *   redirect /auth#coinpay=<base64url> (a fragment never reaches a server log)
+ *   redirect a 2-minute cookie on /auth that the page reads once and deletes.
+ *            Not a URL: a link carrying a session would let anyone sign a
+ *            victim into the attacker's account, and only our own callback can
+ *            set a cookie on this origin.
  * Errors go the same two ways, so the user always sees why.
  *
  * Open to ANYONE. Additive only — does NOT touch the phone/SMS or anon flows.
@@ -36,7 +39,7 @@ import {
 	deriveUniqueUsername
 } from '@/lib/auth/coinpay.js';
 import { mintSession, serviceClient } from '@/lib/auth/cli-auth.js';
-import { coinpayEmail, findAuthUserByCoinpaySub, sessionMessage } from '@/lib/auth/coinpay-identity.js';
+import { COINPAY_HANDOFF_COOKIE, coinpayEmail, findAuthUserByCoinpaySub, sessionMessage } from '@/lib/auth/coinpay-identity.js';
 
 /** Postgres unique-violation error code. */
 const PG_UNIQUE_VIOLATION = '23505';
@@ -93,14 +96,10 @@ export async function GET(request) {
 			}
 		}
 
-		const oauthError = url.searchParams.get('error');
-		if (oauthError) {
-			console.error('coinpay/callback: provider returned error', oauthError);
-			return fail('coinpay_denied');
-		}
-
+		// No code means CoinPay sent the user back without one: cancelled
+		// (?error=…) or broken. The provider's error text is not logged.
 		const code = url.searchParams.get('code');
-		if (!code) return fail('coinpay_missing_code');
+		if (!code) return fail(url.searchParams.has('error') ? 'coinpay_denied' : 'coinpay_missing_code');
 		if (!validateCoinPayState(url.searchParams.get('state'), storedState)) return fail('coinpay_state_mismatch');
 
 		const { issuer, clientId, clientSecret } = getCoinpayConfig();
@@ -198,8 +197,15 @@ export async function GET(request) {
 
 		const message = sessionMessage(session, userRow);
 		if (popup) return popupPage(appOrigin, message);
-		const fragment = Buffer.from(JSON.stringify(message)).toString('base64url');
-		return clearState(NextResponse.redirect(`${appOrigin}/auth#coinpay=${fragment}`));
+		const res = clearState(NextResponse.redirect(`${appOrigin}/auth`));
+		res.cookies.set(COINPAY_HANDOFF_COOKIE, Buffer.from(JSON.stringify(message)).toString('base64url'), {
+			httpOnly: false, // the page reads it once, then deletes it
+			secure: process.env.NODE_ENV === 'production',
+			sameSite: 'lax',
+			path: '/auth',
+			maxAge: 120
+		});
+		return res;
 	} catch (error) {
 		console.error('coinpay/callback error:', error?.message || error);
 		return fail('coinpay_login_failed');
