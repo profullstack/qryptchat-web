@@ -29,6 +29,12 @@ export function middleware(request) {
   if (pathname === '/api/auth/key-backup' && request.method === 'GET') {
     const { allowed } = keyBackupRateLimiter.check(ip);
     if (!allowed) return rateLimitedResponse();
+  } else if (pathname.startsWith('/api/auth/hooks/')) {
+    // Supabase Auth calls these from one address for every user's code, so the
+    // per-IP auth limit would cap the whole site at 10 SMS a minute. They are
+    // signature-checked; the webhook limit still bounds them.
+    const { allowed } = webhookRateLimiter.check(ip);
+    if (!allowed) return rateLimitedResponse();
   } else if (pathname.startsWith('/api/auth/')) {
     const { allowed } = authRateLimiter.check(ip);
     if (!allowed) return rateLimitedResponse();
