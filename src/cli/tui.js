@@ -247,7 +247,8 @@ export async function runTui(client, { initialChat } = {}) {
 	const state = initialState(client.me);
 	state.recent = loadRecent();
 	const abort = new AbortController();
-	const app = await createApp({ quitKeys: ['ctrl+c'], focusNavigation: false });
+	// Focus reports let HD images be redrawn after a tmux window switch or reattach.
+	const app = await createApp({ quitKeys: ['ctrl+c'], focusNavigation: false, focusEvents: true });
 	const redraw = () => app.invalidate();
 	// HD: our OpenEmoji/OpenIcon PNGs as real images where the terminal can show
 	// them. Kitty, Ghostty, WezTerm and iTerm2 are detected locally; over SSH or
