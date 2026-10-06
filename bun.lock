@@ -30,7 +30,7 @@
         "zustand": "^5.0.0",
       },
       "devDependencies": {
-        "@profullstack/hqtui": "^0.8.0",
+        "@profullstack/hqtui": "^0.9.0",
         "@testing-library/jest-dom": "^6.8.0",
         "@testing-library/react": "^16.0.0",
         "@testing-library/user-event": "^14.6.1",
@@ -412,7 +412,7 @@
 
     "@profullstack/emailer": ["@profullstack/emailer@1.0.1", "", {}, "sha512-/uhHJJGH+1xSSz3mJn6X+m6aruYjMD3JOaRp/d4R/YWlzpy07H9z0/JUleIyRyBPNmaANSIwjTZ7aVjaukOEpg=="],
 
-    "@profullstack/hqtui": ["@profullstack/hqtui@0.8.0", "", { "bin": { "hqtui": "bin/hqtui.mjs" } }, "sha512-7dLq4Tb/GO7PyUaSRDf86K0AjeD55aBYW2Y7Mb2CM8YEAANno79ey0o9Dzr7QiGz/smJByah+gGp5UdAdDVGrA=="],
+    "@profullstack/hqtui": ["@profullstack/hqtui@0.9.0", "", { "bin": { "hqtui": "bin/hqtui.mjs" } }, "sha512-Jq+mYTL9gim/zxmj7b08ELiGqtKgOmnH2tmYL3EAh5OTDxdmbzr3pz5a/ygvOHVfNAh3xcf9ZUIkRixpeSclCQ=="],
 
     "@profullstack/pairux-embed": ["@profullstack/pairux-embed@0.1.0", "", { "dependencies": { "livekit-client": "^2.17.0" } }, "sha512-dGRx0kW6Y0awBOy9nbWrqAEcZNJEHrBOfxG/RikmNHuGyE+BaP0Qn1ZFis8dDWyQdEJ6VsTIH6xJbu+Gx5ITqg=="],
 

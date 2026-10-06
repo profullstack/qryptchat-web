@@ -16,7 +16,7 @@
  * draw the real layout with renderToText. The controller (runTui) owns the
  * network: conversations, decrypted messages, sending, and the SSE stream.
  */
-import { createApp, editText, emojify, insertText, stringWidth, truncate, widgets, wrap } from '@profullstack/hqtui';
+import { createApp, createImageStore, drawIcon, drawRichText, editText, emojify, insertText, stringWidth, truncate, widgets, wrap } from '@profullstack/hqtui';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { configDir } from './config.js';
@@ -115,11 +115,12 @@ function drawTranscript(surface, state) {
 	for (let y = top; y < surface.height; y++) {
 		const line = lines[start + y - top];
 		if (!line) break;
+		// Emoji draw as our OpenEmoji artwork on terminals that show images (HD).
 		if (line.spans) {
 			let x = 0;
-			for (const span of line.spans) x += surface.text(x, y, span.text, { fg: span.fg, attrs: span.bold ? 1 : 0 });
+			for (const span of line.spans) x += drawRichText(surface, x, y, span.text, { fg: span.fg, attrs: span.bold ? 1 : 0 }, state.images);
 		} else {
-			surface.text(0, y, truncate(line.text, surface.width), { fg: line.fg });
+			drawRichText(surface, 0, y, truncate(line.text, surface.width), { fg: line.fg }, state.images);
 		}
 	}
 	if (state.scrollBack > 0) {
@@ -137,7 +138,10 @@ export function render({ ui, width, height, theme }, state, on = {}) {
 		bar.draw((s) => {
 			const t = s.theme;
 			s.fillRect(0, 0, s.width, 1, { bg: t.surface ?? t.background });
-			let x = s.text(0, 0, ' 🔒 qrypt.chat ', { fg: t.background, bg: t.primary, attrs: 1 });
+			const brand = { fg: t.background, bg: t.primary, attrs: 1 };
+			let x = s.text(0, 0, ' ', brand);
+			x += drawIcon(s, x, 0, 'lock', state.images, '🔒', brand);
+			x += s.text(x, 0, ' qrypt.chat ', brand);
 			x += s.text(x, 0, `  @${state.me?.username ?? '?'}`, { fg: t.foreground, bg: t.surface ?? t.background });
 			if (state.notice) s.text(x + 2, 0, truncate(state.notice, Math.max(0, s.width - x - 16)), { fg: t.warning, bg: t.surface ?? t.background });
 			const live = { live: ['●', 'live', t.success], connecting: ['◌', 'connecting', t.warning], offline: ['○', 'offline', t.danger] }[state.status] ?? ['○', state.status, t.muted];
@@ -245,6 +249,11 @@ export async function runTui(client, { initialChat } = {}) {
 	const abort = new AbortController();
 	const app = await createApp({ quitKeys: ['ctrl+c'], focusNavigation: false });
 	const redraw = () => app.invalidate();
+	// HD: our OpenEmoji/OpenIcon PNGs as real images where the terminal can show
+	// them. Kitty/Ghostty are detected; over SSH or in tmux say so with QC_HD=1
+	// (or HQTUI_IMAGES=1). Everywhere else the characters are drawn as before.
+	const env = process.env.QC_HD && !process.env.HQTUI_IMAGES ? { ...process.env, HQTUI_IMAGES: process.env.QC_HD } : process.env;
+	state.images = createImageStore({ write: (seq) => app.terminal.write(seq), onReady: redraw, env });
 	const note = (msg, { sticky = false } = {}) => {
 		state.notice = msg;
 		redraw();
@@ -410,7 +419,10 @@ export async function runTui(client, { initialChat } = {}) {
 		state.field = insertText(state.field, event.text);
 		redraw();
 	});
-	app.on('exit', () => abort.abort());
+	app.on('exit', () => {
+		state.images?.clear();
+		abort.abort();
+	});
 
 	app.render((args) => render(args, state, handlers));
 

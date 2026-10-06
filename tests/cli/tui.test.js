@@ -43,6 +43,21 @@ describe('the qc client screen', () => {
 		expect(text).toMatch(/ENTER\s+send/i);
 	});
 
+	it('draws emoji and the brand lock as HD images when the terminal can show them', () => {
+		const s = state();
+		// Every emoji and icon is "loaded" as image 7.
+		s.images = { enabled: true, emoji: () => 7, icon: () => 7, clear: () => {} };
+		const screen = draw(s);
+		const rocket = screen.find('shipped it');
+		const cells = screen.buffer.chars;
+		const at = (x, y) => cells[y * screen.width + x];
+		// "shipped it " is 11 columns; the rocket's two cells follow as image placeholders.
+		expect(screen.text()).not.toContain('shipped it 🚀');
+		expect(at(rocket.x + 11, rocket.y)).not.toBe(at(rocket.x + 10, rocket.y));
+		expect(screen.text()).not.toContain('🔒');
+		expect(screen.text()).toContain('qrypt.chat');
+	});
+
 	it('groups a run of messages under one name line', () => {
 		const lines = transcriptLines(state().messages.c1, 60, { border: 0, primary: 1, muted: 2, foreground: 3, accent: 4, info: 5, success: 6, warning: 7, secondary: 8 });
 		const headers = lines.filter((l) => l.spans);
