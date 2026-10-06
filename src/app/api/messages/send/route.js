@@ -10,7 +10,7 @@ import { MESSAGE_TYPES } from '@/lib/api/protocol.js';
 import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 
-const SENDABLE_TYPES = new Set(['text', 'image', 'file', 'reaction']);
+const SENDABLE_TYPES = new Set(['text', 'image', 'file', 'reaction', 'call']);
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {

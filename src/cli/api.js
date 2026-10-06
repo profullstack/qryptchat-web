@@ -7,6 +7,7 @@
 import { baseUrl } from './config.js';
 import { keyring } from './crypto.js';
 import { foldMessages, reactionEnvelope, REACTION_TYPE } from '../lib/chat/reactions.js';
+import { callSummary, CALL_TYPE } from '../lib/chat/calls.js';
 
 export class QcError extends Error {
 	constructor(message, status) {
@@ -97,7 +98,10 @@ export class QcClient {
 		const raw = [];
 		for (const m of messages) {
 			let content = m.encrypted_content ? await this.ring.decrypt(m.encrypted_content) : '';
-			if (m.message_type === 'file' || m.has_attachments) {
+			if (m.message_type === CALL_TYPE) {
+				// The envelope holds the call's media key: show what happened, never the key.
+				content = `${callSummary({ ...m, content }, this.me?.id)} · join on qrypt.chat`;
+			} else if (m.message_type === 'file' || m.has_attachments) {
 				content = `📎 ${content && content !== '[File attachment]' ? `${content} ` : ''}(attachment: open qrypt.chat to download)`;
 			}
 			raw.push({ ...m, content });

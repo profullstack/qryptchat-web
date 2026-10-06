@@ -8,6 +8,8 @@ import MessageAttachments from './MessageAttachments.jsx';
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 import { renderOpenEmoji, isEmojiOnly, artworkKey, emojiSrc } from '@/lib/emoji/openemoji.js';
 import { QUICK_REACTIONS, myReaction } from '@/lib/chat/reactions.js';
+import { parseCall, isJoinable, CALL_TYPE } from '@/lib/chat/calls.js';
+import { useChatStore } from '@/lib/stores/chat.js';
 
 /** An emoji drawn with our artwork when we have it, else as text. */
 function Emoji({ char, size = 18 }) {
@@ -24,7 +26,10 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
   const hasAttachments = message.message_type === 'file' || message.has_attachments === true;
   const content = message.content || '';
   // Hide the placeholder caption that the upload flow stores on file messages.
-  const showText = content.trim().length > 0 && !(hasAttachments && content.trim() === '[File attachment]');
+  // A call invite's body is the (decrypted) call envelope: never show it as text.
+  const call = message.message_type === CALL_TYPE ? parseCall(content) : null;
+  const joinCall = useChatStore((s) => s.joinCall);
+  const showText = !call && message.message_type !== CALL_TYPE && content.trim().length > 0 && !(hasAttachments && content.trim() === '[File attachment]');
   const detectedFormat = detectTextFormat(content);
   const isAsciiArt = message.metadata?.isAsciiArt === true || detectedFormat.type === 'ascii-art';
   const isCodeBlock = detectedFormat.type === 'code' || detectedFormat.language !== null;
@@ -86,6 +91,23 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
             {/* The snippet is plain text rendered by React (escaped), never HTML. */}
             <span className="quote-text">{message.replyTo.snippet}</span>
           </button>
+        )}
+
+        {message.message_type === CALL_TYPE && (
+          <div className={`call-card${isOwn ? ' own' : ''}`}>
+            <span className="call-card-icon" aria-hidden="true">{call?.video ? '🎥' : '📞'}</span>
+            <span className="call-card-text">
+              {isOwn ? 'You started' : `${displayName} started`} {call?.video ? 'a video' : 'a voice'} call
+              <span className="call-card-sub">🔒 end-to-end encrypted</span>
+            </span>
+            {call && isJoinable(call, message.created_at) ? (
+              <button type="button" className="call-card-join" onClick={() => joinCall(message.conversation_id, call.key, call.video)}>
+                Join
+              </button>
+            ) : (
+              <span className="call-card-sub">{call ? 'Ended' : 'Cannot open this call'}</span>
+            )}
+          </div>
         )}
 
         {showText && (
@@ -177,6 +199,11 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
         .message-time.own { text-align: right; }
         .message-status { margin-left: .25rem; }
 
+        .call-card { display: flex; align-items: center; gap: .6rem; padding: .6rem .8rem; border-radius: 1rem; border: 1px solid var(--color-border-primary); background: var(--color-bg-secondary); color: var(--color-text-primary); font-size: .9rem; }
+        .call-card-icon { font-size: 1.4rem; }
+        .call-card-text { display: flex; flex-direction: column; }
+        .call-card-sub { font-size: .75rem; color: var(--color-text-muted); }
+        .call-card-join { margin-left: .5rem; padding: .35rem .9rem; border: none; border-radius: 999px; background: var(--color-success, #16a34a); color: white; font-weight: 600; cursor: pointer; }
         .message-quote { display: flex; flex-direction: column; gap: .1rem; max-width: 100%; text-align: left; padding: .35rem .65rem; border: none; border-left: 3px solid var(--color-brand-primary); border-radius: .5rem; background: var(--color-bg-tertiary); color: var(--color-text-secondary); font: inherit; font-size: .8125rem; cursor: pointer; }
         .message-quote.missing { cursor: default; font-style: italic; }
         .quote-name { font-weight: 600; color: var(--color-text-primary); font-size: .75rem; }

@@ -6,6 +6,7 @@ import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '@/lib/crypto/public-key-service.js';
 import * as conversationUtils from '@/lib/utils/conversation-utils.js';
 import { reactionEnvelope, REACTION_TYPE } from '@/lib/chat/reactions.js';
+import { callEnvelope, newCallKey, CALL_TYPE } from '@/lib/chat/calls.js';
 
 export const useChatStore = create((set, get) => {
   let eventSource = null;
@@ -153,6 +154,8 @@ export const useChatStore = create((set, get) => {
     typingUsers: [],
     /** The message the composer is replying to, or null. */
     replyingTo: null,
+    /** The call this tab is in: { conversationId, key, video } or null. */
+    activeCall: null,
     connected: false,
     authenticated: false,
     user: null,
@@ -285,6 +288,30 @@ export const useChatStore = create((set, get) => {
         }
       }
       return result;
+    },
+
+    /**
+     * Start an end-to-end encrypted call: a fresh media key goes to everyone in
+     * the conversation inside an ML-KEM-encrypted 'call' message, then this tab joins.
+     */
+    async startCall(conversationId, { video = false } = {}) {
+      const key = newCallKey();
+      const result = await get().sendMessage(conversationId, callEnvelope({ room: conversationId, key, video }), CALL_TYPE);
+      if (!result?.success) return result;
+      const { messages, activeConversation } = get();
+      if (activeConversation === conversationId && result.data && !messages.some((m) => m.id === result.data.id)) {
+        set({ messages: [...messages, result.data] });
+      }
+      set({ activeCall: { conversationId, key, video } });
+      return result;
+    },
+
+    joinCall(conversationId, key, video = false) {
+      set({ activeCall: { conversationId, key, video } });
+    },
+
+    endCall() {
+      set({ activeCall: null });
     },
 
     async startTyping(conversationId) {

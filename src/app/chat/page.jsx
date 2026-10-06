@@ -11,6 +11,7 @@ import MessageInput from '@/lib/components/chat/MessageInput.jsx';
 import AddParticipantModal from '@/lib/components/chat/AddParticipantModal.jsx';
 import EncryptionWarning from '@/lib/components/EncryptionWarning.jsx';
 import MLKEMCallInterface from '@/lib/components/calls/MLKEMCallInterface.jsx';
+import CallPanel from '@/lib/components/calls/CallPanel.jsx';
 import { MLKEMCallManager, CALL_STATES } from '@/lib/webrtc/ml-kem-call-manager.js';
 import { callAudioManager } from '@/lib/audio/call-sounds.js';
 import { pwaSessionManager } from '@/lib/utils/pwa-session-manager.js';
@@ -94,26 +95,20 @@ function ChatPageInner() {
     useChatStore.getState().joinConversation(conversationId);
   }
 
-  async function handleMLKEMVoiceCall() {
-    if (!currentConversation) return;
-    try {
-      const other = currentConversation.participants?.find((p) => p.id !== user?.id);
-      if (!other?.id) { alert('Cannot start call: No valid participant found'); return; }
-      let mgr = mlkemCallManager;
-      if (!mgr) { mgr = new MLKEMCallManager(null); setMlkemCallManager(mgr); setupCallManagerSub(mgr); }
-      await mgr.initiateCall(other.id, false);
-    } catch (err) { alert(`Failed to start encrypted voice call: ${err.message}`); }
+  // End-to-end encrypted calls on PairUX (src/lib/chat/calls.js): the media key
+  // goes to the conversation in an ML-KEM-encrypted 'call' message.
+  async function startEncryptedCall(video) {
+    if (!activeConversationId) return;
+    const result = await useChatStore.getState().startCall(activeConversationId, { video });
+    if (!result?.success) alert(`Could not start the call: ${result?.error || 'unknown error'}`);
   }
 
-  async function handleMLKEMVideoCall() {
-    if (!currentConversation) return;
-    try {
-      const other = currentConversation.participants?.find((p) => p.id !== user?.id);
-      if (!other?.id) { alert('Cannot start call: No valid participant found'); return; }
-      let mgr = mlkemCallManager;
-      if (!mgr) { mgr = new MLKEMCallManager(null); setMlkemCallManager(mgr); setupCallManagerSub(mgr); }
-      await mgr.initiateCall(other.id, true);
-    } catch (err) { alert(`Failed to start encrypted video call: ${err.message}`); }
+  function handleMLKEMVoiceCall() {
+    return startEncryptedCall(false);
+  }
+
+  function handleMLKEMVideoCall() {
+    return startEncryptedCall(true);
   }
 
   function setupCallManagerSub(mgr) {
@@ -174,6 +169,7 @@ function ChatPageInner() {
                   </button>
                 </div>
               </div>
+              <CallPanel />
               <MessageList conversationId={activeConversationId} />
               <MessageInput conversationId={activeConversationId} />
             </div>
