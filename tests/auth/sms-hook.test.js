@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
-import { verifyHook, e164, sendViaTelnyx, smsText } from '../../src/lib/auth/sms-hook.js';
+import { verifyHook, e164, sendViaTelnyx, sendCode, smsText } from '../../src/lib/auth/sms-hook.js';
 
 const key = randomBytes(32);
 const SECRET = `v1,whsec_${key.toString('base64')}`;
@@ -46,6 +46,21 @@ describe('Telnyx delivery', () => {
 		expect(JSON.parse(init.body)).toEqual({ to: '+15550001111', from: '+14084269127', text: smsText('424242') });
 	});
 
+	it('sends through Telnyx Verify with our own code when a profile is set', async () => {
+		const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: { id: 'v1' } }), { status: 200 }));
+		const id = await sendCode({ to: '+15550001111', otp: '424242' }, { apiKey: 'k', profileId: 'prof', fetchImpl });
+		expect(id).toBe('v1');
+		const [url, init] = fetchImpl.mock.calls[0];
+		expect(url).toBe('https://api.telnyx.com/v2/verifications/sms');
+		expect(JSON.parse(init.body)).toEqual({ phone_number: '+15550001111', verify_profile_id: 'prof', custom_code: '424242' });
+	});
+
+	it('falls back to a plain message only without a Verify profile', async () => {
+		const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: { id: 'm' } }), { status: 200 }));
+		await sendCode({ to: '+15550001111', otp: '1' }, { apiKey: 'k', profileId: '', from: '+14084269127', fetchImpl });
+		expect(fetchImpl.mock.calls[0][0]).toBe('https://api.telnyx.com/v2/messages');
+	});
+
 	it("surfaces Telnyx's error detail", async () => {
 		const fetchImpl = async () => new Response(JSON.stringify({ errors: [{ detail: 'Invalid destination' }] }), { status: 422 });
 		await expect(sendViaTelnyx({ to: '+1', text: 'x' }, { apiKey: 'k', from: '+1', fetchImpl })).rejects.toThrow('Telnyx: Invalid destination');
@@ -58,6 +73,7 @@ describe('POST /api/auth/hooks/send-sms', () => {
 		process.env.SEND_SMS_HOOK_SECRET = SECRET;
 		process.env.TELNYX_API_KEY = 'k';
 		process.env.TELNYX_SMS_FROM = '+14084269127';
+		process.env.TELNYX_VERIFY_PROFILE_ID = 'prof';
 	});
 	afterEach(() => {
 		process.env = { ...env };
@@ -84,7 +100,8 @@ describe('POST /api/auth/hooks/send-sms', () => {
 		const s = sign(body);
 		const res = await call(body, { 'webhook-id': s.id, 'webhook-timestamp': s.timestamp, 'webhook-signature': s.signature });
 		expect(res.status).toBe(200);
-		expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({ to: '+15550001111', text: smsText('654321') });
+		expect(fetchSpy.mock.calls[0][0]).toBe('https://api.telnyx.com/v2/verifications/sms');
+		expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({ phone_number: '+15550001111', custom_code: '654321' });
 	});
 
 	it('reports a Telnyx failure in the hook error shape', async () => {
