@@ -9,6 +9,7 @@
         "@noble/hashes": "^2.0.0",
         "@profullstack/autoblog": "github:profullstack/autoblog#75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f",
         "@profullstack/encrypt": "^0.1.0",
+        "@profullstack/openprofile": "^0.2.0",
         "@profullstack/pairux-embed": "^0.1.0",
         "@profullstack/stack": "^0.1.3",
         "@profullstack/text-type-detection": "^1.0.0",
@@ -416,6 +417,8 @@
     "@profullstack/encrypt": ["@profullstack/encrypt@0.1.0", "", { "dependencies": { "@noble/ciphers": "^2.0.0", "@noble/hashes": "^2.0.0", "mlkem": "^2.5.0" }, "bin": { "pfencrypt": "bin/pfencrypt.js" } }, "sha512-FPwim78SLavWt/j2phmFkxlH8wv6oOGamcPCei4PxgNRDaBF+j/OcSRYB7pOJqhpaU3VD1oYX0V9ReVjnWSanA=="],
 
     "@profullstack/hqtui": ["@profullstack/hqtui@0.10.1", "", { "bin": { "hqtui": "bin/hqtui.mjs" } }, "sha512-bYP6vMtwxAhB2gr31zBHkd/ONKA1jIAXwxJABSVCpEmjXDxQEhfMKIDJ17MGOEdEpfyjnEVl2xROpRMXmkVU4Q=="],
+
+    "@profullstack/openprofile": ["@profullstack/openprofile@0.2.0", "", {}, "sha512-cdFsBbfRXurvy5KqHDNcKXxurK2s/YlfVgnILFRpVl2hq3860rExqDee8IfsFGxw5cPdqGv2fxUxtek1Xy2U5Q=="],
 
     "@profullstack/pairux-embed": ["@profullstack/pairux-embed@0.1.0", "", { "dependencies": { "livekit-client": "^2.17.0" } }, "sha512-dGRx0kW6Y0awBOy9nbWrqAEcZNJEHrBOfxG/RikmNHuGyE+BaP0Qn1ZFis8dDWyQdEJ6VsTIH6xJbu+Gx5ITqg=="],
 

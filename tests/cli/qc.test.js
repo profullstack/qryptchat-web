@@ -133,6 +133,13 @@ describe('arguments and chats', () => {
 		expect(parseArgs(['send', 'a', '--', '--not-a-flag'])._).toEqual(['send', 'a', '--not-a-flag']);
 	});
 
+	it('parses profile fields, including clearing one', () => {
+		expect(parseArgs(['profile', '--emoji', '🔭', '--pronouns', 'she/her']).flags).toEqual({ emoji: '🔭', pronouns: 'she/her' });
+		expect(parseArgs(['profile', '--website=', '--bio', '']).flags).toEqual({ website: '', bio: '' });
+		// A bare flag followed by another flag does not swallow it.
+		expect(parseArgs(['profile', '--emoji', '--json']).flags).toEqual({ emoji: true, json: true });
+	});
+
 	it('finds a chat by id, name or a unique fragment', () => {
 		const chats = [{ id: '1', title: 'Alice' }, { id: '2', title: 'Team chat' }, { id: '3', title: 'Team ops' }];
 		expect(findChat(chats, '1').title).toBe('Alice');

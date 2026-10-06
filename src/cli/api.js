@@ -111,6 +111,28 @@ export class QcClient {
 		}
 	}
 
+	/** Your public profile (what qrypt.chat/u/<you> shows): emoji, pronouns, website, bio. */
+	async profile() {
+		const { user } = await this.request(`/api/users/by-username/${encodeURIComponent(this.me?.username ?? '')}`);
+		return user;
+	}
+
+	/**
+	 * Change profile fields: { emoji?, pronouns?, website?, bio? }. A field left
+	 * out is unchanged; an empty string clears it.
+	 */
+	async updateProfile(fields) {
+		const { user } = await this.request('/api/profile/update', { method: 'POST', body: fields });
+		return user;
+	}
+
+	/** Your public profile as OpenProfile.md (logicsrc.com/openprofile). */
+	async openProfile() {
+		const res = await this.fetch(`${this.base}/u/${encodeURIComponent(this.me?.username ?? '')}/openprofile.md`);
+		if (!res.ok) throw new QcError(`HTTP ${res.status}`, res.status);
+		return res.text();
+	}
+
 	/** Conversations, newest activity first, each with a display title. */
 	async conversations() {
 		const { conversations = [] } = await this.request('/api/conversations/load', { method: 'POST', body: {} });
@@ -144,6 +166,8 @@ export class QcClient {
 			conversationId: m.conversation_id,
 			senderId: m.sender_id,
 			sender: m.sender?.display_name || m.sender?.username || 'unknown',
+			emoji: m.sender?.emoji || '',
+			pronouns: m.sender?.pronouns || '',
 			username: m.sender?.username || '',
 			mine: m.sender_id === this.me?.id,
 			text: m.content,

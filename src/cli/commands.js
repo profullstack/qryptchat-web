@@ -13,6 +13,9 @@ Usage:
   qc login [--oob]        sign in through your browser; --oob to paste a code (SSH)
   qc logout               forget this terminal's session and keys
   qc whoami               who this terminal is signed in as
+  qc profile [--emoji 🔭] [--pronouns she/her] [--website URL] [--bio TEXT]
+                          show or set your public profile (an empty value clears it);
+                          --openprofile prints it as OpenProfile.md
   qc chats                list your chats
   qc read <chat> [-n 20]  print the last messages of a chat
   qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply)
@@ -38,7 +41,7 @@ export function parseArgs(argv) {
 		if (a.startsWith('--')) {
 			const [k, v] = a.slice(2).split('=', 2);
 			if (v !== undefined) args.flags[k] = v;
-			else if (['url', 'n', 'limit', 'reply'].includes(k) && argv[i + 1] !== undefined) args.flags[k] = argv[++i];
+			else if (['url', 'n', 'limit', 'reply', 'emoji', 'pronouns', 'website', 'bio'].includes(k) && argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) args.flags[k] = argv[++i];
 			else args.flags[k] = true;
 		} else if (a === '-n' && argv[i + 1] !== undefined) {
 			args.flags.n = argv[++i];
@@ -117,6 +120,19 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			const session = loadSession();
 			if (!session) throw new Error('Not signed in. Run qc login.');
 			return flags.json ? json({ user: session.user, base: session.base }) : out(`@${session.user?.username} (${session.user?.display_name ?? ''}) on ${session.base}`);
+		}
+		case 'profile': {
+			const c = await client(flags);
+			if (flags.openprofile) return out((await c.openProfile()).trimEnd());
+			const fields = {};
+			for (const k of ['emoji', 'pronouns', 'website', 'bio']) if (flags[k] !== undefined) fields[k] = flags[k] === true ? '' : String(flags[k]);
+			const p = Object.keys(fields).length ? await c.updateProfile(fields) : await c.profile();
+			if (flags.json) return json({ username: p.username, emoji: p.emoji ?? null, pronouns: p.pronouns ?? null, website: p.website ?? null, bio: p.bio ?? null });
+			out(`${p.emoji ? `${p.emoji} ` : ''}${p.displayName ?? p.display_name ?? p.username} @${p.username}${p.pronouns ? ` (${p.pronouns})` : ''}`);
+			if (p.website) out(p.website);
+			if (p.bio) out(p.bio);
+			if (!Object.keys(fields).length) out(`\nSet: qc profile --emoji 🔭 --pronouns she/her --website https://you.example  (an empty value clears)`);
+			return;
 		}
 		case 'chats':
 		case 'ls': {

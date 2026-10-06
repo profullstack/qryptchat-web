@@ -1,20 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { createSupabaseServerClientWithToken } from '@/lib/supabase.js';
+import { bearerToken } from '@/lib/auth/bearer.js';
+import { cleanEmoji, cleanPronouns, cleanWebsite } from '@/lib/profile/fields.js';
 
 /**
- * @param {string | null} authHeader
- * @returns {string | null}
+ * POST /api/profile/update  { bio?, website?, emoji?, pronouns? }
+ * Updates the caller's public profile. A field left out is unchanged; an
+ * empty string clears it. Emoji, Pronouns and Web are OpenProfile 0.4's
+ * default fields (logicsrc.com/openprofile).
  */
-function getBearerToken(authHeader) {
-	if (typeof authHeader !== 'string') return null;
-
-	const match = authHeader.match(/^Bearer\s+(.+)$/i);
-	const token = match?.[1]?.trim();
-
-	return token || null;
-}
-
-export async function POST(request, { params } = {}) {
+export async function POST(request) {
 	try {
 		let body;
 		try {
@@ -23,101 +18,67 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
 		}
 
-		const { bio, website } = body;
-
-		// Get authorization header
-		const authHeader = request.headers.get('authorization');
-		const token = getBearerToken(authHeader);
+		const token = bearerToken(request);
 		if (!token) {
 			return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
 		}
 
-		// Create Supabase client and set session
-		const supabase = await createSupabaseServerClient();
-
-		// Set the session to ensure auth.uid() is available for RLS
+		// A client that carries the token on every request, so RLS sees this user.
+		// (setSession() with an empty refresh token is refused by auth-js, which
+		// made every update here run anonymously and match no row.)
+		const supabase = await createSupabaseServerClientWithToken(token);
 		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 		if (authError || !user) {
-			console.error('Auth error:', authError);
 			return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
 		}
 
-		// Set the session for RLS context
-		await supabase.auth.setSession({
-			access_token: token,
-			refresh_token: '' // Not needed for this operation
-		});
+		const { bio, website, emoji, pronouns } = body ?? {};
+		const updateData = { updated_at: new Date().toISOString() };
 
-		console.log('Authenticated user from JWT:', { id: user.id, email: user.email, phone: user.phone });
-
-		console.log('Authenticated user from JWT:', { id: user.id, email: user.email, phone: user.phone });
-
-		// Validate input
-		if (bio !== undefined && typeof bio !== 'string') {
-			return NextResponse.json({ error: 'Bio must be a string' }, { status: 400 });
+		if (bio !== undefined) {
+			if (bio !== null && typeof bio !== 'string') return NextResponse.json({ error: 'Bio must be a string' }, { status: 400 });
+			if (bio && bio.length > 500) return NextResponse.json({ error: 'Bio must be 500 characters or less' }, { status: 400 });
+			updateData.bio = bio?.trim() || null;
+		}
+		for (const [field, value, clean] of [
+			['website', website, cleanWebsite],
+			['emoji', emoji, cleanEmoji],
+			['pronouns', pronouns, cleanPronouns]
+		]) {
+			if (value === undefined) continue;
+			const result = clean(value);
+			if ('error' in result) return NextResponse.json({ error: result.error, field }, { status: 400 });
+			updateData[field] = result.value;
 		}
 
-		if (website !== undefined && typeof website !== 'string') {
-			return NextResponse.json({ error: 'Website must be a string' }, { status: 400 });
-		}
-
-		// Validate bio length
-		if (bio && bio.length > 500) {
-			return NextResponse.json({ error: 'Bio must be 500 characters or less' }, { status: 400 });
-		}
-
-		// Validate website URL format if provided
-		if (website && website.trim()) {
-			const websiteUrl = website.trim();
-			// Basic URL validation - allow with or without protocol
-			const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
-			if (!urlPattern.test(websiteUrl)) {
-				return NextResponse.json({ error: 'Please enter a valid website URL' }, { status: 400 });
-			}
-		}
-
-		// Prepare update data
-		const updateData = {
-			updated_at: new Date().toISOString(),
-			...(bio !== undefined && { bio: bio.trim() || null }),
-			...(website !== undefined && { website: website.trim() || null })
-		};
-
-		// Update user profile using RLS - the policy ensures only the authenticated user can update their own profile
 		const { data: updatedUsers, error: updateError } = await supabase
 			.from('users')
 			.update(updateData)
 			.eq('auth_user_id', user.id)
-			.select('id, username, display_name, avatar_url, bio, website');
+			.select('id, username, display_name, avatar_url, bio, website, emoji, pronouns');
 
 		if (updateError) {
 			console.error('Error updating profile:', updateError);
 			return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
 		}
-
-		// Check if any rows were updated
 		if (!updatedUsers || updatedUsers.length === 0) {
-			console.error('No rows updated - user not found or RLS policy blocked update');
 			return NextResponse.json({ error: 'Profile update failed - user not found or permission denied' }, { status: 404 });
 		}
 
-		const updatedUser = updatedUsers[0];
-
-		// Transform response data
-		const responseData = {
-			id: updatedUser.id,
-			username: updatedUser.username,
-			displayName: updatedUser.display_name,
-			avatarUrl: updatedUser.avatar_url,
-			bio: updatedUser.bio,
-			website: updatedUser.website
-		};
-
-		return NextResponse.json({ 
-			success: true, 
-			user: responseData 
+		const u = updatedUsers[0];
+		return NextResponse.json({
+			success: true,
+			user: {
+				id: u.id,
+				username: u.username,
+				displayName: u.display_name,
+				avatarUrl: u.avatar_url,
+				bio: u.bio,
+				website: u.website,
+				emoji: u.emoji,
+				pronouns: u.pronouns
+			}
 		});
-
 	} catch (err) {
 		console.error('Profile update error:', err);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
