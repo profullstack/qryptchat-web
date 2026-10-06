@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { bearerToken } from '@/lib/auth/bearer.js';
 
 // Create regular Supabase client for authentication
 const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -15,8 +16,10 @@ const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, proces
 async function authenticateUser(request) {
 	try {
 		// Parse cookies to get JWT token
-		const cookieHeader = request.headers.get('cookie');
-		if (!cookieHeader) {
+		// qc, MCP and cookie-less browser sessions (passkey, CoinPay) send a Bearer token.
+		const bearer = bearerToken(request);
+		const cookieHeader = request.headers.get('cookie') || '';
+		if (!bearer && !cookieHeader) {
 			console.log('🔐 [API] ❌ No cookies found in request');
 			return { user: null, error: 'No authentication cookies found' };
 		}
@@ -29,7 +32,7 @@ async function authenticateUser(request) {
 			})
 		);
 
-		const accessToken = cookies['sb-access-token'] || cookies['sb-refresh-token'];
+		const accessToken = bearer || cookies['sb-access-token'] || cookies['sb-refresh-token'];
 		if (!accessToken) {
 			console.log('🔐 [API] ❌ No Supabase auth tokens found in cookies');
 			return { user: null, error: 'No authentication tokens found' };

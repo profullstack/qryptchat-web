@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
+import { bearerToken } from '@/lib/auth/bearer.js';
 
 // Lazy service role client creation
 let supabaseServiceRole = null;
@@ -30,8 +31,10 @@ async function resolveRouteParams(params) {
 async function authenticateUser(request) {
 	try {
 		// Get access token from cookies
-		const cookieHeader = request.headers.get('cookie');
-		if (!cookieHeader) {
+		// qc, MCP and cookie-less browser sessions (passkey, CoinPay) send a Bearer token.
+		const bearer = bearerToken(request);
+		const cookieHeader = request.headers.get('cookie') || '';
+		if (!bearer && !cookieHeader) {
 			return { error: 'No cookies found' };
 		}
 
@@ -46,12 +49,12 @@ async function authenticateUser(request) {
 		);
 
 		// Try different cookie sources for the access token
-		let accessToken = null;
+		let accessToken = bearer;
 		
 		console.log('🔐 Available cookies:', Object.keys(cookies));
 		
 		// Try Supabase-specific cookies first
-		if (cookies[supabaseAuthCookieName()]) {
+		if (!accessToken && cookies[supabaseAuthCookieName()]) {
 			console.log('🔐 Found Supabase auth token cookie');
 			try {
 				let tokenData = cookies[supabaseAuthCookieName()];
