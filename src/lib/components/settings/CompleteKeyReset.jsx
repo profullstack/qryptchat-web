@@ -36,7 +36,8 @@ export default function CompleteKeyReset() {
       await indexedDBManager.delete('qryptchat_pq_keypair');
 
       // 4. Clear key backup
-      await fetch('/api/auth/key-backup', { method: 'DELETE', credentials: 'include' }).catch(() => {});
+      const { privateKeyManager } = await import('@/lib/crypto/private-key-manager.js');
+      await fetch('/api/auth/key-backup', { method: 'DELETE', credentials: 'include', headers: privateKeyManager._authHeaders() }).catch(() => {});
 
       setPhase('done');
       setTimeout(async () => {

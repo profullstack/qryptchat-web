@@ -115,8 +115,8 @@ function AnonRegister() {
 
 	async function setBackupPinFn(e) {
 		e?.preventDefault();
-		if (!backupPin || !/^\d+$/.test(backupPin) || backupPin.length < 6 || backupPin.length > 12) {
-			msgStore.error('PIN must be 6-12 digits');
+		if (!backupPin || !/^\d{4,12}$/.test(backupPin)) {
+			msgStore.error('PIN must be 4-12 digits');
 			return;
 		}
 		if (backupPin !== confirmBackupPin) {
@@ -140,7 +140,7 @@ function AnonRegister() {
 			const backupRes = await fetch('/api/auth/key-backup', {
 				method: 'PUT',
 				headers,
-				body: JSON.stringify({ encrypted_keys: encryptedData })
+				body: JSON.stringify({ encrypted_keys: encryptedData, pin: backupPin })
 			});
 			if (!backupRes.ok) {
 				const err = await backupRes.json().catch(() => ({}));
@@ -262,14 +262,14 @@ function AnonRegister() {
 						</div>
 						<form onSubmit={setBackupPinFn}>
 							<div className="input-group">
-								<label>Backup PIN (6-12 digits) *</label>
+								<label>Backup PIN (4-12 digits) *</label>
 								<div className="password-input">
 									<input
 										type={showBackupPin ? 'text' : 'password'}
 										inputMode="numeric"
 										value={backupPin}
 										onChange={(e) => setBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
-										placeholder="Enter 6-12 digit PIN"
+										placeholder="Enter 4-12 digit PIN"
 										required
 										disabled={submitting}
 										className="code-input"
