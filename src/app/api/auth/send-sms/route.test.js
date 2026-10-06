@@ -64,4 +64,20 @@ describe('POST /api/auth/send-sms', () => {
 		expect(mocks.checkDestination).not.toHaveBeenCalled();
 		expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
 	});
+
+	it("says how long to wait when Supabase's resend window refuses a second code", async () => {
+		const error = Object.assign(new Error('For security purposes, you can only request this after 33 seconds.'), { status: 429 });
+		mocks.createSupabaseServerClient.mockResolvedValue({ auth: { signInWithOtp: vi.fn().mockResolvedValue({ error }) } });
+		const { POST } = await import('./route.js');
+		const response = await POST({
+			headers: new Headers(),
+			json: vi.fn().mockResolvedValue({ phoneNumber: '+14155550123' })
+		});
+		const body = await response.json();
+
+		expect(response.status).toBe(429);
+		expect(response.headers.get('Retry-After')).toBe('33');
+		expect(body).toMatchObject({ code: 'SMS_RESEND_TOO_SOON', retryAfter: 33 });
+		expect(body.error).toBe('A code was just sent. Please wait 33 seconds before requesting another.');
+	});
 });

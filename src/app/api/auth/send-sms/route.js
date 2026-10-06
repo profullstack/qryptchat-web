@@ -160,6 +160,21 @@ export async function POST(request, { params } = {}) {
 				logs: logger.getLogsAsString()
 			});
 
+			// GoTrue's resend window ("...only request this after 33 seconds"): say
+			// how long to wait instead of a failure that sounds like a broken service.
+			const wait = /after (\d+) seconds?/i.exec(String(smsError.message || ''));
+			if (wait) {
+				const seconds = Number(wait[1]);
+				return NextResponse.json(
+					{
+						error: `A code was just sent. Please wait ${seconds} second${seconds === 1 ? '' : 's'} before requesting another.`,
+						code: 'SMS_RESEND_TOO_SOON',
+						retryAfter: seconds
+					},
+					{ status: 429, headers: { 'Retry-After': String(seconds) } }
+				);
+			}
+
 			// Determine HTTP status code
 			let statusCode = 500;
 			if (smsError.status === 429) {
