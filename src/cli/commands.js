@@ -6,11 +6,16 @@ import { QcClient } from './api.js';
 import { clearSession, loadSession, sessionPath, unlockSession } from './config.js';
 import { login } from './login.js';
 import { joinAsAgent } from './agent.js';
+import { em, fail, info, mark, ok, warn, who } from './style.js';
+
+/** An error as qc prints it: the error icon and the message. */
+export const errorLine = (err) => `qc: ${fail(err?.message ?? String(err))}`;
 
 export const HELP = `qc: qrypt.chat in your terminal (end-to-end encrypted, ML-KEM-1024)
 
 Usage:
   qc                      open the chat client (signs you in first if needed)
+  qc fonts install|status|remove   our OpenEmoji colour font as the terminal's emoji font
   qc agent join <link>    join as an AI agent from an invite (makes its own keys) [--name --username]
   qc login [--oob]        sign in through your browser; --oob to paste a code (SSH)
   qc logout               forget this terminal's session and keys
@@ -115,15 +120,41 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 				username: typeof flags.username === 'string' ? flags.username : undefined,
 			});
 			if (flags.json) return json({ user: session.user, conversation_id: conversationId, operator });
-			out(`Joined qrypt.chat as @${session.user?.username} (agent), operated by @${operator?.username ?? '?'}.`);
-			out(`Keys made here and sealed in ${sessionPath()}; only the public key left this machine.`);
+			out(ok(`Joined qrypt.chat as ${who(session.user, { agent: true })}, operated by ${who(operator)}.`));
+			out(`${mark('key')}Keys made here and sealed in ${sessionPath()}; only the public key left this machine.`);
 			const chatName = operator?.display_name || operator?.username || '<chat>';
-			out(`Your chat with ${chatName} is open. Try: qc listen   or   qc send "${chatName}" "hello"   or   qc mcp`);
+			out(`${mark('chat')}Your chat with ${chatName} is open. Try: qc listen   or   qc send "${chatName}" "hello"   or   qc mcp`);
 			return;
+		}
+		case 'fonts': {
+			// The OpenEmoji colour font as the terminal's emoji font, via hqtui.
+			const { installEmojiFont, emojiFontStatus, removeEmojiFont } = await import('@profullstack/hqtui');
+			const action = rest[0] || 'status';
+			if (action === 'install') {
+				const result = await installEmojiFont();
+				for (const note of result.notes) out(info(note));
+				if (result.snippets?.length) {
+					out(`\n${mark('info')}Terminals that pick their own fonts need one line each:`);
+					for (const sn of result.snippets) out(`  ${sn.terminal} (${sn.file}):\n    ${sn.snippet}`);
+				}
+				return out(`\n${ok('Installed OpenEmoji. Restart the terminal, then run: qc fonts status')}`);
+			}
+			if (action === 'status') {
+				const st = await emojiFontStatus();
+				out(`${st.installed ? ok('OpenEmoji installed') : warn('OpenEmoji not installed (qc fonts install)')}`);
+				if (st.emojiFont !== undefined) out(`${mark('info')}Emoji font in use: ${st.emojiFont || 'none'}`);
+				return out(st.active ? ok('Active: emoji draw as OpenEmoji') : warn('Not active yet (restart the terminal)'));
+			}
+			if (action === 'remove') {
+				const done = await removeEmojiFont();
+				return out(done.length ? ok('Removed the OpenEmoji font setup.') : info('Nothing to remove.'));
+			}
+			throw new Error('Usage: qc fonts install|status|remove');
 		}
 		case 'login': {
 			const { session } = await login({ oob: !!flags.oob });
-			out(`Signed in as @${session.user?.username ?? 'unknown'} on ${session.base}. Keys sealed (ChaCha20-Poly1305) in ${sessionPath()}.`);
+			out(ok(`Signed in as ${who(session.user)} on ${session.base}.`));
+			out(`${mark('lock')}Keys sealed (ChaCha20-Poly1305) in ${sessionPath()}.`);
 			if ((await new QcClient(session).keyCheck()) === 'mismatch') {
 				out("Warning: the browser handed over keys that are not your account's current keys, so messages will not decrypt here. Restore your keys in that browser (Settings > Keys) or approve from the device you chat on, then run qc login again.");
 			}
@@ -131,11 +162,11 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 		}
 		case 'logout':
 			clearSession();
-			return out('Signed out. This terminal no longer holds your keys.');
+			return out(ok('Signed out. This terminal no longer holds your keys.'));
 		case 'whoami': {
 			const session = loadSession();
 			if (!session) throw new Error('Not signed in. Run qc login.');
-			return flags.json ? json({ user: session.user, base: session.base }) : out(`@${session.user?.username} (${session.user?.display_name ?? ''}) on ${session.base}`);
+			return flags.json ? json({ user: session.user, base: session.base }) : out(`${who(session.user)} on ${session.base}`);
 		}
 		case 'profile': {
 			const c = await client(flags);
@@ -144,17 +175,17 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			for (const k of ['emoji', 'pronouns', 'website', 'bio']) if (flags[k] !== undefined) fields[k] = flags[k] === true ? '' : String(flags[k]);
 			const p = Object.keys(fields).length ? await c.updateProfile(fields) : await c.profile();
 			if (flags.json) return json({ username: p.username, emoji: p.emoji ?? null, pronouns: p.pronouns ?? null, website: p.website ?? null, bio: p.bio ?? null });
-			out(`${p.emoji ? `${p.emoji} ` : ''}${p.displayName ?? p.display_name ?? p.username} @${p.username}${p.pronouns ? ` (${p.pronouns})` : ''}`);
-			if (p.website) out(p.website);
+			out(who(p));
+			if (p.website) out(`${mark('link')}${p.website}`);
 			if (p.bio) out(p.bio);
-			if (!Object.keys(fields).length) out(`\nSet: qc profile --emoji 🔭 --pronouns she/her --website https://you.example  (an empty value clears)`);
+			if (!Object.keys(fields).length) out(`\n${info('Set: qc profile --emoji :telescope: --pronouns she/her --website https://you.example  (an empty value clears)')}`);
 			return;
 		}
 		case 'chats':
 		case 'ls': {
 			const chats = await (await client(flags)).conversations();
 			if (flags.json) return json(chats.map((c) => ({ id: c.id, title: c.title, type: c.type, updated_at: c.updated_at, participants: c.participants?.length ?? 0 })));
-			for (const c of chats) out(`${c.id}  ${c.title}`);
+			for (const c of chats) out(`${c.id}  ${mark(c.type === 'group' ? 'users' : 'chat')}${c.title}`);
 			return;
 		}
 		case 'read': {
@@ -167,7 +198,7 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			for (const m of last) {
 				if (m.replyTo) out(`    ┃ ${m.replyTo.name ? `${m.replyTo.name}: ` : ''}${m.replyTo.snippet}`);
 				const reactions = m.reactions?.length ? `  [${m.reactions.map((r) => `${r.emoji}${r.count > 1 ? r.count : ''}`).join(' ')}]` : '';
-				out(`[${stamp(m.at)}] ${m.mine ? 'you' : m.sender}: ${m.text}${reactions}  (${m.id.slice(0, 8)})`);
+				out(`[${stamp(m.at)}] ${m.emoji ? `${m.emoji} ` : ''}${m.mine ? 'you' : m.sender}: ${em(m.text)}${reactions}  (${m.id.slice(0, 8)})`);
 			}
 			return;
 		}
@@ -181,7 +212,7 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			const target = messages.filter((m) => m.id === messageId || m.id.startsWith(messageId));
 			if (target.length !== 1) throw new Error(target.length ? `"${messageId}" matches ${target.length} messages` : `No message "${messageId}" in ${chat.title}`);
 			await c.react(chat.id, target[0].id, emoji, !!flags.remove);
-			return out(`${flags.remove ? 'Removed' : 'Reacted'} ${emoji} on ${chat.title}.`);
+			return out(ok(`${flags.remove ? 'Removed' : 'Reacted'} ${emoji} on ${chat.title}.`));
 		}
 		case 'send': {
 			if (!rest[0] || rest.length < 2) throw new Error('Usage: qc send <chat> <text>   (text "-" reads stdin)');
@@ -191,7 +222,8 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			const chat = findChat(await c.conversations(), rest[0]);
 			const { message, skipped } = await c.send(chat.id, text, { replyTo: flags.reply || undefined });
 			if (flags.json) return json({ id: message?.id, conversation: chat.id, skipped });
-			return out(`Sent to ${chat.title}${skipped ? ` (${skipped} participant(s) have no key yet)` : ''}.`);
+			if (skipped) out(warn(`${skipped} participant(s) have no key yet and will not see it.`));
+			return out(`${mark('send')}Sent to ${chat.title}.`);
 		}
 		case 'listen': {
 			const c = await client(flags);
@@ -209,7 +241,7 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 						if (seen.has(m.id) || m.id !== data.message.id) continue;
 						seen.add(m.id);
 						if (flags.json) out(JSON.stringify({ chat: id, title: titles.get(id), ...m }));
-						else out(`[${stamp(m.at)}] ${titles.get(id) ?? id} · ${m.mine ? 'you' : m.sender}: ${m.text}`);
+						else out(`[${stamp(m.at)}] ${mark('chat')}${titles.get(id) ?? id} · ${m.emoji ? `${m.emoji} ` : ''}${m.mine ? 'you' : m.sender}: ${em(m.text)}`);
 					}
 				},
 				{ onStatus: (s) => process.stderr.write(`qc: ${s}\n`) },

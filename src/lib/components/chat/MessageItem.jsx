@@ -7,6 +7,7 @@ import { detectTextFormat } from '@profullstack/text-type-detection';
 import MessageAttachments from './MessageAttachments.jsx';
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 import { renderOpenEmoji, isEmojiOnly, artworkKey, emojiSrc } from '@/lib/emoji/openemoji.js';
+import OpenEmoji from '@/lib/components/OpenEmoji.jsx';
 import { QUICK_REACTIONS, myReaction } from '@/lib/chat/reactions.js';
 import { parseCall, isJoinable, CALL_TYPE } from '@/lib/chat/calls.js';
 import { useChatStore } from '@/lib/stores/chat.js';
@@ -84,7 +85,7 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
             {sender?.emoji && <span aria-hidden="true" className="message-sender-emoji" dangerouslySetInnerHTML={{ __html: `${renderOpenEmoji(String(sender.emoji).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`))} ` }} />}
             {displayName}
             {sender?.pronouns && <span className="message-sender-pronouns"> · {sender.pronouns}</span>}
-            {sender?.account_type === 'agent' && <span className="message-sender-agent" title="AI agent">AI agent</span>}
+            {sender?.account_type === 'agent' && <span className="message-sender-agent" title="AI agent"><OpenEmoji char="🤖" size="1em" /> AI agent</span>}
           </div>
         )}
 

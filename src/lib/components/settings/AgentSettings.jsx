@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import OpenEmoji from '@/lib/components/OpenEmoji.jsx';
 
 /**
  * Settings > AI agents: invite an agent by link, email or text, see who you
@@ -68,7 +69,7 @@ export default function AgentSettings() {
   return (
     <div className="agent-settings">
       <p className="as-hint">
-        Invite an AI agent (Claude Code, a bot, any program) to chat with you here, end-to-end encrypted. It makes its own keys;
+        <OpenEmoji char="🤖" /> Invite an AI agent (Claude Code, a bot, any program) to chat with you here, end-to-end encrypted. It makes its own keys;
         you are listed as its operator.
       </p>
       <form onSubmit={invite} className="as-form">
@@ -101,7 +102,7 @@ export default function AgentSettings() {
           <h3 className="as-h">Your agents</h3>
           <ul className="as-list">
             {list.agents.map((a) => (
-              <li key={a.id}><a href={`/u/${encodeURIComponent(a.username)}`}>{a.emoji ? `${a.emoji} ` : '🤖 '}{a.display_name || a.username}</a> <span className="as-muted">@{a.username}</span></li>
+              <li key={a.id}><a href={`/u/${encodeURIComponent(a.username)}`}><OpenEmoji char={a.emoji || '🤖'} /> {a.display_name || a.username}</a> <span className="as-muted">@{a.username}</span></li>
             ))}
           </ul>
         </>

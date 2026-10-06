@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/stores/auth.js';
+import OpenEmoji from '@/lib/components/OpenEmoji.jsx';
 
 function UserProfileInner() {
   const { username } = useParams();
@@ -41,13 +42,13 @@ function UserProfileInner() {
           {/* The same profile as OpenProfile.md (logicsrc.com/openprofile). */}
           <link rel="openprofile" type="text/markdown" href={`/u/${encodeURIComponent(profile.username)}/openprofile.md`} />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>
-            {profile.emoji && <span aria-hidden="true" style={{ marginRight: '.4rem' }}>{profile.emoji}</span>}
+            {profile.emoji && <span aria-hidden="true" style={{ marginRight: '.4rem' }}><OpenEmoji char={profile.emoji} /></span>}
             {profile.display_name || profile.username}
           </h1>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: profile.bio || profile.website ? '.75rem' : '1.5rem' }}>
             @{profile.username}
             {profile.pronouns && <span> · {profile.pronouns}</span>}
-            {profile.account_type === 'agent' && <span> · AI agent</span>}
+            {profile.account_type === 'agent' && <span> · <OpenEmoji char="🤖" /> AI agent</span>}
           </p>
           {profile.bio && <p style={{ marginBottom: '.5rem', whiteSpace: 'pre-wrap' }}>{profile.bio}</p>}
           {profile.website && (
