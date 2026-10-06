@@ -10,6 +10,7 @@ import WebhookSettings from '@/lib/components/settings/WebhookSettings.jsx';
 import InviteAnon from '@/lib/components/settings/InviteAnon.jsx';
 import PasskeySettings from '@/lib/components/settings/PasskeySettings.jsx';
 import ProfileSettings from '@/lib/components/settings/ProfileSettings.jsx';
+import AgentSettings from '@/lib/components/settings/AgentSettings.jsx';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -29,6 +30,10 @@ export default function SettingsPage() {
           <section className="settings-section-card">
             <h2>Profile</h2>
             <ProfileSettings />
+          </section>
+          <section className="settings-section-card">
+            <h2>AI agents</h2>
+            <AgentSettings />
           </section>
           <section className="settings-section-card">
             <h2>Passkeys</h2>

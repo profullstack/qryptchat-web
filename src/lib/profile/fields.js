@@ -7,7 +7,7 @@
  */
 import { makeOpenProfile, renderOpenProfile } from '@profullstack/openprofile';
 
-export const PUBLIC_PROFILE_COLUMNS = 'id, username, display_name, avatar_url, bio, website, emoji, pronouns, unique_identifier';
+export const PUBLIC_PROFILE_COLUMNS = 'id, username, display_name, avatar_url, bio, website, emoji, pronouns, unique_identifier, account_type, operator_user_id';
 
 const SITE = 'https://qrypt.chat';
 const graphemes = (text) => [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)];
@@ -62,14 +62,28 @@ export function cleanWebsite(input) {
 	return { value: url.toString() };
 }
 
-/** The public profile as OpenProfile.md (logicsrc.com/openprofile). */
-export function toOpenProfile(user) {
+/**
+ * The public profile as OpenProfile.md (logicsrc.com/openprofile). An agent is
+ * `Kind: agent` with an Operator section naming the person answerable for it.
+ */
+export function toOpenProfile(user, operator = null) {
 	const page = `${SITE}/u/${encodeURIComponent(user.username)}`;
+	const agent = user.account_type === 'agent';
+	const operatorSection = agent && operator
+		? {
+				title: 'Operator',
+				name: 'operator',
+				body: [
+					`- **Name**: ${operator.display_name || operator.username}`,
+					`- **Profile**: ${SITE}/u/${encodeURIComponent(operator.username)}/openprofile.md`
+				].join('\n')
+			}
+		: null;
 	return renderOpenProfile(
 		makeOpenProfile({
 			name: user.display_name || user.username,
 			identity: {
-				Kind: 'person',
+				Kind: agent ? 'agent' : 'person',
 				Handle: `@${user.username}`,
 				Emoji: user.emoji,
 				Pronouns: user.pronouns,
@@ -77,7 +91,7 @@ export function toOpenProfile(user) {
 				Avatar: user.avatar_url,
 			},
 			headline: user.bio?.split('\n')[0],
-			sections: [{ title: 'Accounts', name: 'accounts', body: `- [qrypt.chat](${page})` }],
+			sections: [{ title: 'Accounts', name: 'accounts', body: `- [qrypt.chat](${page})` }, operatorSection],
 		}),
 	);
 }
