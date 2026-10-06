@@ -20,15 +20,25 @@ beforeEach(() => {
 describe('emoji picker in the composer', () => {
   it('opens from the emoji button and inserts at the caret', async () => {
     render(<MessageInput conversationId="c1" />);
-    const textarea = screen.getByPlaceholderText('Type a message...');
-    fireEvent.change(textarea, { target: { value: 'ship it' } });
-    textarea.setSelectionRange(4, 4);
+    const editor = screen.getByRole('textbox', { name: 'Message' });
+    editor.textContent = 'ship it';
+    fireEvent.input(editor);
+    const range = document.createRange();
+    range.setStart(editor.firstChild, 4);
+    range.collapse(true);
+    document.getSelection().removeAllRanges();
+    document.getSelection().addRange(range);
+    // Opening the picker moves focus to its search box: the editor blurs and remembers the caret.
+    fireEvent.blur(editor);
 
     fireEvent.click(screen.getByTitle('Emoji'));
     fireEvent.change(await screen.findByLabelText('Search emoji'), { target: { value: 'rocket' } });
     fireEvent.click(await screen.findByRole('button', { name: 'rocket' }));
 
-    await waitFor(() => expect(textarea.value).toBe('ship🚀 it'));
+    // Shown as our artwork, kept as plain text.
+    await waitFor(() => expect(editor.querySelector('img.openemoji')?.alt).toBe('🚀'));
+    expect(editor.querySelector('img.openemoji').getAttribute('src')).toBe('/openemoji/64/1f680.webp');
+    expect([...editor.childNodes].map((n) => n.nodeValue ?? n.alt).join('')).toBe('ship🚀 it');
   });
 
   it('closes on Escape', async () => {
