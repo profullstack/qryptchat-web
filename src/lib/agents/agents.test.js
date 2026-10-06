@@ -8,7 +8,7 @@ const KEY = Buffer.alloc(1568, 7).toString('base64');
 
 /** A tiny in-memory stand-in for the service-role client. */
 function fakeDb({ invite, usernameTaken = false, keyInsertFails = false } = {}) {
-	const state = { invite: invite ? { ...invite } : null, users: [], keys: [], deletedAuth: [], rpc: [] };
+	const state = { invite: invite ? { ...invite } : null, users: [], keys: [], deletedAuth: [], conversations: [], participants: [], deleted: [] };
 	const db = {
 		state,
 		auth: {
@@ -17,7 +17,7 @@ function fakeDb({ invite, usernameTaken = false, keyInsertFails = false } = {}) 
 				deleteUser: vi.fn(async (id) => state.deletedAuth.push(id))
 			}
 		},
-		rpc: vi.fn(async (name, args) => (state.rpc.push([name, args]), { data: 'conv-1', error: null })),
+		rpc: vi.fn(async () => ({ data: null, error: { message: 'create_direct_conversation must not be used' } })),
 		from(table) {
 			let op = 'select';
 			let patch = null;
@@ -29,11 +29,28 @@ function fakeDb({ invite, usernameTaken = false, keyInsertFails = false } = {}) 
 				ilike: (k, v) => (filters.push(['ilike', k, v]), q),
 				update: (p) => ((op = 'update'), (patch = p), q),
 				insert: (row) => ((op = 'insert'), (patch = row), q),
+				upsert: (rows) => ((op = 'upsert'), (patch = rows), q),
+				delete: () => ((op = 'delete'), q),
 				maybeSingle: async () => run('one'),
 				single: async () => run('one'),
 				then: (res, rej) => run('many').then(res, rej)
 			};
 			async function run(shape) {
+				if (op === 'delete') {
+					state.deleted.push([table, ...filters.map(([, k, v]) => `${k}=${v}`)]);
+					return { data: null, error: null };
+				}
+				if (table === 'conversations') {
+					if (op === 'insert') {
+						state.conversations.push(patch);
+						return { data: { id: 'conv-1' }, error: null };
+					}
+					return { data: [], error: null };
+				}
+				if (table === 'conversation_participants') {
+					state.participants.push(...[].concat(patch ?? []));
+					return { data: null, error: null };
+				}
 				if (table === 'agent_invites') {
 					const inv = state.invite;
 					const match = inv && filters.every(([t, k, v]) => (t === 'is' ? inv[k] === v || (v === null && inv[k] == null) : k === 'token_hash' ? inv.token_hash === v : inv[k] === v));
@@ -116,7 +133,9 @@ describe('redeemInvite', () => {
 		expect(out.conversationId).toBe('conv-1');
 		expect(db.state.users[0]).toMatchObject({ account_type: 'agent', operator_user_id: 'inviter', username: 'athena_bot', display_name: 'Athena' });
 		expect(db.state.keys[0]).toEqual({ user_id: 'auth-agent', public_key: KEY, key_type: 'ML-KEM-1024' });
-		expect(db.rpc).toHaveBeenCalledWith('create_direct_conversation', { user1_id: 'inviter', user2_id: 'user-agent' });
+		expect(db.rpc).not.toHaveBeenCalled();
+		expect(db.state.conversations[0]).toEqual({ type: 'direct', created_by: 'inviter' });
+		expect(db.state.participants.map((p) => p.user_id)).toEqual(['inviter', 'user-agent']);
 		expect(db.state.invite.redeemed_at).toBeTruthy();
 		expect(db.state.invite.redeemed_by).toBe('user-agent');
 	});
@@ -136,6 +155,8 @@ describe('redeemInvite', () => {
 		const db = fakeDb({ invite: openInviteFor(token), keyInsertFails: true });
 		await expect(redeemInvite(db, token, { username: 'athena_bot', publicKey: KEY })).rejects.toBeInstanceOf(AgentError);
 		expect(db.state.deletedAuth).toEqual(['auth-agent']);
+		// The users row goes too: deleting the auth user does not cascade to public.users.
+		expect(db.state.deleted).toContainEqual(['users', 'id=user-agent']);
 		expect(db.state.invite.redeemed_at).toBeNull();
 	});
 });
