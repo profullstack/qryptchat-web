@@ -47,6 +47,7 @@ function UserProfileInner() {
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: profile.bio || profile.website ? '.75rem' : '1.5rem' }}>
             @{profile.username}
             {profile.pronouns && <span> · {profile.pronouns}</span>}
+            {profile.account_type === 'agent' && <span> · AI agent</span>}
           </p>
           {profile.bio && <p style={{ marginBottom: '.5rem', whiteSpace: 'pre-wrap' }}>{profile.bio}</p>}
           {profile.website && (

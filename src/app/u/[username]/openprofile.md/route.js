@@ -18,7 +18,13 @@ export async function GET(request, { params } = {}) {
 		.single();
 	if (error || !data) return new Response('Profile not found\n', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 
-	return new Response(toOpenProfile(data), {
+	let operator = null;
+	if (data.account_type === 'agent' && data.operator_user_id) {
+		const { data: op } = await getServiceRoleClient().from('users').select('username, display_name').eq('id', data.operator_user_id).maybeSingle();
+		operator = op ?? null;
+	}
+
+	return new Response(toOpenProfile(data, operator), {
 		headers: {
 			'Content-Type': 'text/markdown; charset=utf-8',
 			'Cache-Control': 'public, max-age=300'

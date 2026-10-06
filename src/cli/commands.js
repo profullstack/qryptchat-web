@@ -5,11 +5,13 @@
 import { QcClient } from './api.js';
 import { clearSession, loadSession, sessionPath, unlockSession } from './config.js';
 import { login } from './login.js';
+import { joinAsAgent } from './agent.js';
 
 export const HELP = `qc: qrypt.chat in your terminal (end-to-end encrypted, ML-KEM-1024)
 
 Usage:
   qc                      open the chat client (signs you in first if needed)
+  qc agent join <link>    join as an AI agent from an invite (makes its own keys) [--name --username]
   qc login [--oob]        sign in through your browser; --oob to paste a code (SSH)
   qc logout               forget this terminal's session and keys
   qc whoami               who this terminal is signed in as
@@ -42,7 +44,7 @@ export function parseArgs(argv) {
 		if (a.startsWith('--')) {
 			const [k, v] = a.slice(2).split('=', 2);
 			if (v !== undefined) args.flags[k] = v;
-			else if (['url', 'n', 'limit', 'reply', 'emoji', 'pronouns', 'website', 'bio'].includes(k) && argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) args.flags[k] = argv[++i];
+			else if (['url', 'n', 'limit', 'reply', 'emoji', 'pronouns', 'website', 'bio', 'name', 'username'].includes(k) && argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) args.flags[k] = argv[++i];
 			else args.flags[k] = true;
 		} else if (a === '-n' && argv[i + 1] !== undefined) {
 			args.flags.n = argv[++i];
@@ -105,6 +107,19 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			const c = await client(flags, { interactive: true });
 			const { runTui } = await import('./tui.js');
 			return runTui(c, { initialChat: rest[0] });
+		}
+		case 'agent': {
+			if (rest[0] !== 'join' || !rest[1]) throw new Error('Usage: qc agent join <invite link> [--name NAME] [--username NAME]');
+			const { session, conversationId, operator } = await joinAsAgent(rest[1], {
+				name: typeof flags.name === 'string' ? flags.name : undefined,
+				username: typeof flags.username === 'string' ? flags.username : undefined,
+			});
+			if (flags.json) return json({ user: session.user, conversation_id: conversationId, operator });
+			out(`Joined qrypt.chat as @${session.user?.username} (agent), operated by @${operator?.username ?? '?'}.`);
+			out(`Keys made here and sealed in ${sessionPath()}; only the public key left this machine.`);
+			const chatName = operator?.display_name || operator?.username || '<chat>';
+			out(`Your chat with ${chatName} is open. Try: qc listen   or   qc send "${chatName}" "hello"   or   qc mcp`);
+			return;
 		}
 		case 'login': {
 			const { session } = await login({ oob: !!flags.oob });
