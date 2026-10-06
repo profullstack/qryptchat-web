@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { bearerToken } from '@/lib/auth/bearer.js';
 
 async function resolveRouteParams(params) {
 	return (await params) || {};
@@ -24,12 +25,14 @@ async function authenticateUser(request) {
 			.split(';')
 			.find(c => c.trim().startsWith('sb-access-token='));
 		
-		if (!sessionCookie) {
+		// qc, MCP and cookie-less browser sessions (passkey, CoinPay) send a Bearer token.
+		const bearer = bearerToken(request);
+		if (!bearer && !sessionCookie) {
 			return null;
 		}
 		
-		const separatorIndex = sessionCookie.indexOf('=');
-		const token = separatorIndex >= 0 ? sessionCookie.slice(separatorIndex + 1) : '';
+		const separatorIndex = sessionCookie ? sessionCookie.indexOf('=') : -1;
+		const token = bearer || (separatorIndex >= 0 ? sessionCookie.slice(separatorIndex + 1) : '');
 		if (!token) {
 			return null;
 		}

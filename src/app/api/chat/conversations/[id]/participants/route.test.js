@@ -115,6 +115,25 @@ describe('GET /api/chat/conversations/[id]/participants', () => {
 		expect(mocks.participantEq).toHaveBeenCalledWith('conversation_id', 'conversation-1');
 	});
 
+	it('accepts a Bearer token with no cookie at all (qc, MCP, passkey sessions)', async () => {
+		mocks.serviceFrom.mockImplementation((table) => {
+			if (table === 'users') return createUsersQuery();
+			if (table === 'conversation_participants') return createParticipantCheckQuery();
+			throw new Error(`Unexpected table: ${table}`);
+		});
+
+		const { GET } = await import('./route.js');
+		const response = await GET(
+			new Request('https://qrypt.chat/api/chat/conversations/conversation-1/participants', {
+				headers: { authorization: 'Bearer qc-token' }
+			}),
+			{ params: Promise.resolve({ id: 'conversation-1' }) }
+		);
+
+		expect(response.status).toBe(200);
+		expect(mocks.authGetUser).toHaveBeenCalledWith('qc-token');
+	});
+
 	it('preserves equals padding in base64 auth cookies', async () => {
 		mocks.serviceFrom.mockImplementation((table) => {
 			if (table === 'users') return createUsersQuery();

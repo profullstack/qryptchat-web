@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
+import { bearerToken } from '@/lib/auth/bearer.js';
 
 // Regular (anon) client used ONLY to validate the caller's JWT. Never use the
 // service-role key for auth checks.
@@ -17,8 +18,10 @@ const supabaseClient = createClient(
  */
 async function authenticateUser(request) {
 	try {
-		const cookieHeader = request.headers.get('cookie');
-		if (!cookieHeader) {
+		// qc, MCP and cookie-less browser sessions (passkey, CoinPay) send a Bearer token.
+		const bearer = bearerToken(request);
+		const cookieHeader = request.headers.get('cookie') || '';
+		if (!bearer && !cookieHeader) {
 			return { error: 'No cookies found' };
 		}
 
@@ -31,10 +34,10 @@ async function authenticateUser(request) {
 			})
 		);
 
-		let accessToken = null;
+		let accessToken = bearer;
 
 		// Supabase-specific auth cookie first
-		if (cookies[supabaseAuthCookieName()]) {
+		if (!accessToken && cookies[supabaseAuthCookieName()]) {
 			try {
 				let tokenData = cookies[supabaseAuthCookieName()];
 				if (tokenData.startsWith('base64-')) {
