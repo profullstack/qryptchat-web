@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useChatStore } from '@/lib/stores/chat.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { detectTextFormat } from '@profullstack/text-type-detection';
 import { trackMessageSent } from '@/lib/utils/analytics.js';
 import { multiRecipientEncryption } from '@/lib/crypto/multi-recipient-encryption.js';
-import { insertAtCursor } from '@/lib/emoji/openemoji.js';
+import EmojiEditor from './EmojiEditor.jsx';
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
@@ -44,7 +44,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadError, setUploadError] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
-  const textareaRef = useRef(null);
+  const editorRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
@@ -58,37 +58,16 @@ export default function MessageInput({ conversationId, disabled = false }) {
     }))
   );
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
-    }
-  }, [messageText]);
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }
-
-  function handleInput(e) {
-    const val = e.target.value;
+  function handleChange(val) {
     setMessageText(val);
     if (conversationId && user?.id) {
       setTyping(conversationId);
     }
   }
 
+  // The picker hands back a character; the editor draws it as our artwork.
   function insertEmoji(char) {
-    const el = textareaRef.current;
-    const { value, caret } = insertAtCursor(messageText, el?.selectionStart, el?.selectionEnd, char);
-    setMessageText(value);
-    requestAnimationFrame(() => {
-      if (!textareaRef.current) return;
-      textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(caret, caret);
-    });
+    editorRef.current?.insert(char);
   }
 
   function handleFileInput(e) {
@@ -292,15 +271,14 @@ export default function MessageInput({ conversationId, disabled = false }) {
           <Icon name="smile" size={20} />
         </button>
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileInput} />
-        <textarea
-          ref={textareaRef}
+        <EmojiEditor
+          ref={editorRef}
           className="message-textarea"
           value={messageText}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
+          onChange={handleChange}
+          onSubmit={handleSend}
           placeholder="Type a message..."
           disabled={disabled || isSending}
-          rows={1}
         />
         <button
           className="send-btn"
@@ -332,7 +310,10 @@ export default function MessageInput({ conversationId, disabled = false }) {
         .send-spinner { border-top-color: white; }
         .message-input-wrapper { display: flex; align-items: flex-end; gap: .5rem; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: 1.5rem; padding: .375rem .375rem .375rem .75rem; }
         .message-textarea { flex: 1; border: none; background: transparent; resize: none; font-size: .9375rem; line-height: 1.5; max-height: 120px; padding: .25rem 0; color: var(--color-text-primary); outline: none; font-family: inherit; }
-        .message-textarea::placeholder { color: var(--color-text-muted); }
+        .message-textarea { overflow-y: auto; white-space: pre-wrap; word-break: break-word; min-height: 1.5em; cursor: text; }
+        .message-textarea[data-empty="true"]::before { content: attr(data-placeholder); color: var(--color-text-muted); pointer-events: none; }
+        .message-textarea[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }
+        .message-textarea img.openemoji { width: 1.35em; height: 1.35em; vertical-align: -0.3em; margin: 0 .05em; }
         .attach-btn, .emoji-btn, .send-btn { flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; }
         .attach-btn, .emoji-btn { background: transparent; color: var(--color-text-secondary); }
         .attach-btn:hover:not(:disabled), .emoji-btn:hover:not(:disabled), .emoji-btn.active { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
