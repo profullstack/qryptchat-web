@@ -4,7 +4,7 @@
  */
 
 import { sseManager } from '@/lib/api/sse-manager.js';
-import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { authenticateRequest } from '@/lib/api/middleware/auth.js';
 
 /**
  * GET handler for SSE connections
@@ -14,14 +14,13 @@ export async function GET(request, { params } = {}) {
 	console.log('📡 [SSE] New connection request');
 
 	try {
-		// Authenticate the user using getUser() for security
-		const supabase = await createSupabaseServerClient();
-		const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-		if (authError || !user) {
-			console.error('📡 [SSE] Authentication failed:', authError?.message || 'No user');
+		// Bearer token (the qc CLI) or the session cookie (the web app).
+		const auth = await authenticateRequest(request);
+		if (!auth.success) {
+			console.error('📡 [SSE] Authentication failed:', auth.error);
 			return new Response('Unauthorized', { status: 401 });
 		}
+		const { user, supabase } = auth;
 
 		const authUserId = user.id;
 		console.log(`📡 [SSE] Auth user ${authUserId} authenticated`);

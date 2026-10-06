@@ -1,0 +1,41 @@
+{
+  "name": "@profullstack/qryptchat",
+  "version": "0.1.0",
+  "description": "qc: qrypt.chat in your terminal. A full-screen end-to-end encrypted chat client (ML-KEM-1024), plus a scriptable CLI and an MCP server.",
+  "type": "module",
+  "bin": {
+    "qc": "./bin/qc.js",
+    "qryptchat": "./bin/qc.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.0.0",
+    "@profullstack/hqtui": "^0.8.0",
+    "mlkem": "^2.5.0"
+  },
+  "keywords": [
+    "qrypt.chat",
+    "chat",
+    "e2ee",
+    "ml-kem",
+    "post-quantum",
+    "tui",
+    "cli",
+    "mcp"
+  ],
+  "homepage": "https://qrypt.chat",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/qryptchat-web.git",
+    "directory": "packages/qryptchat"
+  },
+  "license": "MIT",
+  "author": "Profullstack, Inc."
+}

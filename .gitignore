@@ -27,3 +27,6 @@ supabase/.temp/
 # Claude Code: local-only, machine-specific (keep shared config committed)
 **/.claude/settings.local.json
 **/.claude/worktrees/
+
+# qc package build output (scripts/build-qc.js)
+packages/qryptchat/dist/

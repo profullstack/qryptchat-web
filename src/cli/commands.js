@@ -1,0 +1,168 @@
+/**
+ * qc's commands. Bare `qc` is the full-screen client; everything else is for
+ * scripts and agents and prints plain text (or JSON with --json).
+ */
+import { QcClient } from './api.js';
+import { clearSession, loadSession, sessionPath } from './config.js';
+import { login } from './login.js';
+
+export const HELP = `qc: qrypt.chat in your terminal (end-to-end encrypted, ML-KEM-1024)
+
+Usage:
+  qc                      open the chat client (signs you in first if needed)
+  qc login [--oob]        sign in through your browser; --oob to paste a code (SSH)
+  qc logout               forget this terminal's session and keys
+  qc whoami               who this terminal is signed in as
+  qc chats                list your chats
+  qc read <chat> [-n 20]  print the last messages of a chat
+  qc send <chat> <text>   send a message (text "-" reads stdin)
+  qc listen               print new messages as they arrive (NDJSON with --json)
+  qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message)
+
+<chat> is a chat id or part of its name. Options: --json, --url <server> (or QC_URL).
+Keys and session live in ${'$'}QC_HOME or ~/.config/qc (mode 0600).`;
+
+export function parseArgs(argv) {
+	const args = { _: [], flags: {} };
+	for (let i = 0; i < argv.length; i++) {
+		const a = argv[i];
+		if (a === '--') {
+			args._.push(...argv.slice(i + 1));
+			break;
+		}
+		if (a.startsWith('--')) {
+			const [k, v] = a.slice(2).split('=', 2);
+			if (v !== undefined) args.flags[k] = v;
+			else if (['url', 'n', 'limit'].includes(k) && argv[i + 1] !== undefined) args.flags[k] = argv[++i];
+			else args.flags[k] = true;
+		} else if (a === '-n' && argv[i + 1] !== undefined) {
+			args.flags.n = argv[++i];
+		} else if (a === '-h') {
+			args.flags.help = true;
+		} else if (a === '-v') {
+			args.flags.version = true;
+		} else {
+			args._.push(a);
+		}
+	}
+	return args;
+}
+
+/** Match a chat by id, exact name, then a unique name fragment. */
+export function findChat(chats, query) {
+	const q = String(query).toLowerCase();
+	const byId = chats.find((c) => c.id === query);
+	if (byId) return byId;
+	const exact = chats.filter((c) => c.title.toLowerCase() === q);
+	if (exact.length === 1) return exact[0];
+	const some = chats.filter((c) => c.title.toLowerCase().includes(q));
+	if (some.length === 1) return some[0];
+	if (some.length > 1) throw new Error(`"${query}" matches ${some.length} chats: ${some.map((c) => c.title).join(', ')}`);
+	throw new Error(`No chat matches "${query}". Try qc chats.`);
+}
+
+async function client(flags, { interactive = false } = {}) {
+	if (flags.url) process.env.QC_URL = flags.url;
+	let session = loadSession();
+	if (!session) {
+		if (!interactive) throw new Error('Not signed in. Run qc login.');
+		session = await login({ oob: !!flags.oob });
+	}
+	return new QcClient(session);
+}
+
+const stamp = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+
+async function readStdin() {
+	let text = '';
+	for await (const chunk of process.stdin) text += chunk;
+	return text;
+}
+
+export async function main(argv, { version = '0.0.0' } = {}) {
+	const { _: [cmd, ...rest], flags } = parseArgs(argv);
+	const out = (line) => process.stdout.write(`${line}\n`);
+	const json = (value) => out(JSON.stringify(value, null, flags.json === 'compact' ? 0 : 2));
+
+	if (flags.version) return out(`qc ${version}`);
+	if (flags.help || cmd === 'help') return out(HELP);
+	if (flags.url) process.env.QC_URL = flags.url;
+
+	switch (cmd) {
+		case undefined:
+		case 'tui': {
+			if (!process.stdout.isTTY) throw new Error('qc needs a terminal. For scripts use qc chats / read / send / listen.');
+			const c = await client(flags, { interactive: true });
+			const { runTui } = await import('./tui.js');
+			return runTui(c, { initialChat: rest[0] });
+		}
+		case 'login': {
+			const session = await login({ oob: !!flags.oob });
+			return out(`Signed in as @${session.user?.username ?? 'unknown'} on ${session.base}. Keys saved to ${sessionPath()}.`);
+		}
+		case 'logout':
+			clearSession();
+			return out('Signed out. This terminal no longer holds your keys.');
+		case 'whoami': {
+			const session = loadSession();
+			if (!session) throw new Error('Not signed in. Run qc login.');
+			return flags.json ? json({ user: session.user, base: session.base }) : out(`@${session.user?.username} (${session.user?.display_name ?? ''}) on ${session.base}`);
+		}
+		case 'chats':
+		case 'ls': {
+			const chats = await (await client(flags)).conversations();
+			if (flags.json) return json(chats.map((c) => ({ id: c.id, title: c.title, type: c.type, updated_at: c.updated_at, participants: c.participants?.length ?? 0 })));
+			for (const c of chats) out(`${c.id}  ${c.title}`);
+			return;
+		}
+		case 'read': {
+			if (!rest[0]) throw new Error('Usage: qc read <chat> [-n 20]');
+			const c = await client(flags);
+			const chat = findChat(await c.conversations(), rest[0]);
+			const { messages } = await c.messages(chat.id, { limit: 100 });
+			const last = messages.slice(-Math.max(1, Number(flags.n || flags.limit || 20)));
+			if (flags.json) return json(last);
+			for (const m of last) out(`[${stamp(m.at)}] ${m.mine ? 'you' : m.sender}: ${m.text}`);
+			return;
+		}
+		case 'send': {
+			if (!rest[0] || rest.length < 2) throw new Error('Usage: qc send <chat> <text>   (text "-" reads stdin)');
+			const text = rest[1] === '-' && rest.length === 2 ? (await readStdin()).trim() : rest.slice(1).join(' ');
+			if (!text) throw new Error('Nothing to send.');
+			const c = await client(flags);
+			const chat = findChat(await c.conversations(), rest[0]);
+			const { message, skipped } = await c.send(chat.id, text);
+			if (flags.json) return json({ id: message?.id, conversation: chat.id, skipped });
+			return out(`Sent to ${chat.title}${skipped ? ` (${skipped} participant(s) have no key yet)` : ''}.`);
+		}
+		case 'listen': {
+			const c = await client(flags);
+			const chats = await c.conversations();
+			const titles = new Map(chats.map((x) => [x.id, x.title]));
+			// Loading a chat joins its live room on the server.
+			for (const x of chats) await c.messages(x.id, { limit: 1 }).catch(() => {});
+			const seen = new Set();
+			await c.events(
+				async ({ type, data }) => {
+					if (type !== 'NEW_MESSAGE' || !data?.message?.conversation_id) return;
+					const id = data.message.conversation_id;
+					const { messages } = await c.messages(id, { limit: 100 });
+					for (const m of messages.slice(-5)) {
+						if (seen.has(m.id) || m.id !== data.message.id) continue;
+						seen.add(m.id);
+						if (flags.json) out(JSON.stringify({ chat: id, title: titles.get(id), ...m }));
+						else out(`[${stamp(m.at)}] ${titles.get(id) ?? id} · ${m.mine ? 'you' : m.sender}: ${m.text}`);
+					}
+				},
+				{ onStatus: (s) => process.stderr.write(`qc: ${s}\n`) },
+			);
+			return;
+		}
+		case 'mcp': {
+			const { serveMcp } = await import('./mcp.js');
+			return serveMcp(await client(flags), { version });
+		}
+		default:
+			throw new Error(`Unknown command "${cmd}".\n\n${HELP}`);
+	}
+}

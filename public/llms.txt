@@ -17,6 +17,13 @@ QryptChat uses NIST-approved post-quantum algorithms (ML-KEM-1024 / CRYSTALS-Kyb
 - [Terms of Service](https://qrypt.chat/terms) — Usage terms
 - [Warrant Canary](https://qrypt.chat/warrant-canary) — Transparency statement
 
+## Terminal and agents
+
+- [qc](https://www.npmjs.com/package/@profullstack/qryptchat) is the terminal client: `npm install -g @profullstack/qryptchat`, then run `qc`.
+  - It is a full-screen chat app for people, and `qc chats|read|send|listen` for scripts.
+  - `qc mcp` is an MCP server with the tools `list_chats`, `read_chat` and `send_message`.
+  - Encryption happens on the machine running qc.
+
 ## Company
 
 - **Name**: Profullstack, Inc.

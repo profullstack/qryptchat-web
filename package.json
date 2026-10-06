@@ -4,15 +4,18 @@
   "version": "0.0.3",
   "type": "module",
   "bin": {
-    "qryptchat": "./bin/qryptchat-cli.js",
+    "qc": "./bin/qc.js",
+    "qryptchat": "./bin/qc.js",
     "qryptchat-agent": "./bin/qryptchat-agent.js"
   },
   "packageManager": "bun@1.4.0",
   "scripts": {
     "lint:oxlint": "oxlint",
     "lint:oxlint:fix": "oxlint --fix",
-    "cli": "bun bin/qryptchat-cli.js",
+    "cli": "bun bin/qc.js",
     "agent": "bun bin/qryptchat-agent.js",
+    "qc": "bun bin/qc.js",
+    "build:qc": "bun scripts/build-qc.js",
     "dev": "bun --bun next dev",
     "build": "bun --bun next build",
     "start": "bun --bun next start",
@@ -31,6 +34,7 @@
     "dependencies": "command -v pnpm && pnpm dlx @socketsecurity/socket-patch apply --silent --ecosystems npm || true"
   },
   "devDependencies": {
+    "@profullstack/hqtui": "^0.8.0",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.6.1",
