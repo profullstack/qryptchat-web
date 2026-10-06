@@ -38,8 +38,22 @@ function UserProfileInner() {
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--color-brand-primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', fontWeight: 700, margin: '0 auto 1rem' }}>
             {profile.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (profile.display_name || username).charAt(0).toUpperCase()}
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>{profile.display_name || profile.username}</h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>@{profile.username}</p>
+          {/* The same profile as OpenProfile.md (logicsrc.com/openprofile). */}
+          <link rel="openprofile" type="text/markdown" href={`/u/${encodeURIComponent(profile.username)}/openprofile.md`} />
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>
+            {profile.emoji && <span aria-hidden="true" style={{ marginRight: '.4rem' }}>{profile.emoji}</span>}
+            {profile.display_name || profile.username}
+          </h1>
+          <p style={{ color: 'var(--color-text-secondary)', marginBottom: profile.bio || profile.website ? '.75rem' : '1.5rem' }}>
+            @{profile.username}
+            {profile.pronouns && <span> · {profile.pronouns}</span>}
+          </p>
+          {profile.bio && <p style={{ marginBottom: '.5rem', whiteSpace: 'pre-wrap' }}>{profile.bio}</p>}
+          {profile.website && (
+            <p style={{ marginBottom: '1.5rem' }}>
+              <a href={profile.website} rel="me nofollow noopener" target="_blank">{profile.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>
+            </p>
+          )}
           {currentUser && currentUser.id !== profile.id && (
             <button className="btn btn-primary" onClick={startChat}>Start Chat</button>
           )}

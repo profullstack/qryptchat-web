@@ -78,7 +78,14 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
       )}
 
       <div className="message-content-wrapper">
-        {!isOwn && <div className="message-sender">{displayName}</div>}
+        {!isOwn && (
+          <div className="message-sender">
+            {/* The server only stores a single emoji grapheme here, so this is our artwork, not markup. */}
+            {sender?.emoji && <span aria-hidden="true" className="message-sender-emoji" dangerouslySetInnerHTML={{ __html: `${renderOpenEmoji(String(sender.emoji).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`))} ` }} />}
+            {displayName}
+            {sender?.pronouns && <span className="message-sender-pronouns"> · {sender.pronouns}</span>}
+          </div>
+        )}
 
         {message.replyTo && (
           <button
@@ -188,6 +195,8 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
         .message-content-wrapper { position: relative; max-width: 70%; display: flex; flex-direction: column; gap: .25rem; }
         .message-wrapper.own .message-content-wrapper { align-items: flex-end; }
         .message-sender { font-size: .75rem; color: var(--color-text-secondary); font-weight: 500; padding-left: .25rem; }
+        .message-sender-pronouns { font-weight: 400; opacity: .8; }
+        .message-sender-emoji img { width: 1.1em; height: 1.1em; vertical-align: -0.2em; }
         .message-bubble { padding: .5rem .875rem; border-radius: 1rem; background: var(--color-bg-secondary); color: var(--color-text-primary); font-size: .9375rem; line-height: 1.5; word-break: break-word; }
         .message-bubble.own { background: var(--color-brand-primary); color: white; }
         .message-bubble.ascii-art, .message-bubble.code-block { background: var(--color-bg-tertiary); }

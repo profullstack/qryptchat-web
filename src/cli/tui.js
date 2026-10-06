@@ -76,7 +76,8 @@ export function transcriptLines(messages, width, theme) {
 		if (!sameRun) {
 			lines.push({
 				spans: [
-					{ text: m.mine ? 'you' : m.sender, fg: m.mine ? theme.primary : nameColor(theme, m.senderId || m.sender), bold: true },
+					{ text: `${m.emoji ? `${m.emoji} ` : ''}${m.mine ? 'you' : m.sender}`, fg: m.mine ? theme.primary : nameColor(theme, m.senderId || m.sender), bold: true },
+					...(m.pronouns && !m.mine ? [{ text: ` ${m.pronouns}`, fg: theme.muted }] : []),
 					{ text: `  ${timeOf(m.at)}`, fg: theme.muted },
 				],
 			});

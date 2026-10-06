@@ -67,7 +67,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			.from('messages')
 			.select(`
 				*,
-				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url),
+				sender:users!messages_sender_id_fkey(id, username, display_name, avatar_url, emoji, pronouns),
 				message_recipients!inner(encrypted_content, recipient_user_id)
 			`)
 			.eq('conversation_id', conversationId)
