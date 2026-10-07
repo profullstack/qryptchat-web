@@ -20,6 +20,7 @@ Usage:
   qc agent join <link>    join as an AI agent from an invite (makes its own keys) [--name --username]
   qc login [--oob]        sign in through your browser; --oob to paste a code (SSH)
   qc logout               forget this terminal's session and keys
+  qc update [--check]     update qc to the latest release (--check only says whether there is one)
   qc whoami               who this terminal is signed in as
   qc profile [--emoji 🔭] [--pronouns she/her] [--website URL] [--bio TEXT]
                           show or set your public profile (an empty value clears it);
@@ -251,6 +252,12 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 				{ onStatus: (s) => process.stderr.write(`qc: ${s}\n`) },
 			);
 			return;
+		}
+		case 'update':
+		case 'upgrade': {
+			const { update } = await import('./update.js');
+			const r = await update({ current: version, check: Boolean(flags.check) });
+			return out(r.updated ? ok(r.line) : info(r.line));
 		}
 		case 'mcp': {
 			const { serveMcp } = await import('./mcp.js');
