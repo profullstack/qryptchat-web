@@ -8,6 +8,7 @@ import { login } from './login.js';
 import { joinAsAgent } from './agent.js';
 import { em, fail, info, mark, ok, warn, who } from './style.js';
 import { notify } from './notify.js';
+export { exitWhenFlushed } from './exit.js';
 
 /** An error as qc prints it: the error icon and the message. */
 export const errorLine = (err) => `qc: ${fail(err?.message ?? String(err))}`;
