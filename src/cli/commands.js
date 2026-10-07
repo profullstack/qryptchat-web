@@ -7,6 +7,7 @@ import { clearSession, loadSession, sessionPath, unlockSession } from './config.
 import { login } from './login.js';
 import { joinAsAgent } from './agent.js';
 import { em, fail, info, mark, ok, warn, who } from './style.js';
+import { notify } from './notify.js';
 
 /** An error as qc prints it: the error icon and the message. */
 export const errorLine = (err) => `qc: ${fail(err?.message ?? String(err))}`;
@@ -27,7 +28,7 @@ Usage:
   qc read <chat> [-n 20]  print the last messages of a chat
   qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply)
   qc react <chat> <message-id> <emoji> [--remove]   react to a message
-  qc listen               print new messages as they arrive (NDJSON with --json)
+  qc listen               print new messages as they arrive (NDJSON with --json; --notify alerts with it)
   qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message)
 
 <chat> is a chat id or part of its name. Options: --json, --url <server> (or QC_URL).
@@ -36,7 +37,9 @@ OS keychain, or comes from a passphrase (QC_PASSPHRASE for scripts and qc mcp).
 HD: emoji and icons are drawn as our OpenEmoji/OpenIcon images in Kitty, Ghostty, WezTerm and iTerm2.
 Over SSH or in tmux (set -g allow-passthrough on) say which: QC_HD=1 (Kitty/Ghostty) or
 QC_HD=wezterm (WezTerm/iTerm2). QC_HD=0 turns it off. Mosh carries only text, so behind mosh
-emoji stay characters: for images use ssh or WezTerm's multiplexer (wezterm connect).`;
+emoji stay characters: for images use ssh or WezTerm's multiplexer (wezterm connect).
+New messages raise a terminal notification (OSC 9, Kitty OSC 99) and a bell, naming the chat
+but never the text; in tmux set -g allow-passthrough on. QC_NOTIFY=bell rings only, QC_NOTIFY=0 is quiet.`;
 
 export function parseArgs(argv) {
 	const args = { _: [], flags: {} };
@@ -240,6 +243,7 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 					for (const m of messages.slice(-5)) {
 						if (seen.has(m.id) || m.id !== data.message.id) continue;
 						seen.add(m.id);
+						if (!m.mine && (flags.notify || !flags.json)) notify('qrypt.chat', `${m.sender} in ${titles.get(id) ?? 'a chat'}`);
 						if (flags.json) out(JSON.stringify({ chat: id, title: titles.get(id), ...m }));
 						else out(`[${stamp(m.at)}] ${mark('chat')}${titles.get(id) ?? id} · ${m.emoji ? `${m.emoji} ` : ''}${m.mine ? 'you' : m.sender}: ${em(m.text)}`);
 					}

@@ -20,6 +20,7 @@ import { createApp, createImageStore, drawIcon, drawRichText, editText, emojify,
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { configDir } from './config.js';
+import { notify } from './notify.js';
 
 const SIDEBAR = 30;
 
@@ -437,6 +438,11 @@ export async function runTui(client, { initialChat } = {}) {
 				if (type === 'NEW_MESSAGE') {
 					const id = data?.message?.conversation_id;
 					if (!id) return;
+					// The terminal may be behind another window, so even the open chat alerts.
+					if (data.message.sender_id !== client.me?.id) {
+						const chat = state.conversations.find((c) => c.id === id);
+						notify('qrypt.chat', `new message${chat ? ` in ${chat.title}` : ''}`);
+					}
 					if (id === state.activeId) loadMessages(id);
 					else {
 						if (data.message.sender_id !== client.me?.id) state.unread[id] = (state.unread[id] || 0) + 1;
