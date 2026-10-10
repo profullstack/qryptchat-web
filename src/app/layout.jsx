@@ -1,8 +1,12 @@
 import './globals.css';
 import ClientLayout from './client-layout.jsx';
 import Script from "next/script";
+import { Footer as PfsFooter } from '@profullstack/footer/react';
 
 const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? 'https://qrypt.chat').replace(/\/$/, '');
+
+// Re-render hourly so @profullstack/footer picks up its @latest template.
+export const revalidate = 3600;
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -142,7 +146,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body suppressHydrationWarning>
-        <ClientLayout>{children}</ClientLayout>
+        <ClientLayout footerBottom={<PfsFooter site="https://qrypt.chat/" />}>{children}</ClientLayout>
               <Script data-site="38c4083a-a35e-435d-8a0e-3510c465f419" src="https://crawlproof.com/stats.js" strategy="afterInteractive" />
       </body>
     </html>
