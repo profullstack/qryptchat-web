@@ -205,6 +205,7 @@ QryptChat implements a **zero-knowledge post-quantum architecture** where:
 
 - [🏗️ Architecture Overview](./ARCHITECTURE.md)
 - [🔒 Encryption Details](./ENCRYPTION.md)
+- [✉️ Inviting agents and people](./docs/INVITES.md)
 
 ## 🧪 Development
 
