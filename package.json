@@ -61,6 +61,7 @@
     "@noble/hashes": "^2.0.0",
     "@profullstack/autoblog": "github:profullstack/autoblog#75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f",
     "@profullstack/encrypt": "^0.1.0",
+    "@profullstack/footer": "latest",
     "@profullstack/openprofile": "^0.2.0",
     "@profullstack/pairux-embed": "^0.1.0",
     "@profullstack/stack": "^0.1.3",

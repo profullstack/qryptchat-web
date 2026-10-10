@@ -9,9 +9,8 @@ const socialLinks = [
   { name: 'Bluesky', url: 'https://bsky.app/profile/chovyfu.bsky.social' },
 ];
 
-const currentYear = new Date().getFullYear();
 
-export default function Footer() {
+export default function Footer({ bottom }) {
   const { t } = useI18n();
   const onionUrl = process.env.NEXT_PUBLIC_ONION_URL;
   const isOnionSite = typeof window !== 'undefined' && window.location.hostname.endsWith('.onion');
@@ -73,15 +72,8 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="footer-bottom">
-        <p>© {currentYear} QryptChat. All rights reserved.</p>
-        <nav className="webring" aria-label="Profullstack webring">
-          <a href="https://rssamplifier.com/ring/profullstack/previous?from=https%3A%2F%2Fqrypt.chat%2F" rel="prev">{"<<"}</a>
-          <a href="https://rssamplifier.com/ring/profullstack">Profullstack</a>
-          <a href="https://rssamplifier.com/ring/profullstack/next?from=https%3A%2F%2Fqrypt.chat%2F" rel="next">{">>"}</a>
-          <a href="https://rssamplifier.com/ring/profullstack/random?from=https%3A%2F%2Fqrypt.chat%2F" title="Random site" aria-label="Random site">{"⚄"}</a>
-        </nav>
-      </div>
+      {/* Copyright + Profullstack webring: @profullstack/footer, server-rendered in app/layout.jsx */}
+      {bottom && <div className="footer-bottom">{bottom}</div>}
 
       <style>{`
         .footer { background: var(--color-bg-secondary); border-top: 1px solid var(--color-border-primary); padding: var(--space-12) 0 var(--space-6); }
@@ -100,11 +92,7 @@ export default function Footer() {
         .social-links { display: flex; flex-direction: column; gap: var(--space-2); }
         .social-link { color: var(--color-text-secondary); text-decoration: none; font-size: 0.875rem; transition: color .2s; }
         .social-link:hover { color: var(--color-brand-primary); }
-        .footer-bottom { max-width: 1200px; margin: var(--space-8) auto 0; padding: var(--space-6) var(--space-6) 0; border-top: 1px solid var(--color-border-primary); }
-        .footer-bottom p { color: var(--color-text-secondary); font-size: 0.875rem; }
-        .footer-bottom .webring { display: flex; gap: var(--space-3); margin-top: var(--space-2); font-size: 0.75rem; }
-        .footer-bottom .webring a { color: var(--color-text-secondary); text-decoration: none; transition: color .2s; }
-        .footer-bottom .webring a:hover { color: var(--color-brand-primary); }
+        .footer-bottom { max-width: 1200px; margin: var(--space-8) auto 0; }
         @media (max-width: 768px) {
           .footer-content { grid-template-columns: 1fr; }
           .footer-links { flex-direction: column; }
