@@ -1,10 +1,24 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useI18n } from '@/lib/hooks/useI18n.js';
+
+const INSTALL_CMD = 'curl -fsSL https://qrypt.chat/install.sh | sh';
 
 export default function HomeContent() {
   const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+
+  const copyInstall = async () => {
+    try {
+      await navigator.clipboard.writeText(INSTALL_CMD);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (insecure context or denied); the command stays selectable.
+    }
+  };
 
   return (
     <>
@@ -18,6 +32,16 @@ export default function HomeContent() {
               <div className="hero-actions">
                 <Link href="/auth" className="btn btn-primary">{t('nav.register')}</Link>
                 <Link href="/auth" className="btn btn-secondary">{t('nav.login')}</Link>
+              </div>
+              <div className="hero-install">
+                <span className="hero-install-label">Terminal client (qc): TUI, CLI and MCP</span>
+                <div className="hero-install-cmd">
+                  <span className="hero-install-prompt" aria-hidden="true">$</span>
+                  <code>{INSTALL_CMD}</code>
+                  <button type="button" className="hero-install-copy" onClick={copyInstall} aria-label="Copy install command">
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="hero-visual">
@@ -111,6 +135,13 @@ export default function HomeContent() {
         .hero-actions .btn-primary:hover { background-color: var(--color-bg-secondary); transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,.2); }
         .hero-actions .btn-secondary { background-color: transparent; color: white; border-color: rgba(255,255,255,.3); }
         .hero-actions .btn-secondary:hover { background-color: rgba(255,255,255,.1); border-color: white; }
+        .hero-install { margin-top: var(--space-8); }
+        .hero-install-label { display: block; font-size: .875rem; opacity: .8; margin-bottom: var(--space-2); }
+        .hero-install-cmd { display: flex; align-items: center; gap: var(--space-3); max-width: 100%; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.2); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+        .hero-install-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9375rem; color: #fff; text-align: left; user-select: all; }
+        .hero-install-prompt { opacity: .6; user-select: none; }
+        .hero-install-copy { flex-shrink: 0; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: var(--radius-md); padding: var(--space-1) var(--space-3); font-size: .8125rem; font-weight: 600; cursor: pointer; }
+        .hero-install-copy:hover { background: rgba(255,255,255,.1); border-color: #fff; }
         .hero-image { width: 100%; height: auto; max-width: 500px; opacity: 0.9; filter: drop-shadow(0 10px 30px rgba(0,0,0,.3)); }
         .features { padding: var(--space-20) 0; background-color: var(--color-bg-secondary); }
         .section-header { text-align: center; margin-bottom: var(--space-16); }
