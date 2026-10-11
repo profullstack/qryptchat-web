@@ -9,6 +9,8 @@ import ChatSidebar from '@/lib/components/ChatSidebar.jsx';
 import MessageList from '@/lib/components/chat/MessageList.jsx';
 import MessageInput from '@/lib/components/chat/MessageInput.jsx';
 import AddParticipantModal from '@/lib/components/chat/AddParticipantModal.jsx';
+import GroupInviteModal from '@/lib/components/chat/GroupInviteModal.jsx';
+import { redeemPendingJoin } from '@/lib/chat/pending-join.js';
 import EncryptionWarning from '@/lib/components/EncryptionWarning.jsx';
 import MLKEMCallInterface from '@/lib/components/calls/MLKEMCallInterface.jsx';
 import CallPanel from '@/lib/components/calls/CallPanel.jsx';
@@ -29,7 +31,12 @@ function ChatPageInner() {
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showAddParticipantModal, setShowAddParticipantModal] = useState(false);
-  const [currentConversation, setCurrentConversation] = useState(null);
+  const [showGroupInviteModal, setShowGroupInviteModal] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const currentConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
+  const conversationTitle = currentConversation
+    ? currentConversation.name || currentConversation.participants?.find((p) => p.id !== user?.id)?.username || 'Chat'
+    : 'Chat';
   const [showWelcome, setShowWelcome] = useState(false);
   const [mlkemCallManager, setMlkemCallManager] = useState(null);
   const [showCallInterface, setShowCallInterface] = useState(false);
@@ -46,6 +53,8 @@ function ChatPageInner() {
 
     const convParam = searchParams.get('conversation');
     if (convParam) handleConversationSelect(convParam);
+    // A group invite opened before signing in (/join/<code>).
+    redeemPendingJoin().then((id) => { if (id) handleConversationSelect(id); });
   }, [isAuthenticated]);
 
   async function initWebSocket() {
@@ -120,7 +129,8 @@ function ChatPageInner() {
     });
   }
 
-  const canAddParticipants = currentConversation && ['group', 'direct'].includes(currentConversation.type);
+  // Adding people and invite links are for group admins (the API checks this too).
+  const canAddParticipants = currentConversation?.type === 'group' && currentConversation.my_role === 'admin';
 
   if (!isAuthenticated) return null;
 
@@ -143,6 +153,7 @@ function ChatPageInner() {
           <ChatSidebar
             activeConversationId={activeConversationId}
             onConversationSelect={handleConversationSelect}
+            onConversationsLoaded={setConversations}
           />
         </div>
 
@@ -150,8 +161,8 @@ function ChatPageInner() {
           {activeConversationId ? (
             <div className="chat-interface">
               <div className="chat-header">
-                <button className="back-button" onClick={() => { setShowSidebar(true); setActiveConversationId(null); setCurrentConversation(null); }}>← Back</button>
-                <div className="conversation-title">{currentConversation?.name || 'Chat'}</div>
+                <button className="back-button" onClick={() => { setShowSidebar(true); setActiveConversationId(null); }}>← Back</button>
+                <div className="conversation-title">{conversationTitle}</div>
                 <div className="header-actions">
                   <button className="header-action-btn voice-call-btn" onClick={handleMLKEMVoiceCall} title="Encrypted voice call">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
@@ -162,6 +173,11 @@ function ChatPageInner() {
                   {canAddParticipants && (
                     <button className="header-action-btn" onClick={() => setShowAddParticipantModal(true)} title="Add participants">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                    </button>
+                  )}
+                  {canAddParticipants && (
+                    <button className="header-action-btn" onClick={() => setShowGroupInviteModal(true)} title="Invite link">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                     </button>
                   )}
                   <button className="header-action-btn menu-button" onClick={() => setShowSidebar(!showSidebar)}>
@@ -191,6 +207,10 @@ function ChatPageInner() {
           onClose={() => setShowAddParticipantModal(false)}
           onParticipantsAdded={() => setShowAddParticipantModal(false)}
         />
+      )}
+
+      {showGroupInviteModal && activeConversationId && (
+        <GroupInviteModal conversationId={activeConversationId} onClose={() => setShowGroupInviteModal(false)} />
       )}
 
       <style>{`

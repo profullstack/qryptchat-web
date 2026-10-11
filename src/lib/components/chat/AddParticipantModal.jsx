@@ -7,6 +7,7 @@ export default function AddParticipantModal({ isOpen, conversationId, onClose, o
   const [searchResults, setSearchResults] = useState([]);
   const [selected, setSelected] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
@@ -23,14 +24,17 @@ export default function AddParticipantModal({ isOpen, conversationId, onClose, o
   async function handleAdd() {
     if (!selected.length) return;
     setLoading(true);
+    setError('');
     try {
       const res = await fetch(`/api/chat/conversations/${conversationId}/participants`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participant_ids: selected.map((u) => u.id) }),
       });
-      if (res.ok) onParticipantsAdded?.();
-    } catch {} finally { setLoading(false); }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) onParticipantsAdded?.(data.added ?? []);
+      else setError(data.error || 'Could not add them');
+    } catch { setError('Could not add them'); } finally { setLoading(false); }
   }
 
   return (
@@ -54,6 +58,7 @@ export default function AddParticipantModal({ isOpen, conversationId, onClose, o
               {loading ? 'Adding...' : `Add ${selected.length} participant${selected.length > 1 ? 's' : ''}`}
             </button>
           )}
+          {error && <div className="add-error">{error}</div>}
         </div>
         <style>{`
           .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -65,6 +70,7 @@ export default function AddParticipantModal({ isOpen, conversationId, onClose, o
           .search-results { margin: .75rem 0; max-height: 200px; overflow-y: auto; }
           .user-item { padding: .5rem .75rem; cursor: pointer; border-radius: .375rem; }
           .user-item:hover { background: var(--color-bg-secondary); }
+          .add-error { color: var(--color-error, #dc2626); font-size: .875rem; margin-top: .5rem; }
           .user-item.selected { background: var(--color-brand-primary); color: white; }
         `}</style>
       </div>

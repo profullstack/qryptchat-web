@@ -178,6 +178,18 @@ export class QcClient {
 		return { messages: out, hasMore };
 	}
 
+	/** Join a group from its invite link or code. Returns { conversation_id, joined }. */
+	async joinGroup(code) {
+		return this.request('/api/conversations/join', { method: 'POST', body: { code } });
+	}
+
+	/** A group's invite link (group admins): made if missing; reset replaces it, off turns it off. */
+	async groupInvite(conversationId, { reset = false, off = false } = {}) {
+		const path = `/api/chat/conversations/${encodeURIComponent(conversationId)}/invite`;
+		if (off) return this.request(path, { method: 'DELETE' });
+		return this.request(path, { method: 'POST', body: { reset } });
+	}
+
 	/** React to a message (one per person; remove=true withdraws it). Encrypted like any message. */
 	async react(conversationId, messageId, emoji, remove = false) {
 		return this.send(conversationId, reactionEnvelope(messageId, emoji, remove), { messageType: REACTION_TYPE });
