@@ -40,7 +40,7 @@ export async function GET(request, { params } = {}) {
 			// Check archive status for this conversation
 			const { data: participantData } = await supabase
 				.from('conversation_participants')
-				.select('archived_at')
+				.select('archived_at, role')
 				.eq('conversation_id', conv.conversation_id)
 				.eq('user_id', internalUser?.id)
 				.maybeSingle();
@@ -68,6 +68,7 @@ export async function GET(request, { params } = {}) {
 					}
 					return { id: p.user_id, username };
 				}) ?? [],
+				my_role: participantData?.role ?? null,
 				is_archived: participantData?.archived_at !== null,
 				archived_at: participantData?.archived_at
 			});

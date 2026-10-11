@@ -6,15 +6,34 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api/middleware/auth.js';
 import { sseManager } from '@/lib/api/sse-manager.js';
+import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
+import { GroupInviteError, appUserId, parseInviteCode, redeemInvite } from '@/lib/chat/group-invites.js';
 
 function normalizeConversationId(conversationId) {
 	return typeof conversationId === 'string' ? conversationId.trim() : '';
 }
 
+/** { code }: join a group from its invite code or https://qrypt.chat/join/<code> link. */
+async function joinByInvite(input, authUserId) {
+	const code = parseInviteCode(input);
+	if (!code) return NextResponse.json({ error: 'That is not a group invite code or link.' }, { status: 400 });
+	try {
+		const db = getServiceRoleClient();
+		const userId = await appUserId(db, authUserId);
+		const result = await redeemInvite(db, code, userId);
+		sseManager.joinRoom(userId, result.conversation_id);
+		return NextResponse.json({ success: true, ...result });
+	} catch (error) {
+		if (error instanceof GroupInviteError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+		throw error;
+	}
+}
+
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
-		const { conversationId: rawConversationId } = await request.json();
-		const conversationId = normalizeConversationId(rawConversationId);
+		const body = await request.json();
+		if (typeof body?.code === 'string') return await joinByInvite(body.code, locals.user.id);
+		const conversationId = normalizeConversationId(body?.conversationId);
 
 		if (!conversationId) {
 			return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });

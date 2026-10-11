@@ -6,6 +6,7 @@ import { QcClient } from './api.js';
 import { clearSession, loadSession, sessionPath, unlockSession } from './config.js';
 import { login } from './login.js';
 import { joinAsAgent } from './agent.js';
+import { parseInviteCode } from '../lib/chat/group-invites.js';
 import { em, fail, info, mark, ok, warn, who } from './style.js';
 import { notify } from './notify.js';
 export { exitWhenFlushed } from './exit.js';
@@ -32,6 +33,8 @@ Usage:
   qc react <chat> <message-id> <emoji> [--remove]   react to a message
   qc listen               print new messages as they arrive (NDJSON with --json; --notify alerts with it)
   qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message)
+  qc join <link>          join a group chat from its invite link (https://qrypt.chat/join/...)
+  qc invite <chat>        print a group's invite link (group admins) [--reset makes a new one, --off turns it off]
 
 <chat> is a chat id or part of its name. Options: --json, --url <server> (or QC_URL).
 Keys and tokens are sealed (ChaCha20-Poly1305) in ${'$'}QC_HOME or ~/.config/qc; the key is in your
@@ -206,6 +209,25 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 				out(`[${stamp(m.at)}] ${m.emoji ? `${m.emoji} ` : ''}${m.mine ? 'you' : m.sender}: ${em(m.text)}${reactions}  (${m.id.slice(0, 8)})`);
 			}
 			return;
+		}
+		case 'join': {
+			if (!rest[0]) throw new Error('Usage: qc join <invite link>');
+			const code = parseInviteCode(rest[0]);
+			if (!code) throw new Error('That is not a group invite link (https://qrypt.chat/join/...).');
+			const c = await client(flags);
+			const result = await c.joinGroup(code);
+			const chat = (await c.conversations()).find((x) => x.id === result.conversation_id);
+			if (flags.json) return json(result);
+			return out(ok(`${result.joined ? 'Joined' : 'Already in'} ${chat?.title ?? 'the group'}. Try: qc read "${chat?.title ?? result.conversation_id}"`));
+		}
+		case 'invite': {
+			if (!rest[0]) throw new Error('Usage: qc invite <chat> [--reset | --off]');
+			const c = await client(flags);
+			const chat = findChat(await c.conversations(), rest[0]);
+			const result = await c.groupInvite(chat.id, { reset: !!flags.reset, off: !!flags.off });
+			if (flags.json) return json(result);
+			if (flags.off) return out(ok(`The invite link for ${chat.title} is off.`));
+			return out(result.invite.url);
 		}
 		case 'react': {
 			const [chatQuery, messageId, emoji] = rest;

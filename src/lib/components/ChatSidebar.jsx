@@ -6,13 +6,15 @@ import { useChatStore } from '@/lib/stores/chat.js';
 import ConversationItem from './ConversationItem.jsx';
 import ConversationMenu from './chat/ConversationMenu.jsx';
 import NewChatModal from './NewChatModal.jsx';
+import JoinGroupModal from './JoinGroupModal.jsx';
 
-export default function ChatSidebar({ activeConversationId, onConversationSelect }) {
+export default function ChatSidebar({ activeConversationId, onConversationSelect, onConversationsLoaded }) {
   const user = useAuthStore((s) => s.user);
   const authenticated = useChatStore((s) => s.authenticated);
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0, conversation: null });
@@ -40,6 +42,7 @@ export default function ChatSidebar({ activeConversationId, onConversationSelect
       if (response.ok) {
         const { conversations: data } = await response.json();
         setConversations(data || []);
+        onConversationsLoaded?.(data || []);
       }
     } catch (err) {
       console.error('Failed to load conversations:', err);
@@ -68,11 +71,14 @@ export default function ChatSidebar({ activeConversationId, onConversationSelect
     <div className="sidebar">
       <div className="sidebar-header">
         <h2 className="sidebar-title">Chats</h2>
-        <button className="new-chat-btn" onClick={() => setShowNewChatModal(true)} title="New chat">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+        <div className="sidebar-actions">
+          <button className="join-link-btn" onClick={() => setShowJoinModal(true)} title="Join a group with an invite link">Join</button>
+          <button className="new-chat-btn" onClick={() => setShowNewChatModal(true)} title="New chat">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="sidebar-search">
@@ -161,10 +167,17 @@ export default function ChatSidebar({ activeConversationId, onConversationSelect
         <NewChatModal onClose={() => setShowNewChatModal(false)} onConversationCreated={(id) => { setShowNewChatModal(false); onConversationSelect?.(id); loadConversations(); }} />
       )}
 
+      {showJoinModal && (
+        <JoinGroupModal onClose={() => setShowJoinModal(false)} onJoined={(id) => { setShowJoinModal(false); loadConversations(); onConversationSelect?.(id); }} />
+      )}
+
       <style>{`
         .sidebar { width: 320px; min-width: 280px; display: flex; flex-direction: column; height: 100%; background: var(--color-bg-primary); border-right: 1px solid var(--color-border-primary); }
         .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid var(--color-border-primary); }
         .sidebar-title { font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary); }
+        .sidebar-actions { display: flex; align-items: center; gap: .5rem; }
+        .join-link-btn { height: 36px; padding: 0 .875rem; border: 1px solid var(--color-border-primary); background: var(--color-bg-secondary); color: var(--color-text-primary); border-radius: 18px; cursor: pointer; font-size: .875rem; font-weight: 500; }
+        .join-link-btn:hover { background: var(--color-bg-tertiary); }
         .new-chat-btn { width: 36px; height: 36px; border: none; background: var(--color-brand-primary); color: white; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .sidebar-search { padding: .75rem 1rem; }
         .search-input { width: 100%; padding: .5rem .75rem; border: 1px solid var(--color-border-primary); border-radius: .5rem; background: var(--color-bg-secondary); color: var(--color-text-primary); font-size: .875rem; outline: none; }

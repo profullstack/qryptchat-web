@@ -1,12 +1,13 @@
 # Inviting agents and people
 
-There are three ways to bring someone into a chat on qrypt.chat:
+There are four ways to bring someone into a chat on qrypt.chat:
 
 | Who | How | Account they get |
 | --- | --- | --- |
 | An AI agent (Claude Code, a bot, a script) | **Settings > AI agents**: link, email or text | an `agent` account with you as its operator, plus a DM with you |
 | A person with no account | **Settings > Invite Anonymously**: a one-time link | an anonymous account, no phone or email needed |
-| A person who already has an account | **New Conversation**: search for their username | none needed; you start a DM or group |
+| A person who already has an account | **New chat** (+): search for their username | none needed; you start a DM or group |
+| Anyone, into a group you admin | **Invite link** in the group's header: `https://qrypt.chat/join/<code>` | they sign in or sign up, then join |
 
 ## Invite an AI agent
 
@@ -107,8 +108,42 @@ curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: applicat
 
 No invite is needed for someone who already has an account:
 
-- **New conversation:** open the **New chat** button (+) in the chat sidebar and search for the person's username. Choose **Direct** for one person, or choose **Group**, give it a name, and pick several people.
-- **Add to an existing group:** open the chat and use **Add Participants**, which offers the same username search.
+- **New conversation:** click the **New chat** button (+) in the chat sidebar and search for the person's username. Choose **Direct** for one person, or choose **Group**, give it a name, and pick several people. You are the new group's admin.
+- **Add to an existing group:** group admins can open the chat and click **Add participants** (the person-plus icon in the header), which offers the same username search.
 - **Share your profile:** you can send someone your profile link, `https://qrypt.chat/u/<username>`, so they can find you.
 
-> **Known gap:** the **Join Group** modal asks for a "group code or invite link", but it posts `{ code }` to `/api/conversations/join`, which only accepts `{ conversationId }` for chats you're already in. Group invite codes don't work yet, so add people by username instead.
+## Invite people to a group with a link
+
+A group admin can share one link that lets anyone join the group:
+
+1. Open the group and click **Invite link** (the chain icon in the header).
+2. Click **Create invite link**, then **Copy**, and send the link however you like. It looks like `https://qrypt.chat/join/<code>`.
+3. Whoever opens the link sees the group's name and how many members it has, then clicks **Join group**. If they aren't signed in, the page sends them to sign in or sign up first, and they join the group right after.
+
+How group links work:
+
+- Each group has one link at a time, and it keeps working until an admin changes it. **Reset link** replaces it so the old one stops working, and **Turn off** disables it. The modal shows how many people have joined with it.
+- Someone who joins reads messages sent from then on, not earlier ones. Each message is encrypted to whoever is in the group when it is sent.
+- Someone who left the group can rejoin with the link.
+- People can also paste a link or code into **Join** in the chat sidebar.
+- Only group admins can make links or add people. Direct chats have neither.
+
+From a terminal:
+
+```sh
+qc invite "<group>"            # print the group's link (made if there is none)
+qc invite "<group>" --reset    # replace it; --off turns it off
+qc join https://qrypt.chat/join/<code>
+```
+
+API:
+
+```sh
+curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{}' https://qrypt.chat/api/chat/conversations/<id>/invite         # -> { invite: { url, code, uses } }; {"reset":true} replaces it
+curl -X DELETE -H "Authorization: Bearer $ACCESS_TOKEN" https://qrypt.chat/api/chat/conversations/<id>/invite
+curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"code":"https://qrypt.chat/join/<code>"}' https://qrypt.chat/api/conversations/join    # -> { conversation_id, joined }
+curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"participant_ids":["<user id>"]}' https://qrypt.chat/api/chat/conversations/<id>/participants
+```

@@ -29,8 +29,8 @@ export default function JoinGroupModal({ onClose, onJoined }) {
         <div className="modal-header"><h3>Join Group</h3><button onClick={onClose}>×</button></div>
         <form onSubmit={handleJoin}>
           <div className="input-group">
-            <label>Group Code or Invite Link</label>
-            <input type="text" value={groupCode} onChange={(e) => setGroupCode(e.target.value)} placeholder="Enter group code..." required />
+            <label>Invite link or code</label>
+            <input type="text" value={groupCode} onChange={(e) => setGroupCode(e.target.value)} placeholder="https://qrypt.chat/join/..." required />
           </div>
           {error && <div className="error">{error}</div>}
           <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>

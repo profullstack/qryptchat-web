@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 import { bearerToken } from '@/lib/auth/bearer.js';
+import { GroupInviteError, addMembers, requireGroupAdmin } from '@/lib/chat/group-invites.js';
 
 // Lazy service role client creation
 let supabaseServiceRole = null;
@@ -186,6 +187,33 @@ export async function GET(request, { params } = {}) {
 
 	} catch (error) {
 		console.error('Error in GET /api/chat/conversations/[id]/participants:', error);
+		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+	}
+}
+
+/**
+ * POST /api/chat/conversations/[id]/participants  { participant_ids: [...] }
+ * A group admin adds people. They read what is sent from now on, not the history.
+ */
+export async function POST(request, { params } = {}) {
+	try {
+		const { user, error: authError } = await authenticateUser(request);
+		if (authError || !user) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		}
+		const { id } = await resolveRouteParams(params);
+		const conversationId = typeof id === 'string' ? id.trim() : '';
+		const body = await request.json().catch(() => ({}));
+		if (!conversationId || !Array.isArray(body?.participant_ids) || !body.participant_ids.length) {
+			return NextResponse.json({ error: 'participant_ids is required' }, { status: 400 });
+		}
+		const db = getServiceRoleClient();
+		await requireGroupAdmin(db, conversationId, user.id);
+		const added = await addMembers(db, conversationId, body.participant_ids);
+		return NextResponse.json({ success: true, added });
+	} catch (error) {
+		if (error instanceof GroupInviteError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+		console.error('Error in POST /api/chat/conversations/[id]/participants:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 	}
 }
