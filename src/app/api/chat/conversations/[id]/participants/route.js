@@ -7,6 +7,8 @@ import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
 import { bearerToken } from '@/lib/auth/bearer.js';
 import { GroupInviteError, addMembers, requireGroupAdmin } from '@/lib/chat/group-invites.js';
+import { announceJoined } from '@/lib/chat/membership-events.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
 
 // Lazy service role client creation
 let supabaseServiceRole = null;
@@ -210,6 +212,7 @@ export async function POST(request, { params } = {}) {
 		const db = getServiceRoleClient();
 		await requireGroupAdmin(db, conversationId, user.id);
 		const added = await addMembers(db, conversationId, body.participant_ids);
+		announceJoined(sseManager, conversationId, added);
 		return NextResponse.json({ success: true, added });
 	} catch (error) {
 		if (error instanceof GroupInviteError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });

@@ -7,6 +7,7 @@ import { publicKeyService } from '@/lib/crypto/public-key-service.js';
 import * as conversationUtils from '@/lib/utils/conversation-utils.js';
 import { reactionEnvelope, REACTION_TYPE } from '@/lib/chat/reactions.js';
 import { callEnvelope, newCallKey, CALL_TYPE } from '@/lib/chat/calls.js';
+import { CHAT_LIST_EVENTS, CHATS_CHANGED_EVENT } from '@/lib/chat/membership-events.js';
 
 export const useChatStore = create((set, get) => {
   let eventSource = null;
@@ -71,9 +72,16 @@ export const useChatStore = create((set, get) => {
         handleTypingUpdate(data.data);
       });
 
-      eventSource.addEventListener(MESSAGE_TYPES.CONVERSATION_CREATED, () => {
-        get().loadConversations();
-      });
+      // A chat was made, someone joined or left, or this user archived one on
+      // any device: reload the list here and tell the sidebar (its own list).
+      for (const type of CHAT_LIST_EVENTS) {
+        eventSource.addEventListener(type, (event) => {
+          get().loadConversations();
+          let detail = null;
+          try { detail = JSON.parse(event.data)?.data ?? null; } catch {}
+          window.dispatchEvent(new CustomEvent(CHATS_CHANGED_EVENT, { detail: { type, ...detail } }));
+        });
+      }
 
       eventSource.addEventListener('error', () => {
         if (eventSource?.readyState === EventSource.CLOSED) {

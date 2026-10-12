@@ -5,6 +5,10 @@
 
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api/middleware/auth.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
+import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
+import { appUserId } from '@/lib/chat/group-invites.js';
+import { announceArchived } from '@/lib/chat/membership-events.js';
 
 function normalizeConversationId(conversationId) {
 	return typeof conversationId === 'string' ? conversationId.trim() : '';
@@ -38,6 +42,12 @@ export const POST = withAuth(async ({ request, locals }) => {
 				error: 'Conversation not found or cannot be archived'
 			}, { status: 404 });
 		}
+
+		// Every device of this user moves the chat between its lists.
+		// Announcing never turns a done archive into an error.
+		try {
+			announceArchived(sseManager, await appUserId(getServiceRoleClient(), authUser.id), conversationId, true);
+		} catch {}
 
 		return NextResponse.json({ success: true });
 	} catch (error) {

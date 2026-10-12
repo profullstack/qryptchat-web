@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToScreen } from '@profullstack/hqtui/testing';
 import { setIconMode } from '@profullstack/hqtui';
-import { initialState, render, transcriptLines } from '../../src/cli/tui.js';
+import { CHAT_LIST_REFRESH_MS, chatsWithNews, initialState, listed, render, SLASH_COMMANDS, transcriptLines } from '../../src/cli/tui.js';
 
 setIconMode('unicode');
 
@@ -90,5 +90,50 @@ describe('the qc client screen', () => {
 		expect(draw(s).text()).toContain('Loading your chats');
 		s.loading = false;
 		expect(draw(s).text()).toContain('Pick a chat on the left');
+	});
+});
+
+describe('archived chats in the qc client', () => {
+	const withArchive = () => {
+		const s = state();
+		s.conversations.push({ id: 'c3', title: 'old project', participants: [], is_archived: true });
+		return s;
+	};
+
+	it('hides archived chats and counts them in the list title', () => {
+		const text = draw(withArchive()).text();
+		expect(text).not.toContain('old project');
+		expect(text).toContain('1 archived');
+		expect(listed(withArchive()).map((c) => c.id)).toEqual(['c1', 'c2']);
+	});
+
+	it('shows only archived chats in the archived view', () => {
+		const s = withArchive();
+		s.showArchived = true;
+		const text = draw(s).text();
+		expect(text).toContain('Archived (1)');
+		expect(text).toContain('old project');
+		expect(text).not.toContain('team chat');
+	});
+
+	it('handles /voice, /archive, /unarchive and /archived in the composer', () => {
+		expect(SLASH_COMMANDS).toEqual(expect.arrayContaining(['voice', 'archive', 'unarchive', 'archived']));
+	});
+});
+
+describe('the periodic chat list refresh', () => {
+	it('finds chats that are new or have newer activity', () => {
+		const prev = [
+			{ id: 'a', updated_at: '2026-10-12T10:00:00Z' },
+			{ id: 'b', updated_at: '2026-10-12T10:00:00Z' },
+		];
+		const next = [
+			{ id: 'a', updated_at: '2026-10-12T10:05:00Z' },
+			{ id: 'b', updated_at: '2026-10-12T10:00:00Z' },
+			{ id: 'c', updated_at: '2026-10-12T10:01:00Z' },
+		];
+		expect(chatsWithNews(prev, next)).toEqual(['a', 'c']);
+		expect(chatsWithNews(next, next)).toEqual([]);
+		expect(CHAT_LIST_REFRESH_MS).toBeLessThanOrEqual(30_000);
 	});
 });

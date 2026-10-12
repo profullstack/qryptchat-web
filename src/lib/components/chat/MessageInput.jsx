@@ -9,6 +9,7 @@ import { trackMessageSent } from '@/lib/utils/analytics.js';
 import { multiRecipientEncryption } from '@/lib/crypto/multi-recipient-encryption.js';
 import EmojiEditor from './EmojiEditor.jsx';
 import { snippet } from '@/lib/chat/reactions.js';
+import { newVoiceRoomLink, parseSlashCommand, voiceMessage } from '@/lib/chat/voice.js';
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
@@ -184,7 +185,14 @@ export default function MessageInput({ conversationId, disabled = false }) {
   async function handleSend() {
     if (!conversationId || isSending || isUploadingFiles) return;
 
-    const content = messageText.trim();
+    let content = messageText.trim();
+    // /voice: post a fresh end-to-end encrypted PairUX room and open it here.
+    // window.open runs before any await so the popup blocker allows it.
+    if (!selectedFiles.length && parseSlashCommand(content, ['voice'])) {
+      const url = newVoiceRoomLink();
+      content = voiceMessage(url);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
     const hasText = content.length > 0;
     const hasFiles = selectedFiles.length > 0;
     if (!hasText && !hasFiles) return;
@@ -304,7 +312,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
           onChange={handleChange}
           onSubmit={handleSend}
           onEscape={replyingTo ? clearReplyingTo : undefined}
-          placeholder="Type a message..."
+          placeholder="Type a message... (/voice starts a voice room)"
           disabled={disabled || isSending}
         />
         <button

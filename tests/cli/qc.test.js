@@ -109,6 +109,19 @@ describe('QcClient', () => {
 	}, 20000);
 });
 
+describe('archiving from qc', () => {
+	it('posts to archive or unarchive with the chat id', async () => {
+		const fetch = vi.fn(async () => json({ success: true }));
+		const client = new QcClient({ access_token: 't', refresh_token: 'r', keys: await account(), user: { id: 'a' } }, { fetch });
+		await client.archive('c1');
+		await client.archive('c1', false);
+		const [[url1, init1], [url2]] = fetch.mock.calls;
+		expect(new URL(url1).pathname).toBe('/api/conversations/archive');
+		expect(JSON.parse(init1.body)).toEqual({ conversationId: 'c1' });
+		expect(new URL(url2).pathname).toBe('/api/conversations/unarchive');
+	}, 20000);
+});
+
 describe('the SSE reader', () => {
 	it('parses frames split across chunks', async () => {
 		const enc = new TextEncoder();

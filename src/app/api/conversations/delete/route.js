@@ -11,6 +11,8 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api/middleware/auth.js';
 import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
+import { announceLeft } from '@/lib/chat/membership-events.js';
 
 export const POST = withAuth(async ({ request, locals }) => {
 	try {
@@ -195,6 +197,7 @@ export const POST = withAuth(async ({ request, locals }) => {
 			console.log(`✅ Garbage-collected orphaned conversation ${conversationId}`);
 		}
 
+		announceLeft(sseManager, conversationId, internalUserId);
 		return NextResponse.json({ success: true, conversationRemoved: isOrphaned });
 	} catch (error) {
 		console.error('Delete conversation error:', error);
