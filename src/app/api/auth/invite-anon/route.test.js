@@ -93,7 +93,7 @@ describe('GET /api/auth/invite-anon authentication', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({ remaining: 4, quota: 5, used: 1 });
+    expect(body).toEqual({ remaining: null, quota: null, used: 1 });
     expect(mocks.authGetUser).toHaveBeenCalledWith('access-token-123');
   });
 
@@ -135,5 +135,65 @@ describe('GET /api/auth/invite-anon authentication', () => {
 
     expect(response.status).toBe(500);
     expect(body).toEqual({ error: 'Failed to verify invite quota' });
+  });
+});
+
+describe('POST /api/auth/invite-anon', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    process.env.QRYPT_WEB_ISSUER_SEED = 'test-seed';
+
+    mocks.authGetUser.mockResolvedValue({
+      data: { user: { id: 'auth-user-id' } },
+      error: null
+    });
+    mocks.createSupabaseServerClient.mockResolvedValue({
+      auth: { getUser: mocks.authGetUser }
+    });
+    mocks.createClient.mockReturnValue({ from: mocks.from });
+  });
+
+  function postRequest() {
+    return new Request('https://qrypt.chat/api/auth/invite-anon', {
+      method: 'POST',
+      headers: { authorization: 'Bearer access-token-123' }
+    });
+  }
+
+  function mockTables({ disabled = false } = {}) {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mocks.from.mockImplementation((table) => {
+      if (table === 'users') return createSingleQuery({ data: { id: 'user-id' }, error: null });
+      if (table === 'invite_issuers') {
+        return createSingleQuery({ data: { default_quota: 5, disabled }, error: null });
+      }
+      if (table === 'issued_invites') return { insert };
+      throw new Error(`Unexpected table: ${table}`);
+    });
+    return insert;
+  }
+
+  it('mints an invite with no per-account limit', async () => {
+    const insert = mockTables();
+    const { POST } = await import('./route.js');
+
+    const response = await POST(postRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ success: true, remaining: null });
+    expect(body.url).toBe('https://qrypt.chat/anon?invite=qci1.test-token');
+    expect(insert).toHaveBeenCalledOnce();
+  });
+
+  it('still refuses when the issuer is disabled', async () => {
+    const insert = mockTables({ disabled: true });
+    const { POST } = await import('./route.js');
+
+    const response = await POST(postRequest());
+
+    expect(response.status).toBe(503);
+    expect(insert).not.toHaveBeenCalled();
   });
 });

@@ -91,7 +91,7 @@ Go to **Settings > Invite Anonymously** and click **Create invite link**, then s
 - The link is `https://qrypt.chat/anon?invite=qci1....`, an Ed25519-signed token.
 - It works once and expires in 7 days. Through the API, you can set `ttlSeconds` anywhere from 1 hour to 30 days.
 - The link does not reveal who invited them.
-- Each account has a limited number of invites, 5 by default (`invite_issuers.default_quota`). The panel shows how many you have left.
+- There is no limit on how many invites an account can create. Setting `invite_issuers.disabled` for `qryptchat-web` turns minting off for everyone.
 - The server needs `QRYPT_WEB_ISSUER_SEED` to be set. Without it the endpoint returns 503.
 
 The person opens the link, picks a username, and their browser generates their keys. They are then asked to set a 4–12 digit **Backup PIN**, which protects the key backup. To chat, start a conversation with their username as described in the next section.
@@ -99,9 +99,9 @@ The person opens the link, picks a username, and their browser generates their k
 API:
 
 ```sh
-curl -H "Authorization: Bearer $ACCESS_TOKEN" https://qrypt.chat/api/auth/invite-anon         # quota
+curl -H "Authorization: Bearer $ACCESS_TOKEN" https://qrypt.chat/api/auth/invite-anon         # how many you have minted
 curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"ttlSeconds":86400}' https://qrypt.chat/api/auth/invite-anon                            # -> { url, remaining }
+  -d '{"ttlSeconds":86400}' https://qrypt.chat/api/auth/invite-anon                            # -> { url }
 ```
 
 ## Chat with someone who already has an account
