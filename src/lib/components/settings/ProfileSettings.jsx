@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import EmojiPicker from '@/lib/components/chat/EmojiPicker.jsx';
 import OpenEmoji from '@/lib/components/OpenEmoji.jsx';
@@ -14,6 +14,7 @@ export default function ProfileSettings() {
   const [form, setForm] = useState({ emoji: '', pronouns: '', website: '', bio: '' });
   const [loaded, setLoaded] = useState(false);
   const [picking, setPicking] = useState(false);
+  const emojiBtnRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -59,7 +60,7 @@ export default function ProfileSettings() {
       <div className="ps-row">
         <label htmlFor="ps-emoji">Emoji</label>
         <div className="ps-emoji">
-          <button type="button" id="ps-emoji" className="ps-emoji-btn emoji-btn" onClick={() => setPicking((p) => !p)} aria-label="Pick your emoji">
+          <button type="button" id="ps-emoji" ref={emojiBtnRef} className="ps-emoji-btn emoji-btn" onClick={() => setPicking((p) => !p)} aria-label="Pick your emoji">
             {form.emoji ? <OpenEmoji char={form.emoji} size="1.6rem" /> : '＋'}
           </button>
           {form.emoji && (
@@ -67,9 +68,12 @@ export default function ProfileSettings() {
           )}
           <span className="ps-hint">Shown next to your name.</span>
           {picking && (
-            <div className="ps-picker">
-              <EmojiPicker onPick={(char) => { setForm((f) => ({ ...f, emoji: char })); setPicking(false); }} onClose={() => setPicking(false)} />
-            </div>
+            <EmojiPicker
+              anchorRef={emojiBtnRef}
+              prefer="bottom"
+              onPick={(char) => { setForm((f) => ({ ...f, emoji: char })); setPicking(false); }}
+              onClose={() => setPicking(false)}
+            />
           )}
         </div>
       </div>
@@ -104,7 +108,6 @@ export default function ProfileSettings() {
         .ps-input { width: 100%; padding: .5rem .75rem; border: 1px solid var(--color-border-primary); border-radius: .375rem; background: var(--color-bg-primary); color: var(--color-text-primary); font-size: .875rem; font-family: inherit; }
         .ps-emoji { position: relative; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
         .ps-emoji-btn { width: 2.75rem; height: 2.75rem; font-size: 1.6rem; line-height: 1; border: 1px solid var(--color-border-primary); border-radius: .5rem; background: var(--color-bg-primary); cursor: pointer; }
-        .ps-picker { position: absolute; top: 3rem; left: 0; z-index: 20; }
         .ps-hint { font-size: .8rem; color: var(--color-text-secondary); }
         .ps-alert { padding: .5rem .75rem; border-radius: .375rem; font-size: .85rem; }
         .ps-ok { background: rgba(16,185,129,.1); color: #065f46; }

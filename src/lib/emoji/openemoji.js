@@ -14,9 +14,12 @@ const PICTOGRAPHIC = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣/u;
 const segmenter =
   typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
 
-/** OpenEmoji key of a character sequence: its codepoints, lowercase hex, hyphen-joined. */
+/**
+ * OpenEmoji key of a character sequence: its codepoints, lowercase hex padded
+ * to four digits ("0023-fe0f-20e3" for #️⃣, "00a9-fe0f" for ©️), hyphen-joined.
+ */
 export function emojiKey(char) {
-  return [...char].map((c) => c.codePointAt(0).toString(16)).join('-');
+  return [...char].map((c) => c.codePointAt(0).toString(16).padStart(4, '0')).join('-');
 }
 
 /**
