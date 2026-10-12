@@ -7,6 +7,7 @@ import ConversationItem from './ConversationItem.jsx';
 import ConversationMenu from './chat/ConversationMenu.jsx';
 import NewChatModal from './NewChatModal.jsx';
 import JoinGroupModal from './JoinGroupModal.jsx';
+import { CHATS_CHANGED_EVENT } from '@/lib/chat/membership-events.js';
 
 export default function ChatSidebar({ activeConversationId, onConversationSelect, onConversationsLoaded }) {
   const user = useAuthStore((s) => s.user);
@@ -33,6 +34,14 @@ export default function ChatSidebar({ activeConversationId, onConversationSelect
       pollingRef.current = setInterval(loadConversations, 10000);
     }
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [authenticated, user?.id]);
+
+  // Joins, leaves and archiving on any device arrive live (see membership-events.js).
+  useEffect(() => {
+    if (!authenticated || !user?.id) return;
+    const onChange = () => loadConversations();
+    window.addEventListener(CHATS_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(CHATS_CHANGED_EVENT, onChange);
   }, [authenticated, user?.id]);
 
   async function loadConversations() {

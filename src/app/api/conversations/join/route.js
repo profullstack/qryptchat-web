@@ -8,6 +8,7 @@ import { withAuth } from '@/lib/api/middleware/auth.js';
 import { sseManager } from '@/lib/api/sse-manager.js';
 import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 import { GroupInviteError, appUserId, parseInviteCode, redeemInvite } from '@/lib/chat/group-invites.js';
+import { announceJoined } from '@/lib/chat/membership-events.js';
 
 function normalizeConversationId(conversationId) {
 	return typeof conversationId === 'string' ? conversationId.trim() : '';
@@ -22,6 +23,7 @@ async function joinByInvite(input, authUserId) {
 		const userId = await appUserId(db, authUserId);
 		const result = await redeemInvite(db, code, userId);
 		sseManager.joinRoom(userId, result.conversation_id);
+		if (result.joined) announceJoined(sseManager, result.conversation_id, [userId]);
 		return NextResponse.json({ success: true, ...result });
 	} catch (error) {
 		if (error instanceof GroupInviteError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });

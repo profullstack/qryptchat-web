@@ -15,6 +15,8 @@
  * Composer commands: /voice posts a fresh end-to-end encrypted PairUX room,
  * /archive and /unarchive file the open chat away, /archived flips the list
  * between your chats and the archived ones (also Ctrl+O; `a` in the list).
+ * The chat list reloads every 15 s as well as on live events, so it never
+ * goes stale if the events stream drops.
  *
  * The view is a pure function of one state object (render() below), so tests
  * draw the real layout with renderToText. The controller (runTui) owns the
@@ -26,6 +28,7 @@ import { join } from 'node:path';
 import { configDir } from './config.js';
 import { notify } from './notify.js';
 import { newVoiceRoomLink, parseSlashCommand, PAIRUX_URL, voiceMessage } from '../lib/chat/voice.js';
+import { CHAT_LIST_EVENTS, MEMBERSHIP_EVENTS } from '../lib/chat/membership-events.js';
 
 const SIDEBAR = 30;
 
@@ -52,6 +55,15 @@ export function initialState(me) {
 
 /** The chats the sidebar shows: archived ones only in the archived view. */
 export const listed = (state) => state.conversations.filter((c) => !!c.is_archived === !!state.showArchived);
+
+/** How often the chat list is reloaded, so it never goes stale if the live stream drops. */
+export const CHAT_LIST_REFRESH_MS = 15_000;
+
+/** Chats that are new or have newer activity in `next` than in `prev` (by updated_at). */
+export function chatsWithNews(prev, next) {
+	const seen = new Map(prev.map((c) => [c.id, c.updated_at ?? '']));
+	return next.filter((c) => !seen.has(c.id) || (c.updated_at ?? '') > seen.get(c.id)).map((c) => c.id);
+}
 
 /** Composer slash commands the TUI handles itself; anything else is sent as typed. */
 export const SLASH_COMMANDS = ['voice', 'archive', 'unarchive', 'archived'];
@@ -302,11 +314,27 @@ export async function runTui(client, { initialChat } = {}) {
 
 	let keysChecked = false;
 
-	async function loadConversations() {
+	let listLoading = false;
+
+	/** Reload the chat list. `periodic` is the background refresh: quiet on errors, and it catches news the live stream missed. */
+	async function loadConversations({ periodic = false } = {}) {
+		if (listLoading) return;
+		listLoading = true;
 		try {
 			const before = state.activeId;
+			const prev = state.conversations;
 			state.conversations = await client.conversations();
 			state.loading = false;
+			if (periodic) {
+				for (const id of chatsWithNews(prev, state.conversations)) {
+					if (id === state.activeId) loadMessages(id);
+					else {
+						delete state.messages[id];
+						// While live, the events stream already counted it.
+						if (state.status !== 'live' && prev.some((c) => c.id === id)) state.unread[id] = (state.unread[id] || 0) + 1;
+					}
+				}
+			}
 			const chats = listed(state);
 			if (!state.activeId && chats.length) {
 				const want = initialChat ? chats.findIndex((c) => c.id === initialChat || c.title.toLowerCase().includes(String(initialChat).toLowerCase())) : 0;
@@ -323,7 +351,9 @@ export async function runTui(client, { initialChat } = {}) {
 			}
 		} catch (err) {
 			state.loading = false;
-			note(err.status === 401 ? 'Session ended: run qc login' : `Could not load chats: ${err.message}`);
+			if (!periodic || err.status === 401) note(err.status === 401 ? 'Session ended: run qc login' : `Could not load chats: ${err.message}`);
+		} finally {
+			listLoading = false;
 		}
 	}
 
@@ -489,7 +519,10 @@ export async function runTui(client, { initialChat } = {}) {
 		state.field = insertText(state.field, event.text);
 		redraw();
 	});
+	const listTimer = setInterval(() => loadConversations({ periodic: true }), CHAT_LIST_REFRESH_MS);
+	listTimer.unref?.();
 	app.on('exit', () => {
+		clearInterval(listTimer);
 		state.images?.clear();
 		abort.abort();
 	});
@@ -533,7 +566,9 @@ export async function runTui(client, { initialChat } = {}) {
 							}
 						}, 6100);
 					} else delete room[data.userId];
-				} else if (type === 'CONVERSATION_CREATED') {
+				} else if (CHAT_LIST_EVENTS.has(type)) {
+					// Made, joined, left, or archived on another device: reload the list now.
+					if (type === MEMBERSHIP_EVENTS.LEFT && data?.userId === client.me?.id && data?.conversationId === state.activeId) state.activeId = null;
 					loadConversations();
 				}
 				redraw();
@@ -549,5 +584,6 @@ export async function runTui(client, { initialChat } = {}) {
 		.catch((err) => note(err.message));
 
 	await app.start();
+	clearInterval(listTimer);
 	abort.abort();
 }

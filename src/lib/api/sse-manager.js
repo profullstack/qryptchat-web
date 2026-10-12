@@ -7,7 +7,7 @@
  * SSE Connection Manager
  * Handles SSE connections, user presence, and message broadcasting
  */
-class SSEManager {
+export class SSEManager {
 	constructor() {
 		// Map of user_id -> Set of SSE response objects
 		this.userConnections = new Map();

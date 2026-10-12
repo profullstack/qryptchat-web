@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToScreen } from '@profullstack/hqtui/testing';
 import { setIconMode } from '@profullstack/hqtui';
-import { initialState, listed, render, SLASH_COMMANDS, transcriptLines } from '../../src/cli/tui.js';
+import { CHAT_LIST_REFRESH_MS, chatsWithNews, initialState, listed, render, SLASH_COMMANDS, transcriptLines } from '../../src/cli/tui.js';
 
 setIconMode('unicode');
 
@@ -118,5 +118,22 @@ describe('archived chats in the qc client', () => {
 
 	it('handles /voice, /archive, /unarchive and /archived in the composer', () => {
 		expect(SLASH_COMMANDS).toEqual(expect.arrayContaining(['voice', 'archive', 'unarchive', 'archived']));
+	});
+});
+
+describe('the periodic chat list refresh', () => {
+	it('finds chats that are new or have newer activity', () => {
+		const prev = [
+			{ id: 'a', updated_at: '2026-10-12T10:00:00Z' },
+			{ id: 'b', updated_at: '2026-10-12T10:00:00Z' },
+		];
+		const next = [
+			{ id: 'a', updated_at: '2026-10-12T10:05:00Z' },
+			{ id: 'b', updated_at: '2026-10-12T10:00:00Z' },
+			{ id: 'c', updated_at: '2026-10-12T10:01:00Z' },
+		];
+		expect(chatsWithNews(prev, next)).toEqual(['a', 'c']);
+		expect(chatsWithNews(next, next)).toEqual([]);
+		expect(CHAT_LIST_REFRESH_MS).toBeLessThanOrEqual(30_000);
 	});
 });
