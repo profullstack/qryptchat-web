@@ -159,7 +159,7 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
           </div>
         )}
 
-        {pickerOpen && <EmojiPicker onPick={react} onClose={() => setPickerOpen(false)} />}
+        {pickerOpen && <EmojiPicker onPick={react} onClose={() => setPickerOpen(false)} align={isOwn ? 'end' : 'start'} />}
       </div>
 
       <div className="message-actions" role="toolbar" aria-label="Message actions">
@@ -234,8 +234,6 @@ export default function MessageItem({ message, showAvatar = true, showTimestamp 
         .quick-reaction.mine { background: var(--color-bg-tertiary); }
         .quick-reaction img.openemoji { display: block; transition: transform .1s; }
         .quick-reaction:hover img.openemoji { transform: scale(1.2); }
-        .message-content-wrapper .emoji-picker { left: 0; right: auto; }
-        .message-wrapper.own .message-content-wrapper .emoji-picker { left: auto; right: 0; }
         @media (max-width: 640px) { .message-actions { position: absolute; bottom: 100%; z-index: 5; } .message-wrapper.own .message-actions { right: 0; } }
       `}</style>
     </div>

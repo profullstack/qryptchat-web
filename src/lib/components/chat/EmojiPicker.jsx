@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { loadEmojiIndex, searchEmoji, readRecent, pushRecent, emojiSrc, OPENICON_SPRITE } from '@/lib/emoji/openemoji.js';
+import { placePopover } from '@/lib/emoji/placement.js';
 
 /** OpenIcon glyph per OpenEmoji group, in the set's own group order. */
 const GROUP_ICONS = {
@@ -25,12 +26,30 @@ export function Icon({ name, size = 18 }) {
 }
 
 const RECENT = 'recent';
+const EDGE = 8;
+
+/** The visible viewport, less a sticky navbar across the top. */
+function viewportBounds() {
+  let top = EDGE;
+  const nav = document.querySelector('.navbar');
+  if (nav) {
+    const pos = getComputedStyle(nav).position;
+    const r = nav.getBoundingClientRect();
+    if ((pos === 'sticky' || pos === 'fixed') && r.bottom > 0) top = Math.max(top, r.bottom + EDGE);
+  }
+  return { top, left: EDGE, right: window.innerWidth - EDGE, bottom: window.innerHeight - EDGE };
+}
 
 /**
  * The OpenEmoji picker. It only ever hands back a Unicode character through
  * onPick: what the message stores (and encrypts) is plain text.
+ *
+ * It is position: fixed next to its anchor (anchorRef, or else the element it
+ * is rendered in), on the `prefer` side when that fits and flipped to
+ * below/above/right/left when it does not, so a scroll container or the navbar
+ * never cuts it off. align 'end' lines it up with the anchor's right edge.
  */
-export default function EmojiPicker({ onPick, onClose }) {
+export default function EmojiPicker({ onPick, onClose, anchorRef, prefer = 'top', align = 'start' }) {
   const [index, setIndex] = useState(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -38,13 +57,40 @@ export default function EmojiPicker({ onPick, onClose }) {
   const [tab, setTab] = useState(() => (readRecent().length ? RECENT : 0));
   const rootRef = useRef(null);
   const searchRef = useRef(null);
+  const [place, setPlace] = useState(null);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return undefined;
+    function update() {
+      const anchor = anchorRef?.current || root.parentElement;
+      if (!anchor) return;
+      const next = placePopover({
+        anchor: anchor.getBoundingClientRect(),
+        size: { width: root.offsetWidth, height: 380 },
+        bounds: viewportBounds(),
+        prefer,
+        align,
+      });
+      setPlace((prev) =>
+        prev && prev.top === next.top && prev.left === next.left && prev.maxHeight === next.maxHeight ? prev : next,
+      );
+    }
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [anchorRef, prefer, align]);
 
   useEffect(() => {
     let live = true;
     loadEmojiIndex()
       .then((i) => live && setIndex(i))
       .catch((err) => live && setError(err.message));
-    searchRef.current?.focus();
+    searchRef.current?.focus({ preventScroll: true });
     return () => {
       live = false;
     };
@@ -80,7 +126,18 @@ export default function EmojiPicker({ onPick, onClose }) {
   }
 
   return (
-    <div className="emoji-picker" ref={rootRef} role="dialog" aria-label="Emoji">
+    <div
+      className="emoji-picker"
+      ref={rootRef}
+      role="dialog"
+      aria-label="Emoji"
+      data-side={place?.side}
+      style={
+        place
+          ? { top: place.top, left: place.left, height: place.maxHeight == null ? undefined : Math.min(380, place.maxHeight) }
+          : { visibility: 'hidden', top: 0, left: 0 }
+      }
+    >
       <div className="emoji-search">
         <Icon name="search" size={16} />
         <input
@@ -122,7 +179,7 @@ export default function EmojiPicker({ onPick, onClose }) {
       <div className="emoji-credit">OpenEmoji by Profullstack, Inc. (CC BY 4.0)</div>
 
       <style>{`
-        .emoji-picker { position: absolute; bottom: calc(100% + .5rem); left: .75rem; width: min(352px, calc(100vw - 2rem)); height: 380px; display: flex; flex-direction: column; background: var(--color-bg-primary); border: 1px solid var(--color-border-primary); border-radius: .75rem; box-shadow: 0 10px 30px rgba(0,0,0,.25); z-index: 20; overflow: hidden; }
+        .emoji-picker { position: fixed; width: min(352px, calc(100vw - 2rem)); height: 380px; display: flex; flex-direction: column; background: var(--color-bg-primary); border: 1px solid var(--color-border-primary); border-radius: .75rem; box-shadow: 0 10px 30px rgba(0,0,0,.25); z-index: 45; overflow: hidden; }
         .emoji-search { display: flex; align-items: center; gap: .4rem; margin: .5rem; padding: .35rem .6rem; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: .5rem; color: var(--color-text-muted); }
         .emoji-search input { flex: 1; border: none; background: transparent; outline: none; color: var(--color-text-primary); font: inherit; font-size: .875rem; }
         .emoji-tabs { display: flex; justify-content: space-between; padding: 0 .35rem; border-bottom: 1px solid var(--color-border-primary); }
