@@ -9,7 +9,7 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 // mcp); exit then, or the SSE socket and timers would hold the process open,
 // but only once stdout has drained (see exit.js).
 main(process.argv.slice(2), { version: pkg.version }).then(
-	() => exitWhenFlushed(0),
+	() => exitWhenFlushed(process.exitCode ?? 0),
 	(err) => {
 		process.stderr.write(`${errorLine(err)}\n`);
 		exitWhenFlushed(1);

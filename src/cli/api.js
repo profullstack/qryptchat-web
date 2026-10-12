@@ -133,6 +133,11 @@ export class QcClient {
 		return res.text();
 	}
 
+	/** Archive a chat for you (or bring it back with on = false); the others still see it. */
+	async archive(conversationId, on = true) {
+		return this.request(`/api/conversations/${on ? 'archive' : 'unarchive'}`, { method: 'POST', body: { conversationId } });
+	}
+
 	/** Conversations, newest activity first, each with a display title. */
 	async conversations() {
 		const { conversations = [] } = await this.request('/api/conversations/load', { method: 'POST', body: {} });

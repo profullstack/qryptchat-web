@@ -9,6 +9,8 @@ import { joinAsAgent } from './agent.js';
 import { parseInviteCode } from '../lib/chat/group-invites.js';
 import { em, fail, info, mark, ok, warn, who } from './style.js';
 import { notify } from './notify.js';
+import { parseVoiceArgs, runPairux, voiceLink, VOICE_HELP } from './voice.js';
+import { voiceMessage } from '../lib/chat/voice.js';
 export { exitWhenFlushed } from './exit.js';
 
 /** An error as qc prints it: the error icon and the message. */
@@ -27,7 +29,10 @@ Usage:
   qc profile [--emoji 🔭] [--pronouns she/her] [--website URL] [--bio TEXT]
                           show or set your public profile (an empty value clears it);
                           --openprofile prints it as OpenProfile.md
-  qc chats                list your chats
+  qc chats [--archived]   list your chats (archived ones only with --archived)
+  qc archive <chat>       archive a chat for you (qc unarchive <chat> brings it back)
+  qc voice [--send <chat>]   a link to a fresh end-to-end encrypted PairUX voice room (no account
+                          needed to join); qc voice login|join|... runs the pairux CLI (qc voice help)
   qc read <chat> [-n 20]  print the last messages of a chat
   qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply)
   qc react <chat> <message-id> <emoji> [--remove]   react to a message
@@ -108,6 +113,9 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 	const { _: [cmd, ...rest], flags } = parseArgs(argv);
 	const out = (line) => process.stdout.write(`${line}\n`);
 	const json = (value) => out(JSON.stringify(value, null, flags.json === 'compact' ? 0 : 2));
+
+	// qc voice is the pairux CLI: its arguments are pairux's, not qc's.
+	if (cmd === 'voice') return voiceCommand(argv.slice(argv.indexOf('voice') + 1), { out, json });
 
 	if (flags.version) return out(`qc ${version}`);
 	if (flags.help || cmd === 'help') return out(HELP);
@@ -191,10 +199,20 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 		}
 		case 'chats':
 		case 'ls': {
-			const chats = await (await client(flags)).conversations();
+			const all = await (await client(flags)).conversations();
+			const chats = all.filter((c) => !!c.is_archived === !!flags.archived);
 			if (flags.json) return json(chats.map((c) => ({ id: c.id, title: c.title, type: c.type, updated_at: c.updated_at, participants: c.participants?.length ?? 0 })));
 			for (const c of chats) out(`${c.id}  ${mark(c.type === 'group' ? 'users' : 'chat')}${c.title}`);
 			return;
+		}
+		case 'archive':
+		case 'unarchive': {
+			if (!rest[0]) throw new Error(`Usage: qc ${cmd} <chat>`);
+			const c = await client(flags);
+			const chat = findChat(await c.conversations(), rest[0]);
+			await c.archive(chat.id, cmd === 'archive');
+			if (flags.json) return json({ id: chat.id, archived: cmd === 'archive' });
+			return out(ok(cmd === 'archive' ? `Archived ${chat.title}. qc chats --archived lists it; qc unarchive brings it back.` : `${chat.title} is back in your chats.`));
 		}
 		case 'read': {
 			if (!rest[0]) throw new Error('Usage: qc read <chat> [-n 20]');
@@ -288,5 +306,29 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 		}
 		default:
 			throw new Error(`Unknown command "${cmd}".\n\n${HELP}`);
+	}
+}
+
+async function voiceCommand(argv, { out, json }) {
+	const parsed = parseVoiceArgs(argv);
+	if (parsed.action === 'help') return out(VOICE_HELP);
+	if (parsed.action === 'pairux') {
+		const code = await runPairux(parsed.args);
+		if (code) process.exitCode = code;
+		return;
+	}
+	const url = voiceLink();
+	let sent = null;
+	if (parsed.send) {
+		const c = await client({});
+		const chat = findChat(await c.conversations(), parsed.send);
+		const { skipped } = await c.send(chat.id, voiceMessage(url));
+		sent = { id: chat.id, title: chat.title, skipped };
+	}
+	if (parsed.json) return json({ url, sent });
+	out(url);
+	if (sent) {
+		if (sent.skipped) process.stderr.write(`qc: ${warn(`${sent.skipped} participant(s) have no key yet and will not see it.`)}\n`);
+		process.stderr.write(`qc: ${mark('send')}Sent to ${sent.title}.\n`);
 	}
 }

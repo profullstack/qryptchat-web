@@ -12,6 +12,10 @@
  *   └─────────────┘└──────────────────────────────────────────────┘
  *    ENTER send  CTRL+E emoji  TAB chats  PGUP scroll      ● live
  *
+ * Composer commands: /voice posts a fresh end-to-end encrypted PairUX room,
+ * /archive and /unarchive file the open chat away, /archived flips the list
+ * between your chats and the archived ones (also Ctrl+O; `a` in the list).
+ *
  * The view is a pure function of one state object (render() below), so tests
  * draw the real layout with renderToText. The controller (runTui) owns the
  * network: conversations, decrypted messages, sending, and the SSE stream.
@@ -21,6 +25,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { configDir } from './config.js';
 import { notify } from './notify.js';
+import { newVoiceRoomLink, parseSlashCommand, PAIRUX_URL, voiceMessage } from '../lib/chat/voice.js';
 
 const SIDEBAR = 30;
 
@@ -41,8 +46,15 @@ export function initialState(me) {
 		status: 'connecting',
 		notice: '',
 		loading: true,
+		showArchived: false,
 	};
 }
+
+/** The chats the sidebar shows: archived ones only in the archived view. */
+export const listed = (state) => state.conversations.filter((c) => !!c.is_archived === !!state.showArchived);
+
+/** Composer slash commands the TUI handles itself; anything else is sent as typed. */
+export const SLASH_COMMANDS = ['voice', 'archive', 'unarchive', 'archived'];
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const timeOf = (iso) => {
@@ -154,12 +166,15 @@ export function render({ ui, width, height, theme }, state, on = {}) {
 
 	ui.row({ size: 'fill' }, (row) => {
 		const listWidth = Math.min(SIDEBAR, Math.max(18, Math.floor(width * 0.3)));
-		row.panel({ title: 'Chats', size: listWidth, borderColor: state.focus === 'list' ? theme?.borderFocused : undefined }, (p) => {
+		const chats = listed(state);
+		const archivedCount = state.conversations.filter((c) => c.is_archived).length;
+		const listTitle = state.showArchived ? `Archived (${archivedCount})` : archivedCount ? `Chats · ${archivedCount} archived` : 'Chats';
+		row.panel({ title: truncate(listTitle, Math.max(4, listWidth - 4)), size: listWidth, borderColor: state.focus === 'list' ? theme?.borderFocused : undefined }, (p) => {
 			// hqtui's list declares a badge but does not draw it, so the unread
 			// count is laid out here: name on the left, ●N flush right.
 			const inner = Math.max(4, listWidth - 5); // borders, padding, scrollbar
 			p.list({
-				items: state.conversations.map((c) => {
+				items: chats.map((c) => {
 					const unread = state.unread[c.id] || 0;
 					const tag = unread ? ` ●${unread > 99 ? '99+' : unread}` : '';
 					const name = truncate(c.title, inner - stringWidth(tag));
@@ -206,6 +221,8 @@ export function render({ ui, width, height, theme }, state, on = {}) {
 			{ key: 'Ctrl+E', label: 'emoji' },
 			{ key: 'Tab', label: state.focus === 'list' ? 'compose' : 'chats' },
 			{ key: 'PgUp', label: 'scroll' },
+			...(state.focus === 'list' ? [{ key: 'a', label: state.showArchived ? 'unarchive' : 'archive' }] : []),
+			{ key: 'Ctrl+O', label: state.showArchived ? 'chats' : 'archived' },
 			{ key: 'Ctrl+C', label: 'quit' },
 		],
 		size: 1,
@@ -290,11 +307,12 @@ export async function runTui(client, { initialChat } = {}) {
 			const before = state.activeId;
 			state.conversations = await client.conversations();
 			state.loading = false;
-			if (!state.activeId && state.conversations.length) {
-				const want = initialChat ? state.conversations.findIndex((c) => c.id === initialChat || c.title.toLowerCase().includes(String(initialChat).toLowerCase())) : 0;
+			const chats = listed(state);
+			if (!state.activeId && chats.length) {
+				const want = initialChat ? chats.findIndex((c) => c.id === initialChat || c.title.toLowerCase().includes(String(initialChat).toLowerCase())) : 0;
 				openAt(Math.max(0, want));
 			} else {
-				state.selected = Math.max(0, state.conversations.findIndex((c) => c.id === before));
+				state.selected = Math.max(0, chats.findIndex((c) => c.id === before));
 			}
 			// The events stream joins every chat's live room itself, so unread
 			// counts arrive without loading each chat (which tripped the rate limit).
@@ -310,7 +328,7 @@ export async function runTui(client, { initialChat } = {}) {
 	}
 
 	function openAt(i) {
-		const c = state.conversations[i];
+		const c = listed(state)[i];
 		if (!c) return;
 		state.selected = i;
 		state.activeId = c.id;
@@ -330,8 +348,49 @@ export async function runTui(client, { initialChat } = {}) {
 		}
 	}
 
-	async function send() {
-		const text = emojify(state.field.value.trim(), { mode: 'emoji' });
+	function toggleArchivedView() {
+		state.showArchived = !state.showArchived;
+		const chats = listed(state);
+		state.selected = Math.max(0, chats.findIndex((c) => c.id === state.activeId));
+		if (!state.showArchived && !chats.length) note('No chats here yet.');
+		if (state.showArchived && !chats.length) note('Nothing archived. Press a on a chat (or type /archive) to archive it.');
+		redraw();
+	}
+
+	/** Archive or unarchive a chat for this user; it moves to the other list. */
+	async function setArchived(chat, on) {
+		try {
+			await client.archive(chat.id, on);
+			chat.is_archived = on;
+			const chats = listed(state);
+			state.selected = Math.max(0, Math.min(state.selected, chats.length - 1));
+			note(on ? `Archived ${chat.title} (Ctrl+O shows archived chats)` : `${chat.title} is back in your chats`);
+		} catch (err) {
+			note(`Could not ${on ? 'archive' : 'unarchive'}: ${err.message}`);
+		}
+	}
+
+	/** A slash command typed in the composer; true when it was one. */
+	function runSlash(raw) {
+		const cmd = parseSlashCommand(raw, SLASH_COMMANDS);
+		if (!cmd) return false;
+		const active = state.conversations.find((c) => c.id === state.activeId);
+		state.field = { value: '', cursor: 0 };
+		if (cmd.name === 'archived') toggleArchivedView();
+		else if (!active) note('Pick a chat first');
+		else if (cmd.name === 'voice') {
+			// Made here (src/lib/chat/voice.js) and sent inside the encrypted message.
+			const url = newVoiceRoomLink(process.env.PAIRUX_API_URL || PAIRUX_URL);
+			state.field = { value: voiceMessage(url), cursor: 0 };
+			send({ raw: true }).then(() => note('Voice room posted; open the link in a browser to join', { sticky: false }));
+		} else setArchived(active, cmd.name === 'archive');
+		redraw();
+		return true;
+	}
+
+	async function send({ raw = false } = {}) {
+		if (!raw && runSlash(state.field.value)) return;
+		const text = raw ? state.field.value.trim() : emojify(state.field.value.trim(), { mode: 'emoji' });
 		if (!text || !state.activeId) return;
 		const id = state.activeId;
 		state.field = { value: '', cursor: 0 };
@@ -394,16 +453,22 @@ export async function runTui(client, { initialChat } = {}) {
 		} else if (event.key === 'pagedown') {
 			handlers.scroll(-4);
 		} else if (event.key === 'ctrl+n' || event.key === 'alt+down') {
-			openAt(Math.min(state.conversations.length - 1, state.selected + 1));
+			openAt(Math.min(listed(state).length - 1, state.selected + 1));
 		} else if (event.key === 'ctrl+p' || event.key === 'alt+up') {
 			openAt(Math.max(0, state.selected - 1));
+		} else if (event.key === 'ctrl+o') {
+			toggleArchivedView();
 		} else if (event.key === 'ctrl+r') {
 			loadConversations();
 			if (state.activeId) loadMessages(state.activeId);
 		} else if (state.focus === 'list') {
 			if (event.key === 'up' || event.key === 'k') state.selected = Math.max(0, state.selected - 1);
-			else if (event.key === 'down' || event.key === 'j') state.selected = Math.min(state.conversations.length - 1, state.selected + 1);
+			else if (event.key === 'down' || event.key === 'j') state.selected = Math.min(listed(state).length - 1, state.selected + 1);
 			else if (event.key === 'enter' || event.key === 'right' || event.key === 'l') handlers.open(state.selected);
+			else if (event.key === 'a') {
+				const c = listed(state)[state.selected];
+				if (c) setArchived(c, !c.is_archived);
+			}
 		} else if (event.key === 'enter') {
 			send();
 		} else if (event.key === 'up' && !state.field.value) {
@@ -453,7 +518,7 @@ export async function runTui(client, { initialChat } = {}) {
 					if (i > 0) {
 						const [c] = state.conversations.splice(i, 1);
 						state.conversations.unshift(c);
-						state.selected = state.conversations.findIndex((x) => x.id === state.activeId);
+						state.selected = Math.max(0, listed(state).findIndex((x) => x.id === state.activeId));
 					}
 					if (i === -1) loadConversations();
 					if (data.message.sender_id !== client.me?.id) delete (state.typing[id] || {})[data.message.sender_id];
