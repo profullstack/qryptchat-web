@@ -49,6 +49,6 @@ describe('qc voice', () => {
 		const child = new EventEmitter();
 		const done = runPairux(['login'], { spawnImpl: () => child, env: {} });
 		child.emit('error', Object.assign(new Error('spawn pairux ENOENT'), { code: 'ENOENT' }));
-		await expect(done).rejects.toThrow(/installer\.pairux\.com/);
+		await expect(done).rejects.toThrow('curl -fsSL https://installer.pairux.com/install.sh');
 	});
 });
