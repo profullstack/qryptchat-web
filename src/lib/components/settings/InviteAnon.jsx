@@ -2,16 +2,13 @@
 
 /**
  * @fileoverview Settings panel that lets a signed-in user mint single-use
- * anonymous invite links for other people, subject to a per-account quota.
+ * anonymous invite links for other people. There is no limit.
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 
 export default function InviteAnon() {
-	const [remaining, setRemaining] = useState(null);
-	const [quota, setQuota] = useState(null);
-	const [loading, setLoading] = useState(true);
 	const [minting, setMinting] = useState(false);
 	const [link, setLink] = useState('');
 	const [copied, setCopied] = useState(false);
@@ -22,27 +19,6 @@ export default function InviteAnon() {
 		if (!session?.access_token) throw new Error('You need to be signed in.');
 		return { Authorization: `Bearer ${session.access_token}` };
 	}
-
-	async function loadQuota() {
-		setLoading(true);
-		setError('');
-		try {
-			const headers = await authHeader();
-			const res = await fetch('/api/auth/invite-anon', { headers });
-			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(data.error || 'Failed to load invite quota');
-			setRemaining(data.remaining);
-			setQuota(data.quota);
-		} catch (e) {
-			setError(e.message);
-		} finally {
-			setLoading(false);
-		}
-	}
-
-	useEffect(() => {
-		loadQuota();
-	}, []);
 
 	async function createInvite() {
 		setMinting(true);
@@ -57,15 +33,8 @@ export default function InviteAnon() {
 				body: JSON.stringify({})
 			});
 			const data = await res.json().catch(() => ({}));
-			if (!res.ok || !data.success) {
-				if (data.code === 'quota_exceeded') {
-					setRemaining(0);
-					throw new Error("You've used all your invites.");
-				}
-				throw new Error(data.error || 'Failed to create invite');
-			}
+			if (!res.ok || !data.success) throw new Error(data.error || 'Failed to create invite');
 			setLink(data.url);
-			setRemaining(data.remaining);
 		} catch (e) {
 			setError(e.message);
 		} finally {
@@ -83,8 +52,6 @@ export default function InviteAnon() {
 		}
 	}
 
-	const outOfInvites = remaining === 0;
-
 	return (
 		<div className="invite-anon">
 			<p className="invite-desc">
@@ -93,34 +60,22 @@ export default function InviteAnon() {
 				them.
 			</p>
 
-			{loading ? (
-				<p className="invite-muted">Loading…</p>
-			) : (
-				<>
-					{remaining !== null && (
-						<p className="invite-quota">
-							{remaining} of {quota} invites remaining
-						</p>
-					)}
+			<button
+				type="button"
+				className="invite-button"
+				onClick={createInvite}
+				disabled={minting}
+			>
+				{minting ? 'Creating…' : 'Create invite link'}
+			</button>
 
-					<button
-						type="button"
-						className="invite-button"
-						onClick={createInvite}
-						disabled={minting || outOfInvites}
-					>
-						{minting ? 'Creating…' : outOfInvites ? 'No invites left' : 'Create invite link'}
+			{link && (
+				<div className="invite-result">
+					<input className="invite-link" type="text" readOnly value={link} onFocus={(e) => e.target.select()} />
+					<button type="button" className="invite-copy" onClick={copyLink}>
+						{copied ? 'Copied!' : 'Copy'}
 					</button>
-
-					{link && (
-						<div className="invite-result">
-							<input className="invite-link" type="text" readOnly value={link} onFocus={(e) => e.target.select()} />
-							<button type="button" className="invite-copy" onClick={copyLink}>
-								{copied ? 'Copied!' : 'Copy'}
-							</button>
-						</div>
-					)}
-				</>
+				</div>
 			)}
 
 			{error && <p className="invite-error">{error}</p>}
@@ -128,8 +83,6 @@ export default function InviteAnon() {
 			<style>{`
         .invite-anon { display: flex; flex-direction: column; gap: .75rem; }
         .invite-desc { color: var(--color-text-secondary); font-size: .875rem; line-height: 1.5; margin: 0; }
-        .invite-quota { color: var(--color-text-primary); font-weight: 500; font-size: .875rem; margin: 0; }
-        .invite-muted { color: var(--color-text-secondary); font-size: .875rem; margin: 0; }
         .invite-button { padding: .625rem 1rem; background: var(--color-brand-primary); color: #fff; border: none; border-radius: .5rem; font-weight: 500; cursor: pointer; align-self: flex-start; }
         .invite-button:hover:not(:disabled) { background: var(--color-brand-secondary); }
         .invite-button:disabled { opacity: .6; cursor: not-allowed; }

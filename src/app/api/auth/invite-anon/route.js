@@ -1,7 +1,7 @@
 /**
  * @fileoverview API endpoint that lets a signed-in account mint a single-use
  * anonymous invite for someone else. Mirrors AgentBBS's issuer role, but the
- * issuer is the web app itself (`qryptchat-web`), gated by a per-account quota.
+ * issuer is the web app itself (`qryptchat-web`). There is no per-account limit.
  *
  * Auth: `Authorization: Bearer <supabase access_token>` (anonymous or verified).
  * The minted token is redeemed at /anon?invite=... via /api/auth/register-anon.
@@ -15,9 +15,6 @@ import { mintInviteToken } from '@/lib/invites/mint.js';
 
 /** Issuer id registered in `invite_issuers` for the web app. */
 const WEB_ISSUER_ID = 'qryptchat-web';
-
-/** Fallback quota if the issuer row has none. */
-const DEFAULT_QUOTA = 5;
 
 /**
  * Build a service-role Supabase client (bypasses RLS).
@@ -39,7 +36,8 @@ function getBearerToken(authHeader) {
 }
 
 /**
- * GET /api/auth/invite-anon — report remaining quota for the caller.
+ * GET /api/auth/invite-anon — report how many invites the caller has minted.
+ * Invites are unlimited, so `remaining` and `quota` are null.
  * @param {import('next/server').NextRequest} request
  */
 export async function GET(request) {
@@ -47,12 +45,12 @@ export async function GET(request) {
 	if (auth.error) return auth.error;
 	const { serviceSupabase, authUser } = auth;
 
-	const { quota, used, quotaError } = await getQuota(serviceSupabase, authUser.id);
+	const { used, quotaError } = await getQuota(serviceSupabase, authUser.id);
 	if (quotaError) {
 		console.error('invite-anon: failed to verify invite quota', quotaError);
 		return NextResponse.json({ error: 'Failed to verify invite quota' }, { status: 500 });
 	}
-	return NextResponse.json({ remaining: Math.max(0, quota - used), quota, used });
+	return NextResponse.json({ remaining: null, quota: null, used });
 }
 
 /**
@@ -88,20 +86,14 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Complete registration before inviting' }, { status: 403 });
 		}
 
-		// --- Enforce the per-account quota ---
-		const { quota, used, issuerDisabled, quotaError } = await getQuota(serviceSupabase, authUser.id);
-		if (quotaError) {
-			console.error('invite-anon: failed to verify invite quota', quotaError);
-			return NextResponse.json({ error: 'Failed to verify invite quota' }, { status: 500 });
-		}
-		if (issuerDisabled) {
+		// --- The issuer can still be switched off as a kill switch ---
+		const { data: issuer } = await serviceSupabase
+			.from('invite_issuers')
+			.select('disabled')
+			.eq('id', WEB_ISSUER_ID)
+			.single();
+		if (issuer?.disabled) {
 			return NextResponse.json({ error: 'Anonymous invites are disabled' }, { status: 503 });
-		}
-		if (used >= quota) {
-			return NextResponse.json(
-				{ error: 'Invite limit reached', code: 'quota_exceeded', quota, used },
-				{ status: 429 }
-			);
 		}
 
 		// --- Optional caller-supplied ttl, clamped to [1h, 30d] ---
@@ -115,7 +107,7 @@ export async function POST(request) {
 			// no body — use default ttl
 		}
 
-		// --- Mint and record the invite (record burns a quota slot) ---
+		// --- Mint and record the invite ---
 		const { token, payload } = mintInviteToken({ seed, iss: WEB_ISSUER_ID, ttlSeconds, uses: 1 });
 
 		const { error: insertError } = await serviceSupabase.from('issued_invites').insert({
@@ -136,7 +128,7 @@ export async function POST(request) {
 			success: true,
 			token,
 			url,
-			remaining: Math.max(0, quota - used - 1)
+			remaining: null
 		});
 	} catch (error) {
 		console.error('invite-anon error:', error);
@@ -168,24 +160,16 @@ async function authenticate(request) {
 }
 
 /**
- * Resolve the caller's quota and current usage.
+ * Count the invites the caller has minted.
  * @param {any} serviceSupabase
  * @param {string} authUserId
- * @returns {Promise<{ quota: number, used: number, issuerDisabled: boolean, quotaError: any }>}
+ * @returns {Promise<{ used: number, quotaError: any }>}
  */
 async function getQuota(serviceSupabase, authUserId) {
-	const { data: issuer } = await serviceSupabase
-		.from('invite_issuers')
-		.select('default_quota, disabled')
-		.eq('id', WEB_ISSUER_ID)
-		.single();
-
-	const quota = issuer?.default_quota ?? DEFAULT_QUOTA;
-
 	const { count, error: countError } = await serviceSupabase
 		.from('issued_invites')
 		.select('jti', { count: 'exact', head: true })
 		.eq('issued_by', authUserId);
 
-	return { quota, used: count ?? 0, issuerDisabled: !!issuer?.disabled, quotaError: countError };
+	return { used: count ?? 0, quotaError: countError };
 }
