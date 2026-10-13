@@ -4,6 +4,16 @@
 
 A secure, privacy-focused chat application built with post-quantum cryptography to protect against both classical and quantum computer attacks.
 
+## Install the terminal client
+
+```sh
+curl -fsSL https://qrypt.chat/install.sh | sh
+qc
+```
+
+`qc` is qrypt.chat in your terminal: a full-screen chat client, a CLI and an MCP server
+([`packages/qryptchat`](packages/qryptchat)). Remove it with `sh ~/.local/share/qryptchat/uninstall.sh`.
+
 ## ✨ Features
 
 ### 🛡️ Quantum-Resistant Security

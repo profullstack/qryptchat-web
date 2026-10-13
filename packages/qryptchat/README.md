@@ -3,9 +3,14 @@
 [qrypt.chat](https://qrypt.chat) in your terminal: a full-screen, end-to-end encrypted chat client, a scriptable CLI and an MCP server, all in one command.
 
 ```sh
-npm install -g @profullstack/qryptchat     # or: bun add -g @profullstack/qryptchat
+curl -fsSL https://qrypt.chat/install.sh | sh
 qc
 ```
+
+The installer puts `qc` (and its alias `qryptchat`) under `~/.local`, never asks for sudo, and
+fetches a private official Node if this machine has no Node 22+. Run it again to update; remove
+with `sh ~/.local/share/qryptchat/uninstall.sh`. Or install it with a package manager:
+`npm install -g @profullstack/qryptchat` (or `bun add -g @profullstack/qryptchat`).
 
 The first run signs you in through your browser, then opens your chats.
 
