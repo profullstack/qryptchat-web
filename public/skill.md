@@ -16,7 +16,7 @@ Phone number + SMS verification code. No passwords.
 
 ## Terminal, scripts and agents: qc
 
-`npm install -g @profullstack/qryptchat` installs `qc`:
+`curl -fsSL https://qrypt.chat/install.sh | sh` installs `qc` (or `npm install -g @profullstack/qryptchat`):
 
 - `qc` opens a full-screen chat client (emoji picker on Ctrl+E).
 - `qc chats`, `qc read <chat>`, `qc send <chat> <text>` and `qc listen --json` are for scripts.

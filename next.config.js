@@ -41,6 +41,8 @@ const nextConfig = {
       { source: '/:path*', headers: securityHeaders },
       { source: '/openemoji/:path*', headers: assetCache },
       { source: '/openicon/:path*', headers: assetCache },
+      // The curl installer: shown as text in a browser, never offered as a download.
+      { source: '/install.sh', headers: [{ key: 'Content-Type', value: 'text/plain; charset=utf-8' }] },
     ];
   },
 };
