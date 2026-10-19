@@ -17,7 +17,7 @@ import ActiveCallInterface from '@/lib/components/voice-call/ActiveCallInterface
 // token, since passkey/CoinPay/phone sessions have no cookie.
 installApiAuth({ refresh: (token) => useAuthStore.getState().refreshSession(token) });
 
-export default function ClientLayout({ children }) {
+export default function ClientLayout({ children, footerBottom }) {
   const pathname = usePathname();
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const { t: _t } = useI18n();
@@ -60,7 +60,7 @@ export default function ClientLayout({ children }) {
     <div className="app" suppressHydrationWarning>
       <Navbar />
       <main className="main-content">{children}</main>
-      {shouldShowFooter && <Footer />}
+      {shouldShowFooter && <Footer bottom={footerBottom} />}
       {mounted && (
         <>
           <PWAToastManager />
