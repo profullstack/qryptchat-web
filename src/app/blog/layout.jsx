@@ -7,7 +7,7 @@ const AD_WRAP = { maxWidth: '48rem', margin: '0 auto', padding: '1.5rem 0', disp
 export default function BlogLayout({ children }) {
   return (
     <>
-      {children}
+      {/* Top of the blog content, never at the bottom against the footer. */}
       {/* Primary: standard CrawlProof snippet via ad.js, logged-out visitors only. */}
       <BlogAd />
       {/* No-JS fallback — renders only when JavaScript is disabled (e.g. Tor
@@ -26,6 +26,7 @@ export default function BlogLayout({ children }) {
           />
         </div>
       </noscript>
+      {children}
     </>
   );
 }
