@@ -1,11 +1,12 @@
 import './globals.css';
 import ClientLayout from './client-layout.jsx';
 import Script from "next/script";
+import { Footer as PfsFooter } from '@profullstack/footer/react';
 import PitFooter from '@/lib/components/PitFooter.jsx';
 
 const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? 'https://qrypt.chat').replace(/\/$/, '');
 
-// Re-render hourly so the pit.world footer stays fresh.
+// Re-render hourly so @profullstack/footer and the pit.world footer stay fresh.
 export const revalidate = 3600;
 
 export const metadata = {
@@ -146,7 +147,26 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body suppressHydrationWarning>
-        <ClientLayout>{children}</ClientLayout>
+        <ClientLayout
+          footerBottom={
+            <PfsFooter
+              site="https://qrypt.chat/"
+              links={[
+                { label: 'Security', href: '/security' },
+                { label: 'About', href: '/about' },
+                { label: 'Blog', href: '/blog' },
+                { label: 'FAQ', href: '/faq' },
+                { label: 'Contact', href: '/contact' },
+                { label: 'Warrant Canary', href: '/warrant-canary' },
+                { label: 'Privacy', href: '/privacy' },
+                { label: 'Terms', href: '/terms' },
+                { label: 'GitHub', href: 'https://github.com/profullstack/qryptchat-web' },
+              ]}
+            />
+          }
+        >
+          {children}
+        </ClientLayout>
         <Script data-site="38c4083a-a35e-435d-8a0e-3510c465f419" src="https://crawlproof.com/stats.js" strategy="afterInteractive" />
         <PitFooter />
       </body>
