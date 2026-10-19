@@ -5,6 +5,8 @@ const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_BAS
 export const metadata = {
   alternates: { canonical: '/' },
   openGraph: { url: '/' },
+  // ad.network verifies the site by fetching this page's raw HTML for the code.
+  other: { 'ad.network': 'LifRx90nnLMtBYAw' },
 };
 
 const softwareApplicationJsonLd = {
