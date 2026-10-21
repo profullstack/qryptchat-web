@@ -6,13 +6,6 @@ import { useI18n } from '@/lib/hooks/useI18n.js';
 
 const INSTALL_CMD = 'curl -fsSL https://qrypt.chat/install.sh | sh';
 
-// qrypt.chat's ad.network listing (a CrawlProof slot). Like the blog's BlogAd,
-// a plain cross-origin <iframe> to CrawlProof's server-rendered ad: no
-// third-party JavaScript runs in this page.
-const AD_NETWORK_CODE = 'LifRx90nnLMtBYAw';
-const AD_SLOT = 'db16349c-888d-4f7a-b04e-1a4bf1afcb57';
-const AD_FORMAT = 'banner_300x250';
-
 export default function HomeContent() {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
@@ -57,25 +50,6 @@ export default function HomeContent() {
           </div>
         </div>
       </div>
-
-      <aside
-        data-ad-network={AD_NETWORK_CODE}
-        data-cp-ad=""
-        data-slot={AD_SLOT}
-        data-format={AD_FORMAT}
-        className="container"
-        style={{ display: 'flex', justifyContent: 'center', padding: '1.5rem 0' }}
-      >
-        <iframe
-          src={`https://crawlproof.com/api/ads/frame?slot=${AD_SLOT}&format=${AD_FORMAT}`}
-          title="Advertisement"
-          width={300}
-          height={250}
-          scrolling="no"
-          loading="lazy"
-          style={{ border: 0, width: 300, height: 250, maxWidth: '100%' }}
-        />
-      </aside>
 
       <section className="features">
         <div className="container">

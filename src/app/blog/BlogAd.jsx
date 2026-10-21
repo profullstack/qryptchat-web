@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 
-// CrawlProof banner for logged-out visitors on /blog/*.
+// CrawlProof text_link line (one thin 40px row with its own "Sponsored" mark)
+// for logged-out visitors on /blog/*.
 //
 // qrypt.chat deliberately loads NO third-party JavaScript for ads: instead of
 // the data-cp-ad + ad.js snippet, the ad is a plain cross-origin <iframe>
@@ -17,7 +18,7 @@ import { useAuthStore } from '@/lib/stores/auth.js';
 // a signed-in user. Visitors with JS disabled get the <noscript> iframe in the
 // blog layout instead.
 const AD_SLOT = '4a5b5f93-ebd9-4d02-b927-05544fdeb81e';
-const AD_FORMAT = 'banner_300x250';
+const AD_FORMAT = 'text_link';
 const AD_SRC = `https://crawlproof.com/api/ads/frame?slot=${AD_SLOT}&format=${AD_FORMAT}`;
 
 export default function BlogAd() {
@@ -32,16 +33,15 @@ export default function BlogAd() {
   if (!mounted || loading || user) return null;
 
   return (
-    <div className="container" style={{ maxWidth: '48rem', margin: '0 auto', padding: '1.5rem 0', display: 'flex', justifyContent: 'center' }}>
+    <div className="container" style={{ maxWidth: '48rem', margin: '8px auto' }}>
       <iframe
         src={AD_SRC}
-        title="Advertisement"
-        width={300}
-        height={250}
+        title="Sponsored"
+        height={40}
         scrolling="no"
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
-        style={{ border: 0, width: 300, height: 250, maxWidth: '100%' }}
+        style={{ border: 0, width: '100%', height: 40, display: 'block' }}
       />
     </div>
   );
