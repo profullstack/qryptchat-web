@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getClientIp, RateLimiter } from '@/lib/server/rate-limiter.js';
+import { gate } from '@/lib/server/crawl-gateway.js';
 
 const authRateLimiter = new RateLimiter({ maxRequests: 10, windowMs: 60 * 1000 });
 const webhookRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60 * 1000 });
@@ -13,7 +14,7 @@ function rateLimitedResponse() {
   );
 }
 
-export function middleware(request) {
+export async function middleware(request) {
   const { pathname, host } = request.nextUrl;
 
   // WWW redirect
@@ -22,6 +23,12 @@ export function middleware(request) {
     url.host = host.slice(4);
     return NextResponse.redirect(url, 301);
   }
+
+  // Crawl gateway: AI training crawlers get 402 Payment Required (or the pass
+  // page at /crawl) unless they present a paid pass. People, Googlebot and AI
+  // chat fetchers fall through to everything below.
+  const answer = await gate(request);
+  if (answer) return answer;
 
   // Health checks (status.profullstack.com) are never rate limited.
   if (pathname === '/api/health') return NextResponse.next();
