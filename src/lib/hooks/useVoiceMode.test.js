@@ -2,6 +2,32 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceMode } from './useVoiceMode.js';
 
+// The record-and-transcribe engine, scripted like FakeRecognition below.
+const recorder = vi.hoisted(() => ({ last: null }));
+vi.mock('@/lib/chat/voice-recorder.js', () => ({
+	canRecord: () => true,
+	setAudioSession: () => {},
+	unlockAudio: () => {},
+	RecorderRecognition: class {
+		constructor() {
+			recorder.last = this;
+		}
+		start() {}
+		stop() {
+			this.onend?.();
+		}
+		abort() {
+			this.onend?.();
+		}
+		say(text) {
+			const r = [{ transcript: text }];
+			r.isFinal = true;
+			this.onresult?.({ results: [r] });
+			this.onend?.();
+		}
+	},
+}));
+
 /** A scriptable stand-in for the browser's SpeechRecognition. */
 class FakeRecognition {
 	static last = null;
@@ -35,6 +61,7 @@ let spoken;
 beforeEach(() => {
 	spoken = [];
 	FakeRecognition.last = null;
+	recorder.last = null;
 	window.SpeechRecognition = FakeRecognition;
 	window.SpeechSynthesisUtterance = function (text) {
 		this.text = text;
@@ -118,5 +145,33 @@ describe('useVoiceMode', () => {
 		await act(async () => rerender({ conversation, messages: [reply('r3', 'on it')], selfId: 'me', send }));
 		expect(result.current.phase).toBe('speaking');
 		expect(spoken.map((u) => u.text)).toEqual(['on it']);
+	});
+
+	it('switches to recording when the browser refuses its recognizer (Siri off, iOS web app)', async () => {
+		const { result, send } = setup();
+		act(() => result.current.start());
+		expect(result.current.engine).toBe('browser');
+		await act(async () => {
+			FakeRecognition.last.onerror({ error: 'service-not-allowed' });
+			FakeRecognition.last.onend();
+		});
+		expect(result.current.engine).toBe('server');
+		expect(result.current.phase).toBe('listening');
+		expect(result.current.error).toBe('');
+		await act(async () => recorder.last.say('check the inbox'));
+		expect(send).toHaveBeenCalledWith('🗣️ check the inbox');
+	});
+
+	it('records on iOS even where SpeechRecognition exists, and names the chat for the transcriber', async () => {
+		const ua = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)');
+		try {
+			const { result } = setup();
+			act(() => result.current.start());
+			expect(result.current.engine).toBe('server');
+			expect(FakeRecognition.last).toBeNull();
+			expect(recorder.last.hints).toEqual(['qrypt.chat', 'riotcoder']);
+		} finally {
+			ua.mockRestore();
+		}
 	});
 });

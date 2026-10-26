@@ -15,7 +15,7 @@ const DEFAULT_CONFIG = {
 	windowMs: 60 * 1000 // 1 minute
 };
 
-class RateLimiter {
+export class RateLimiter {
 	/**
 	 * @param {RateLimitConfig} config
 	 */

@@ -2,11 +2,12 @@
  * Voice mode: talk to a chat (usually your AI agents) instead of typing.
  *
  * Turn by turn, hands free: listen → send what you said → read the replies
- * aloud → listen again. Both halves use the browser's own speech engines
- * (Web Speech API), so nothing new is sent to qrypt. Recognition runs on the
- * device when the browser can (Chrome's on-device packs, Safari), otherwise in
- * the browser vendor's speech service; the voice bar says which. Messages are
- * still ML-KEM encrypted like anything typed; speech never touches our server.
+ * aloud → listen again. Replies are read by the device (speechSynthesis).
+ * Speech becomes text in the browser where it can (Web Speech API, on the
+ * device when Chrome has the language pack, otherwise the vendor's service).
+ * Where it cannot (iOS, Firefox) the clip is transcribed by qrypt.chat through
+ * Workers AI and not stored. The voice bar says which. Messages are ML-KEM
+ * encrypted like anything typed.
  *
  * Everything here is pure or takes the window/engine as an argument so it can
  * be tested without a browser.
@@ -14,6 +15,7 @@
 
 import { CALL_TYPE } from './calls.js';
 import { REACTION_TYPE } from './reactions.js';
+import { canRecord } from './voice-recorder.js';
 
 /** Marks a message as dictated, so agents know to answer in speakable prose. */
 export const DICTATED = '🗣️';
@@ -25,9 +27,42 @@ export function recognitionCtor(win = globalThis) {
 	return win?.SpeechRecognition || win?.webkitSpeechRecognition || null;
 }
 
+/** iPhone, iPad (which reports itself as a Mac) or iPod. */
+export function isIOS(win = globalThis) {
+	const nav = win?.navigator || {};
+	return /iPad|iPhone|iPod/.test(nav.userAgent || '') || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+}
+
+/**
+ * How to turn speech into text here:
+ *   'native'  the browser's SpeechRecognition
+ *   'server'  record the clip and transcribe it on qrypt.chat (voice-recorder.js)
+ * iOS always records: home-screen apps have no SpeechRecognition, Safari's
+ * needs Siri on, and it goes deaf after audio plays (WebKit 321436).
+ */
+export function pickEngine(win = globalThis) {
+	if (recognitionCtor(win) && !isIOS(win)) return 'native';
+	if (canRecord(win)) return 'server';
+	return null;
+}
+
+/** Native recognition errors that mean "this engine cannot work here", not "try again". */
+export const NATIVE_UNUSABLE = ['service-not-allowed', 'network', 'language-not-supported'];
+
 /** What this browser can do: listen (speech to text) and speak (text to speech). */
 export function voiceSupport(win = globalThis) {
-	return { listen: !!recognitionCtor(win), speak: !!win?.speechSynthesis && typeof win?.SpeechSynthesisUtterance === 'function' };
+	return { listen: !!pickEngine(win), speak: !!win?.speechSynthesis && typeof win?.SpeechSynthesisUtterance === 'function' };
+}
+
+/** Names worth spelling right when transcribing: the people and agents in the chat. */
+export function nameHints(conversation, selfId) {
+	const names = new Set(['qrypt.chat']);
+	for (const p of conversation?.participants || []) {
+		if ((p.user_id ?? p.id) === selfId) continue;
+		if (p.user?.username) names.add(p.user.username);
+		if (p.user?.display_name) names.add(p.user.display_name);
+	}
+	return [...names];
 }
 
 /**

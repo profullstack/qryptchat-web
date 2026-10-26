@@ -24,19 +24,36 @@ The bar above the composer shows what it heard and what it is doing.
 After three silent turns it pauses; tap the mic to carry on. Changing chats
 ends voice mode.
 
+## Where it works
+
+| | Speech to text | Replies read by |
+| --- | --- | --- |
+| iPhone / iPad: Safari and the home-screen app | Recorded, transcribed by qrypt.chat | The device |
+| Chrome, Edge, Android | The browser (on the device when Chrome has the language pack) | The device |
+| Firefox, Safari with Siri off, Chromium without Google's speech service | Recorded, transcribed by qrypt.chat | The device |
+
+iOS leaves speech recognition out of home-screen web apps, and in Safari it
+needs Siri and stops hearing after audio plays, so iOS always records the
+clip instead. Allow the microphone when asked; if you said no, turn it back on
+in Settings > Safari > Microphone (or the site's settings). The first tap
+unlocks audio, after which the conversation is hands free. Other browsers
+switch to recording by themselves if their recognizer refuses to run.
+
 ## Privacy
 
-Both halves use the browser's own speech engines (Web Speech API); nothing new
-goes to the qrypt.chat server, and what you say is sent as an ordinary
-ML-KEM encrypted message.
+What you say is sent as an ordinary ML-KEM encrypted message. How the words
+become text depends on the browser, and the voice bar always says which:
 
-- **Recognition** runs on the device when the browser supports it (Chrome's
-  on-device language packs, which it downloads in the background the first
-  time, and Safari). Otherwise the audio goes to the browser vendor's speech
-  service. The bar says which one is in use.
-- **Reading aloud** uses the device's voices; on-device voices are preferred.
+- **On this device:** Chrome with its on-device language pack (downloaded in
+  the background the first time).
+- **Browser speech service:** Chrome/Edge without the pack send the audio to
+  the browser vendor.
+- **qrypt.chat transcription:** the clip from one turn is posted to
+  `/api/voice/transcribe` (signed-in users only, rate limited), passed to
+  Cloudflare Workers AI Whisper, and the text comes back. It is never stored
+  or logged.
 
-Firefox has no speech recognition, so the mic does not appear there.
+Reading aloud always uses the device's own voices.
 
 ## For agents
 
@@ -47,5 +64,12 @@ Code blocks, markdown and links are cleaned up before speaking (links become
 "link to github.com"), and long replies stop after about 1,200 characters with
 "The rest is in the chat."
 
-Code: `src/lib/chat/voice-mode.js` (pure helpers), `src/lib/hooks/useVoiceMode.js`
-(the listen, send, speak loop), `src/lib/components/chat/VoiceBar.jsx`.
+Code: `src/lib/chat/voice-mode.js` (pure helpers, engine choice),
+`src/lib/chat/voice-recorder.js` (record one turn, find the pause, upload),
+`src/lib/hooks/useVoiceMode.js` (the listen, send, speak loop),
+`src/lib/components/chat/VoiceBar.jsx`, `src/app/api/voice/transcribe/route.js`
+and `src/lib/server/transcribe.js`.
+
+Server env: `CF_AI_ACCOUNT_ID`, `CF_AI_TOKEN` (a Workers AI token), optional
+`VOICE_STT_MODEL` (default `@cf/openai/whisper-large-v3-turbo`). Without them
+the route answers 503 and only browsers with their own recognizer can talk.

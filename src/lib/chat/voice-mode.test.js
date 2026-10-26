@@ -3,8 +3,11 @@ import {
 	DICTATED,
 	agentsIn,
 	dictatedMessage,
+	isIOS,
 	isStopPhrase,
+	nameHints,
 	onDeviceRecognition,
+	pickEngine,
 	pickVoice,
 	recognitionCtor,
 	shouldSpeak,
@@ -113,5 +116,26 @@ describe('pickVoice', () => {
 		expect(pickVoice(voices, 'en-US', 'riotcoder')).toBe(v);
 		expect(pickVoice(voices, 'fr-CA', 'x').name).toBe('D');
 		expect(pickVoice(voices, 'ja-JP', 'x')).toBeNull();
+	});
+});
+
+describe('engine choice', () => {
+	const fn = function () {};
+	const desktop = { navigator: { userAgent: 'Chrome', mediaDevices: { getUserMedia: fn } }, MediaRecorder: fn, AudioContext: fn };
+	const iphone = { ...desktop, navigator: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)', mediaDevices: { getUserMedia: fn } } };
+	const ipad = { ...desktop, navigator: { userAgent: 'Macintosh', platform: 'MacIntel', maxTouchPoints: 5, mediaDevices: { getUserMedia: fn } } };
+
+	it('uses the browser recognizer except on iOS, and records where there is none', () => {
+		expect(pickEngine({ ...desktop, webkitSpeechRecognition: fn })).toBe('native');
+		expect(pickEngine({ ...iphone, webkitSpeechRecognition: fn })).toBe('server');
+		expect(pickEngine({ ...ipad, webkitSpeechRecognition: fn })).toBe('server');
+		expect(pickEngine(desktop)).toBe('server');
+		expect(pickEngine({ navigator: {} })).toBeNull();
+		expect(isIOS(iphone)).toBe(true);
+		expect(isIOS({ navigator: { userAgent: 'Macintosh', platform: 'MacIntel', maxTouchPoints: 0 } })).toBe(false);
+	});
+
+	it('hints the names in the chat, not your own', () => {
+		expect(nameHints(agents, 'a')).toEqual(['qrypt.chat', 'riotcoder', 'cha0spunk']);
 	});
 });
