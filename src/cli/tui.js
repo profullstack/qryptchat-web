@@ -17,6 +17,9 @@
  * between your chats and the archived ones (also Ctrl+O; `a` in the list).
  * /names (who is here) and /list (your chats) answer IRC-style in the
  * transcript, shown only to you and never sent.
+ * @mentions complete like x.com and IRC: type @ and optionally the start of a
+ * name, then Tab (again to cycle, Shift+Tab back); the line above the composer
+ * lists the matches as you type. Tab outside an @name still switches panes.
  * The chat list reloads every 15 s as well as on live events, so it never
  * goes stale if the events stream drops.
  *
@@ -32,6 +35,7 @@ import { notify } from './notify.js';
 import { newVoiceRoomLink, parseSlashCommand, PAIRUX_URL, voiceMessage } from '../lib/chat/voice.js';
 import { listLines, namesLines } from '../lib/chat/irc.js';
 import { CHAT_LIST_EVENTS, MEMBERSHIP_EVENTS } from '../lib/chat/membership-events.js';
+import { completeMention, matchMentions, mentionAt, mentionCandidates, mentionHint } from '../lib/chat/mentions.js';
 
 const SIDEBAR = 30;
 
@@ -53,7 +57,29 @@ export function initialState(me) {
 		notice: '',
 		loading: true,
 		showArchived: false,
+		mention: null,
 	};
+}
+
+/** The people @ can complete in the open chat. */
+const mentionPeople = (state) => mentionCandidates(state.conversations.find((c) => c.id === state.activeId)?.participants, state.me?.id);
+
+/** The @name being typed and who it could be, or null: drawn above the composer. */
+export function mentionSuggestions(state) {
+	if (state.focus !== 'compose' || !state.activeId) return null;
+	const cycle = state.mention;
+	if (cycle && cycle.value === state.field.value && cycle.cursor === state.field.cursor) return { query: cycle.query, matches: cycle.matches, index: cycle.index };
+	const at = mentionAt(state.field.value, state.field.cursor);
+	return at ? { query: at.query, matches: matchMentions(mentionPeople(state), at.query), index: -1 } : null;
+}
+
+/** Tab (dir 1) or Shift+Tab (dir -1) in the composer: true when it completed an @name. */
+export function tabComplete(state, dir = 1) {
+	const done = completeMention(state.field.value, state.field.cursor, mentionPeople(state), state.mention, dir);
+	if (!done) return false;
+	state.field = { value: done.value, cursor: done.cursor };
+	state.mention = done.cycle;
+	return true;
 }
 
 /** The chats the sidebar shows: archived ones only in the archived view. */
@@ -162,6 +188,7 @@ function drawTranscript(surface, state) {
 export function render({ ui, width, height, theme }, state, on = {}) {
 	const active = state.conversations.find((c) => c.id === state.activeId);
 	const typingNames = Object.values(state.typing[state.activeId] || {}).map((t) => t.name);
+	const mention = mentionSuggestions(state);
 
 	ui.row({ size: 1 }, (bar) => {
 		bar.draw((s) => {
@@ -218,11 +245,18 @@ export function render({ ui, width, height, theme }, state, on = {}) {
 					drawTranscript(s, state);
 					p.ctx.hit({ rect: s.hitRect(), onScroll: (delta) => on.scroll?.(-delta) });
 				}, { size: 'fill' });
-				p.label(typingNames.length ? `${typingNames.join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typing…` : ' ', { size: 1 });
+				p.label(
+					mention
+						? mentionHint(mention.matches, mention.query, mention.index)
+						: typingNames.length
+							? `${typingNames.join(', ')} ${typingNames.length === 1 ? 'is' : 'are'} typing…`
+							: ' ',
+					{ size: 1 },
+				);
 				p.textInput({
 					value: state.field.value,
 					cursor: state.field.cursor,
-					placeholder: active ? `Message ${active.title}  (Ctrl+E emoji, :rocket: works too)` : 'Pick a chat first',
+					placeholder: active ? `Message ${active.title}  (@name Tab, Ctrl+E emoji, :rocket: works too)` : 'Pick a chat first',
 					focused: state.focus === 'compose' && !state.picker,
 					size: 1,
 				});
@@ -234,7 +268,7 @@ export function render({ ui, width, height, theme }, state, on = {}) {
 		items: [
 			{ key: 'Enter', label: state.focus === 'list' ? 'open' : 'send' },
 			{ key: 'Ctrl+E', label: 'emoji' },
-			{ key: 'Tab', label: state.focus === 'list' ? 'compose' : 'chats' },
+			{ key: 'Tab', label: state.focus === 'list' ? 'compose' : mention?.matches.length ? 'complete @' : 'chats' },
 			{ key: 'PgUp', label: 'scroll' },
 			...(state.focus === 'list' ? [{ key: 'a', label: state.showArchived ? 'unarchive' : 'archive' }] : []),
 			{ key: 'Ctrl+O', label: state.showArchived ? 'chats' : 'archived' },
@@ -489,6 +523,8 @@ export async function runTui(client, { initialChat } = {}) {
 		if (state.picker) return; // the picker's own key handler has it
 		if (event.key === 'ctrl+e') {
 			state.picker = widgets.createEmojiPicker(state.recent);
+		} else if ((event.key === 'tab' || event.key === 'shift+tab') && state.focus === 'compose' && tabComplete(state, event.key === 'tab' ? 1 : -1)) {
+			typed();
 		} else if (event.key === 'tab' || event.key === 'shift+tab' || (event.key === 'escape' && state.focus === 'compose')) {
 			state.focus = state.focus === 'list' ? 'compose' : 'list';
 		} else if (event.key === 'pageup') {

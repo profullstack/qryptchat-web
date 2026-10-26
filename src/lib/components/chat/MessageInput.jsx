@@ -13,6 +13,7 @@ import { newVoiceRoomLink, parseSlashCommand, voiceMessage } from '@/lib/chat/vo
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 import { IRC_COMMANDS, listLines, namesLines } from '@/lib/chat/irc.js';
 import { agentsIn } from '@/lib/chat/voice-mode.js';
+import { completeMention, insertMention, matchMentions, mentionAt, mentionCandidates } from '@/lib/chat/mentions.js';
 import { useVoiceMode } from '@/lib/hooks/useVoiceMode.js';
 import VoiceBar from './VoiceBar.jsx';
 import { setBusy } from '@/lib/app-update.js';
@@ -102,6 +103,59 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const chatAgents = agentsIn(activeConversation, user?.id);
   function talkToAgents() {
     return useChatStore.getState().startCall(conversationId, { video: false });
+  }
+
+  // @mentions like x.com and IRC: type @ (and maybe the start of a name) and the
+  // matches show above the composer; ↑/↓ move, Tab or Enter picks, Tab again
+  // cycles the next match, Esc closes, a tap picks on a phone.
+  const people = mentionCandidates(activeConversation?.participants, user?.id);
+  const [caret, setCaretAt] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionClosedAt, setMentionClosedAt] = useState(null);
+  const mentionCycle = useRef(null);
+  const mention = mentionAt(messageText, Math.min(caret, messageText.length));
+  const mentionList = mention && mentionClosedAt !== mention.start ? matchMentions(people, mention.query) : [];
+  const shownMentions = mentionList.slice(0, 8);
+  const mentionKey = mention ? `${mention.start}:${mention.query}` : '';
+  useEffect(() => {
+    setMentionIndex(0);
+    // Esc closes the list for that one @; a new one opens it again.
+    if (!mention) setMentionClosedAt(null);
+  }, [mentionKey]);
+
+  function pickMention(i) {
+    const done = insertMention(messageText, mention, mentionList[i].username);
+    // Remembered so a further Tab moves on to the next match, as in IRC.
+    mentionCycle.current = { start: mention.start, query: mention.query, matches: mentionList, index: i, value: done.value, cursor: done.cursor };
+    editorRef.current?.replace(done.value, done.cursor);
+  }
+
+  function handleMentionKey(e, { value, selection }) {
+    if (shownMentions.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const n = shownMentions.length;
+        setMentionIndex((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + n) % n);
+        return;
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault();
+        pickMention(Math.min(mentionIndex, shownMentions.length - 1));
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionClosedAt(mention.start);
+        return;
+      }
+    }
+    if (e.key === 'Tab' && selection) {
+      const done = completeMention(value, selection.end, people, mentionCycle.current, e.shiftKey ? -1 : 1);
+      if (!done) return; // Tab keeps its usual job
+      e.preventDefault();
+      mentionCycle.current = done.cycle;
+      editorRef.current?.replace(done.value, done.cursor);
+    }
   }
 
   // An unsent draft or a voice conversation holds off the automatic reload after a deploy.
@@ -366,6 +420,30 @@ export default function MessageInput({ conversationId, disabled = false }) {
 
       <VoiceBar voice={voice} agents={agentsIn(activeConversation, user?.id)} />
 
+      {shownMentions.length > 0 && (
+        <ul className="mention-list" role="listbox" aria-label="Mention someone">
+          {shownMentions.map((c, i) => (
+            <li
+              key={c.username}
+              role="option"
+              aria-selected={i === mentionIndex}
+              className={`mention-item${i === mentionIndex ? ' active' : ''}`}
+              // Keep the caret in the editor: pick on mousedown, before it blurs.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pickMention(i);
+              }}
+              onMouseEnter={() => setMentionIndex(i)}
+            >
+              <span className="mention-username">@{c.username}</span>
+              {c.agent && <span className="mention-agent" title="AI agent">🤖</span>}
+              {c.name && <span className="mention-name">{c.name}</span>}
+            </li>
+          ))}
+          <li className="mention-hint" aria-hidden="true">↑↓ to choose · Tab or Enter to mention · Esc to close</li>
+        </ul>
+      )}
+
       {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
 
       {replyingTo && (
@@ -404,9 +482,11 @@ export default function MessageInput({ conversationId, disabled = false }) {
           className="message-textarea"
           value={messageText}
           onChange={handleChange}
+          onCaret={setCaretAt}
+          onKeyDown={handleMentionKey}
           onSubmit={handleSend}
           onEscape={replyingTo ? clearReplyingTo : undefined}
-          placeholder="Type a message... (/voice starts a voice room)"
+          placeholder="Type a message... (@ mentions, /voice starts a voice room)"
           disabled={disabled || isSending}
         />
         {/* Always drawn: where voice cannot work, the tap says why (a hidden button explains nothing). */}
@@ -444,6 +524,12 @@ export default function MessageInput({ conversationId, disabled = false }) {
         .irc-notice-title { font-weight: 600; }
         .irc-notice-hint { opacity: .6; font-size: .75rem; margin-top: .25rem; }
         .irc-notice-close { position: absolute; top: .25rem; right: .5rem; background: none; border: 0; color: inherit; font-size: 1rem; cursor: pointer; opacity: .7; }
+        .mention-list { list-style: none; margin: 0 0 .5rem; padding: .25rem; max-height: 16rem; overflow: auto; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: .75rem; box-shadow: 0 4px 16px rgba(0,0,0,.15); }
+        .mention-item { display: flex; align-items: baseline; gap: .5rem; padding: .4rem .6rem; border-radius: .5rem; cursor: pointer; color: var(--color-text-primary); font-size: .875rem; }
+        .mention-item.active { background: var(--color-bg-tertiary); }
+        .mention-username { font-weight: 600; }
+        .mention-name { color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mention-hint { padding: .25rem .6rem 0; font-size: .75rem; color: var(--color-text-muted); }
         .encryption-error { color: var(--color-error); font-size: .8125rem; margin-bottom: .5rem; padding: .5rem; background: rgba(239,68,68,.1); border-radius: .375rem; }
         .file-preview-list { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
         .file-chip { display: flex; align-items: center; gap: .4rem; max-width: 240px; padding: .35rem .5rem; background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary); border-radius: .5rem; font-size: .8125rem; color: var(--color-text-primary); }
