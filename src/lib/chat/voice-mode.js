@@ -15,7 +15,9 @@
 
 import { CALL_TYPE } from './calls.js';
 import { REACTION_TYPE } from './reactions.js';
-import { canRecord } from './voice-recorder.js';
+import { canRecord, isIOS } from './voice-recorder.js';
+
+export { isIOS };
 
 /** Marks a message as dictated, so agents know to answer in speakable prose. */
 export const DICTATED = '🗣️';
@@ -27,12 +29,6 @@ export function recognitionCtor(win = globalThis) {
 	return win?.SpeechRecognition || win?.webkitSpeechRecognition || null;
 }
 
-/** iPhone, iPad (which reports itself as a Mac) or iPod. */
-export function isIOS(win = globalThis) {
-	const nav = win?.navigator || {};
-	return /iPad|iPhone|iPod/.test(nav.userAgent || '') || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
-}
-
 /**
  * How to turn speech into text here:
  *   'native'  the browser's SpeechRecognition
@@ -41,7 +37,9 @@ export function isIOS(win = globalThis) {
  * needs Siri on, and it goes deaf after audio plays (WebKit 321436).
  */
 export function pickEngine(win = globalThis) {
-	if (recognitionCtor(win) && !isIOS(win)) return 'native';
+	// On iOS always record: if the microphone is out of reach the recorder says exactly why.
+	if (isIOS(win)) return 'server';
+	if (recognitionCtor(win)) return 'native';
 	if (canRecord(win)) return 'server';
 	return null;
 }

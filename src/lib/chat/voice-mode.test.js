@@ -139,3 +139,11 @@ describe('engine choice', () => {
 		expect(nameHints(agents, 'a')).toEqual(['qrypt.chat', 'riotcoder', 'cha0spunk']);
 	});
 });
+
+describe('iOS without a reachable microphone', () => {
+	it('still offers voice so the tap can say what is wrong', () => {
+		const iphoneNoMic = { navigator: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X)' } };
+		expect(pickEngine(iphoneNoMic)).toBe('server');
+		expect(voiceSupport(iphoneNoMic).listen).toBe(true);
+	});
+});

@@ -3,7 +3,8 @@
  * iOS home-screen apps (WebKit leaves SpeechRecognition out of them), Safari
  * with Siri off, Firefox, Chromium builds without Google's speech service.
  *
- * It records one utterance with MediaRecorder, finds the pause itself from
+ * It records one utterance (MediaRecorder, or raw audio packed into a WAV
+ * file on iOS, where MediaRecorder is unreliable in home-screen apps), finds the pause itself from
  * the microphone level, sends the clip to /api/voice/transcribe and reports
  * the text through the same events as SpeechRecognition (onresult, onerror,
  * onend, plus onspeechstart/onaudioend), so voice mode drives either one.
@@ -30,9 +31,67 @@ export function unlockAudio(win = globalThis) {
 	} catch {}
 }
 
-/** Whether this browser can record a clip for server transcription. */
+/** iPhone, iPad (which reports itself as a Mac) or iPod. */
+export function isIOS(win = globalThis) {
+	const nav = win?.navigator || {};
+	return /iPad|iPhone|iPod/.test(nav.userAgent || '') || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+}
+
+/** What recording needs that this browser lacks (empty when it can record). */
+export function micMissing(win = globalThis) {
+	const missing = [];
+	if (!win?.isSecureContext && win?.isSecureContext !== undefined) missing.push('a secure (https) page');
+	if (!win?.navigator?.mediaDevices?.getUserMedia) missing.push('microphone access (navigator.mediaDevices)');
+	if (!(win?.AudioContext || win?.webkitAudioContext)) missing.push('Web Audio');
+	return missing;
+}
+
+/** Whether this browser can record a clip for server transcription (MediaRecorder is optional: WAV fallback). */
 export function canRecord(win = globalThis) {
-	return !!(win?.navigator?.mediaDevices?.getUserMedia && win.MediaRecorder && (win.AudioContext || win.webkitAudioContext));
+	return micMissing(win).length === 0;
+}
+
+/** Record raw audio and pack a WAV instead of using MediaRecorder: iOS, or browsers without it. */
+export const useWav = (win = globalThis) => isIOS(win) || !win?.MediaRecorder;
+
+/** Average-downsample mono float samples, e.g. 48 kHz to 16 kHz for speech. */
+export function downsample(samples, from, to = 16000) {
+	if (from <= to) return samples;
+	const ratio = from / to;
+	const out = new Float32Array(Math.floor(samples.length / ratio));
+	for (let i = 0; i < out.length; i++) {
+		const start = Math.floor(i * ratio);
+		const end = Math.min(samples.length, Math.floor((i + 1) * ratio));
+		let sum = 0;
+		for (let j = start; j < end; j++) sum += samples[j];
+		out[i] = sum / Math.max(1, end - start);
+	}
+	return out;
+}
+
+/** 16-bit PCM mono WAV bytes. */
+export function encodeWav(samples, sampleRate) {
+	const buf = new ArrayBuffer(44 + samples.length * 2);
+	const v = new DataView(buf);
+	const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+	str(0, 'RIFF');
+	v.setUint32(4, 36 + samples.length * 2, true);
+	str(8, 'WAVE');
+	str(12, 'fmt ');
+	v.setUint32(16, 16, true);
+	v.setUint16(20, 1, true);
+	v.setUint16(22, 1, true);
+	v.setUint32(24, sampleRate, true);
+	v.setUint32(28, sampleRate * 2, true);
+	v.setUint16(32, 2, true);
+	v.setUint16(34, 16, true);
+	str(36, 'data');
+	v.setUint32(40, samples.length * 2, true);
+	for (let i = 0; i < samples.length; i++) {
+		const x = Math.max(-1, Math.min(1, samples[i]));
+		v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+	}
+	return new Uint8Array(buf);
 }
 
 export function recorderMimeType(MR = globalThis.MediaRecorder) {
@@ -119,6 +178,7 @@ export class RecorderRecognition {
 
 	async start() {
 		const win = globalThis;
+		if (!canRecord(win)) return this._fail('audio-capture', `This app can't reach the microphone here: missing ${micMissing(win).join(', ')}.`);
 		setAudioSession('play-and-record', win);
 		try {
 			this._stream = await win.navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -139,13 +199,32 @@ export class RecorderRecognition {
 		this._source = source;
 		const buf = new Float32Array(analyser.fftSize);
 
-		const mimeType = recorderMimeType(win.MediaRecorder);
-		const rec = new win.MediaRecorder(this._stream, mimeType ? { mimeType } : undefined);
-		const chunks = [];
-		rec.ondataavailable = (e) => e.data?.size && chunks.push(e.data);
-		rec.onstop = () => this._finish(new Blob(chunks, { type: rec.mimeType || mimeType || 'audio/webm' }));
-		this._rec = rec;
-		rec.start();
+		if (useWav(win)) {
+			// Raw samples through a ScriptProcessor (supported everywhere, iOS included); its output stays silent.
+			const proc = ctx.createScriptProcessor(4096, 1, 1);
+			const pcm = [];
+			proc.onaudioprocess = (e) => pcm.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+			source.connect(proc);
+			proc.connect(ctx.destination);
+			this._proc = proc;
+			this._wav = () => {
+				const all = new Float32Array(pcm.reduce((n, c) => n + c.length, 0));
+				let o = 0;
+				for (const c of pcm) {
+					all.set(c, o);
+					o += c.length;
+				}
+				return new Blob([encodeWav(downsample(all, ctx.sampleRate), Math.min(ctx.sampleRate, 16000))], { type: 'audio/wav' });
+			};
+		} else {
+			const mimeType = recorderMimeType(win.MediaRecorder);
+			const rec = new win.MediaRecorder(this._stream, mimeType ? { mimeType } : undefined);
+			const chunks = [];
+			rec.ondataavailable = (e) => e.data?.size && chunks.push(e.data);
+			rec.onstop = () => this._finish(new Blob(chunks, { type: rec.mimeType || mimeType || 'audio/webm' }));
+			this._rec = rec;
+			rec.start();
+		}
 
 		const ep = createEndpointer();
 		this._endpointer = ep;
@@ -165,6 +244,11 @@ export class RecorderRecognition {
 	/** Stop listening and transcribe what was heard. */
 	stop() {
 		clearInterval(this._timer);
+		if (this._wav) {
+			const make = this._wav;
+			this._wav = null;
+			return this._finish(this._aborted ? null : make());
+		}
 		if (this._rec && this._rec.state !== 'inactive') {
 			try {
 				this._rec.stop();
@@ -208,16 +292,20 @@ export class RecorderRecognition {
 		this.onend?.();
 	}
 
-	_fail(error) {
+	_fail(error, message) {
 		this._done = true;
 		this._release();
-		this.onerror?.({ error });
+		this.onerror?.({ error, message });
 		this.onend?.();
 	}
 
 	_release() {
 		try {
 			this._source?.disconnect();
+			if (this._proc) {
+				this._proc.onaudioprocess = null;
+				this._proc.disconnect();
+			}
 		} catch {}
 		this._stream?.getTracks().forEach((t) => t.stop());
 		this._stream = null;

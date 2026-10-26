@@ -1,5 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RecorderRecognition, createEndpointer, recorderMimeType, transcribeClip } from './voice-recorder.js';
+import { RecorderRecognition, createEndpointer, downsample, encodeWav, micMissing, recorderMimeType, transcribeClip, useWav } from './voice-recorder.js';
+
+describe('WAV fallback', () => {
+	it('packs 16-bit mono PCM with a valid header', () => {
+		const wav = encodeWav(new Float32Array([0, 1, -1, 0.5]), 16000);
+		const v = new DataView(wav.buffer);
+		const str = (o) => String.fromCharCode(...wav.slice(o, o + 4));
+		expect([str(0), str(8), str(12), str(36)]).toEqual(['RIFF', 'WAVE', 'fmt ', 'data']);
+		expect(v.getUint32(24, true)).toBe(16000);
+		expect(v.getUint32(40, true)).toBe(8);
+		expect([v.getInt16(44, true), v.getInt16(46, true), v.getInt16(48, true)]).toEqual([0, 32767, -32768]);
+	});
+
+	it('downsamples 48 kHz to 16 kHz by averaging', () => {
+		const out = downsample(new Float32Array([0, 0.3, 0.6, 1, 1, 1]), 48000);
+		expect(Array.from(out).map((x) => +x.toFixed(2))).toEqual([0.3, 1]);
+		const same = new Float32Array([1]);
+		expect(downsample(same, 16000)).toBe(same);
+	});
+
+	it('uses WAV on iOS or without MediaRecorder, and names what is missing', () => {
+		const iphone = { navigator: { userAgent: 'iPhone' }, MediaRecorder: function () {} };
+		expect(useWav(iphone)).toBe(true);
+		expect(useWav({ navigator: { userAgent: 'Chrome' }, MediaRecorder: function () {} })).toBe(false);
+		expect(useWav({ navigator: { userAgent: 'Firefox' } })).toBe(true);
+		expect(micMissing({ isSecureContext: true, navigator: {}, AudioContext: function () {} })).toEqual(['microphone access (navigator.mediaDevices)']);
+		expect(micMissing({ isSecureContext: true, navigator: { mediaDevices: { getUserMedia() {} } }, webkitAudioContext: function () {} })).toEqual([]);
+	});
+});
 
 const feed = (ep, level, ms) => {
 	const out = [];
@@ -54,7 +82,9 @@ describe('transcribeClip', () => {
 describe('RecorderRecognition', () => {
 	let level;
 	let track;
+	let procs;
 	beforeEach(() => {
+		procs = [];
 		vi.useFakeTimers();
 		level = 0.001;
 		track = { stop: vi.fn() };
@@ -66,6 +96,16 @@ describe('RecorderRecognition', () => {
 			}
 			createAnalyser() {
 				return { fftSize: 0, getFloatTimeDomainData: (buf) => buf.fill(level) };
+			}
+			createScriptProcessor() {
+				procs.push({ connect() {}, disconnect() {} });
+				return procs.at(-1);
+			}
+			get sampleRate() {
+				return 48000;
+			}
+			get destination() {
+				return {};
 			}
 		};
 		window.MediaRecorder = class {
@@ -131,5 +171,36 @@ describe('RecorderRecognition', () => {
 		rec.onend = () => events.push('end');
 		await rec.start();
 		expect(events).toEqual(['not-allowed', 'end']);
+	});
+
+	it('records a WAV without MediaRecorder (the iOS path) and transcribes it', async () => {
+		delete window.MediaRecorder;
+		const rec = new RecorderRecognition();
+		const events = [];
+		rec.onresult = (e) => events.push(e.results[0][0].transcript);
+		rec.onend = () => events.push('end');
+		await rec.start();
+		const feed = (v) => procs[0].onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4800).fill(v) } });
+		await vi.advanceTimersByTimeAsync(400);
+		level = 0.2;
+		feed(0.2);
+		await vi.advanceTimersByTimeAsync(600);
+		level = 0.001;
+		feed(0);
+		await vi.advanceTimersByTimeAsync(1500);
+		expect(events).toEqual(['deploy crawlproof', 'end']);
+		const [, init] = fetch.mock.calls[0];
+		expect(init.headers['Content-Type']).toBe('audio/wav');
+		expect(init.body.size).toBe(44 + 2 * 3200);
+		expect(procs[0].onaudioprocess).toBeNull();
+	});
+
+	it("says what is missing when the page can't reach the microphone", async () => {
+		delete navigator.mediaDevices;
+		const rec = new RecorderRecognition();
+		const events = [];
+		rec.onerror = (e) => events.push(`${e.error}: ${e.message}`);
+		await rec.start();
+		expect(events[0]).toMatch(/^audio-capture: .*navigator\.mediaDevices/);
 	});
 });
