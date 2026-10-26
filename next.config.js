@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 // Security headers applied to every response. We deliberately do NOT set a
 // restrictive script-src/style-src CSP here: the app relies on inline styles,
 // Next.js inline bootstrap scripts, the crawlproof.com analytics script, and
@@ -14,9 +16,17 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'geolocation=(), browsing-topics=()' },
 ];
 
+// One id per build, baked into the client and the server alike. An installed
+// iOS web app is resumed from memory rather than reloaded, so it compares its
+// own id with /api/version to learn that a newer build is live
+// (src/lib/app-update.js).
+const BUILD_ID = `${JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version}-${Date.now().toString(36)}`;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  generateBuildId: async () => BUILD_ID,
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   // The image runs the standalone server under Bun (`bun server.js` from
   // entrypoint.sh): server.js plus only the dependencies it imports.
   output: 'standalone',

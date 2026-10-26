@@ -15,6 +15,7 @@ import { IRC_COMMANDS, listLines, namesLines } from '@/lib/chat/irc.js';
 import { agentsIn } from '@/lib/chat/voice-mode.js';
 import { useVoiceMode } from '@/lib/hooks/useVoiceMode.js';
 import VoiceBar from './VoiceBar.jsx';
+import { setBusy } from '@/lib/app-update.js';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
@@ -78,6 +79,17 @@ export default function MessageInput({ conversationId, disabled = false }) {
     send: (text) => sendMessage(conversationId, text, 'text'),
   });
   const voiceOn = voice.phase !== 'off';
+
+  // An unsent draft or a voice conversation holds off the automatic reload after a deploy.
+  const drafting = !!messageText.trim() || selectedFiles.length > 0;
+  useEffect(() => {
+    setBusy('composer', drafting);
+    setBusy('voice', voiceOn);
+  }, [drafting, voiceOn]);
+  useEffect(() => () => {
+    setBusy('composer', false);
+    setBusy('voice', false);
+  }, []);
 
   // Choosing Reply on a message puts the caret straight in the composer.
   useEffect(() => {
