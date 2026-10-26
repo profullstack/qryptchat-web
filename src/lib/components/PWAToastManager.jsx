@@ -19,6 +19,15 @@ export default function PWAToastManager() {
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
+      // A new worker took over (it activates at once): reload into it unless
+      // something is in progress. Not on first install, when there was no worker.
+      const hadWorker = !!navigator.serviceWorker.controller;
+      const onControllerChange = () => {
+        if (!hadWorker) return;
+        if (isBusy() || useChatStore.getState().activeCall) setUpdateAvailable(true);
+        else window.location.reload();
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
       navigator.serviceWorker.ready.then((reg) => {
         registration.current = reg;
         reg.addEventListener('updatefound', () => {
@@ -32,6 +41,7 @@ export default function PWAToastManager() {
           }
         });
       });
+      return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
     }
   }, []);
 

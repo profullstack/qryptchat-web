@@ -4,8 +4,9 @@
  */
 
 // Bumped to v1 -> v2 so clients running the old cache-first worker drop the
-// stale app shell they precached on install.
-const CACHE_NAME = 'qryptchat-v2';
+// stale app shell they precached on install. v3: page loads skip the HTTP
+// cache's stale copies (see the fetch handler).
+const CACHE_NAME = 'qryptchat-v3';
 const OFFLINE_SHELL = '/';
 const STATIC_CACHE_URLS = [
   OFFLINE_SHELL,
@@ -40,7 +41,8 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Opened cache');
-        return cache.addAll(STATIC_CACHE_URLS);
+        // 'reload' skips the HTTP cache, so the offline shell is never a stale copy.
+        return cache.addAll(STATIC_CACHE_URLS.map((u) => new Request(u, { cache: 'reload' })));
       })
       .then(() => {
         // Skip waiting to activate immediately
@@ -87,9 +89,13 @@ self.addEventListener('fetch', (event) => {
   // Page loads are network-first with the cached shell as an offline fallback.
   // Cache-first here pinned the installed app to the HTML captured at install
   // time, whose hashed Next.js chunks stop existing after the next deploy.
+  //
+  // cache: 'no-cache' makes the browser check with the server every time. Pages
+  // used to be served with stale-while-revalidate for a year, and a plain
+  // fetch() here let the browser hand back that stale copy instead.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-cache' })
         .then((response) => {
           if (response.ok && url.pathname === OFFLINE_SHELL) {
             const copy = response.clone();
