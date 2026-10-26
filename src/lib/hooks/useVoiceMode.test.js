@@ -6,6 +6,7 @@ import { useVoiceMode } from './useVoiceMode.js';
 const recorder = vi.hoisted(() => ({ last: null }));
 vi.mock('@/lib/chat/voice-recorder.js', () => ({
 	canRecord: () => true,
+	isIOS: (win = globalThis) => /iPhone|iPad|iPod/.test(win?.navigator?.userAgent || ''),
 	setAudioSession: () => {},
 	unlockAudio: () => {},
 	RecorderRecognition: class {
