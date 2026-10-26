@@ -51,6 +51,34 @@ export default function HomeContent() {
         </div>
       </div>
 
+      <section className="agents-voice" aria-labelledby="agents-voice-title">
+        <div className="container">
+          <div className="agents-voice-inner">
+            <div className="agents-voice-copy">
+              <span className="agents-voice-badge">🎙️ New</span>
+              <h2 id="agents-voice-title">Voice chat with your AI agents</h2>
+              <p className="agents-voice-lede">
+                Invite your agents to a group, give them names, and just talk. They join the call, listen,
+                take turns like people, and answer out loud in their own voices. Ask for real work and they
+                get on it, then tell you how it went.
+              </p>
+              <ol className="agents-voice-steps">
+                <li><strong>Invite your agents.</strong> Settings → AI agents sends an invite by link, email or text; an agent joins with <code>qc agent join</code> and makes its own keys.</li>
+                <li><strong>Name them and add them to a group.</strong> One agent for code, one for your inbox, whatever you run: they each know their job.</li>
+                <li><strong>Tap the mic.</strong> A voice call starts, your agents join, and you talk. Everything they say is also written into the chat.</li>
+              </ol>
+              <Link href="/auth" className="btn btn-primary agents-voice-cta">Start talking to your agents</Link>
+            </div>
+            <div className="agents-voice-call" aria-hidden="true">
+              <div className="call-line you"><span>You</span>riotcoder, is the deploy green?</div>
+              <div className="call-line agent"><span>🤖 riotcoder</span>Yep, all green. Want me to post the release notes?</div>
+              <div className="call-line agent alt"><span>🤖 cha0spunk</span>And your inbox is clear, nothing waiting.</div>
+              <div className="call-foot">🔒 End-to-end encrypted voice call</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="features">
         <div className="container">
           <div className="section-header">
@@ -64,6 +92,7 @@ export default function HomeContent() {
               { num: '03', title: '🔐 Encrypted Voice & Video Calls', desc: 'Crystal-clear 1:1 and group calls protected with ML-KEM-1024 post-quantum encryption.' },
               { num: '04', title: 'Real-time Messaging', desc: 'Instant message delivery with typing indicators and read receipts.' },
               { num: '05', title: 'Multi-language Support', desc: 'Available in multiple languages with full internationalization support.' },
+              { num: '06', title: '🤖 Voice Chat With Your AI Agents', desc: 'Invite your agents to a group, name them, and talk: they join an encrypted call and answer in their own voices.' },
             ].map(({ num, title, desc }) => (
               <div key={num} className="feature-item">
                 <div className="feature-number">{num}</div>
@@ -100,6 +129,25 @@ export default function HomeContent() {
         .steps li { color: var(--color-text-secondary); line-height: 1.7; font-size: 1.0625rem; }
         .steps li strong { color: var(--color-text-primary); }
         .audience { max-width: 760px; margin: var(--space-8) auto 0; text-align: center; color: var(--color-text-secondary); line-height: 1.7; }
+        .agents-voice { padding: var(--space-20) 0; background: var(--color-bg-primary); }
+        .agents-voice-inner { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--space-12); align-items: center; }
+        .agents-voice-badge { display: inline-block; padding: var(--space-1) var(--space-3); border-radius: 999px; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); font-size: .8125rem; font-weight: 600; color: var(--color-brand-primary); margin-bottom: var(--space-4); }
+        .agents-voice h2 { font-size: 2.5rem; font-weight: 800; line-height: 1.15; color: var(--color-text-primary); margin-bottom: var(--space-4); }
+        .agents-voice-lede { font-size: 1.1875rem; line-height: 1.7; color: var(--color-text-secondary); margin-bottom: var(--space-6); }
+        .agents-voice-steps { padding-left: var(--space-6); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-8); color: var(--color-text-secondary); line-height: 1.6; }
+        .agents-voice-steps strong { color: var(--color-text-primary); }
+        .agents-voice-steps code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: var(--color-bg-secondary); padding: 0 .3em; border-radius: 4px; }
+        .agents-voice-cta { padding: var(--space-4) var(--space-8); font-size: 1.0625rem; font-weight: 600; }
+        .agents-voice-call { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-6); border-radius: var(--radius-xl); background: linear-gradient(135deg, var(--color-brand-primary) 0%, var(--color-brand-secondary) 100%); box-shadow: var(--shadow-xl); }
+        .call-line { max-width: 85%; padding: var(--space-3) var(--space-4); border-radius: 1rem; background: rgba(255,255,255,.95); color: #1a1a2e; line-height: 1.45; font-size: .9375rem; }
+        .call-line span { display: block; font-size: .75rem; font-weight: 700; opacity: .65; margin-bottom: 2px; }
+        .call-line.you { align-self: flex-end; background: rgba(0,0,0,.35); color: #fff; }
+        .call-line.alt { background: rgba(255,255,255,.85); }
+        .call-foot { color: rgba(255,255,255,.85); font-size: .8125rem; text-align: center; margin-top: var(--space-2); }
+        @media (max-width: 768px) {
+          .agents-voice-inner { grid-template-columns: 1fr; }
+          .agents-voice h2 { font-size: 2rem; }
+        }
       `}</style>
 
       <style>{`
@@ -127,6 +175,8 @@ export default function HomeContent() {
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
+        /* Grid items default to min-width:auto, so the nowrap install command stretched the page on phones. */
+        .hero-text, .hero-visual, .agents-voice-copy, .agents-voice-call { min-width: 0; }
         .hero-tagline { font-size: 1.5rem; font-weight: 600; margin-bottom: var(--space-4); opacity: 0.9; }
         .hero-description { font-size: 1.125rem; line-height: 1.7; margin-bottom: var(--space-8); opacity: 0.8; }
         .hero-actions { display: flex; gap: var(--space-4); }

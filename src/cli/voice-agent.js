@@ -14,7 +14,8 @@
  * The brain is any command (--brain "cmd"): it gets one JSON object on stdin
  *   { agent, conversationId, title, speaker, speakerId, text, at, transcript: [{ who, text }] }
  * and prints PASS (say nothing) or SAY: <what to say>. It may post to the chat
- * itself; with --post the agent posts what it says as "🔊 …".
+ * itself; with --post the agent posts what it says as "🔊 …". --tts <url> speaks with your
+ * own voice server (POST { text, voice } -> 16-bit PCM WAV), falling back to qrypt.chat's.
  *
  * Needs @livekit/rtc-node (npm i -g @livekit/rtc-node), loaded only here.
  */
@@ -119,8 +120,8 @@ export function askBrain(cmd, input, { timeoutMs = 90_000, env = process.env } =
 
 /** One call the agent is in. */
 export class CallSession {
-	constructor({ client, rtc, conversation, call, brain, voice, post, log, isHuman }) {
-		Object.assign(this, { client, rtc, conversation, call, brain, voice, post, log, isHuman });
+	constructor({ client, rtc, conversation, call, brain, voice, tts, post, log, isHuman }) {
+		Object.assign(this, { client, rtc, conversation, call, brain, voice, ttsUrl: tts, post, log, isHuman });
 		this.transcript = [];
 		this.queue = Promise.resolve();
 		this.speakToken = 0;
@@ -146,8 +147,9 @@ export class CallSession {
 		await room.connect(url, token, { autoSubscribe: true, e2ee: e2eeOptions(this.call.key) });
 		this.source = new AudioSource(SPEAK_RATE, 1);
 		const track = LocalAudioTrack.createAudioTrack(`${this.client.me?.username || 'agent'}-voice`, this.source);
-		const opts = new TrackPublishOptions();
-		opts.source = TrackSource.SOURCE_MICROPHONE;
+		// Speech, not music, but synthetic: a higher Opus bitrate and no DTX keep it from sounding
+		// clipped and robotic; RED makes lost packets cheaper.
+		const opts = new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE, dtx: false, red: true, audioEncoding: { maxBitrate: 64000n } });
 		await room.localParticipant.publishTrack(track, opts);
 		this.log(`joined the call in ${this.conversation.title}`);
 		this.watchdog = setInterval(() => this.checkAlone(), 5000);
@@ -262,6 +264,20 @@ export class CallSession {
 	}
 
 	async tts(sentence) {
+		// Our own voice server first (--tts, e.g. a local Kokoro), then qrypt.chat's.
+		if (this.ttsUrl) {
+			try {
+				const res = await this.client.fetch(this.ttsUrl, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ text: sentence, voice: this.voice }),
+				});
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return wavSamples(new Uint8Array(await res.arrayBuffer()));
+			} catch (e) {
+				this.log(`--tts failed (${e.message}); using qrypt.chat's voice`);
+			}
+		}
 		const res = await this.client.fetch(`${this.client.base}/api/voice/speak`, {
 			method: 'POST',
 			headers: { Authorization: `Bearer ${await this.client.token()}`, 'Content-Type': 'application/json' },
@@ -315,7 +331,7 @@ async function latestCall(client, conversationId) {
  * Run the agent: join calls in its chats as they start, until stopped.
  * `rtc` and `onSession` are for tests.
  */
-export async function runVoiceAgent(client, { brain, voice = 'orion', post = false, greet = true, hearAgents = false, log = (s) => process.stderr.write(`qc agent call: ${s}\n`), rtc, signal } = {}) {
+export async function runVoiceAgent(client, { brain, voice = 'orion', tts, post = false, greet = true, hearAgents = false, log = (s) => process.stderr.write(`qc agent call: ${s}\n`), rtc, signal } = {}) {
 	if (!brain) throw new Error('Usage: qc agent call --brain "<command>" [--voice orion] [--post] [--no-greet]');
 	rtc ??= await loadRtc();
 	const sessions = new Map();
@@ -330,7 +346,7 @@ export async function runVoiceAgent(client, { brain, voice = 'orion', post = fal
 
 	const join = async (conversation, call) => {
 		if (sessions.has(conversation.id) || Date.now() - Date.parse(call.at) > MAX_CALL_MS) return;
-		const session = new CallSession({ client, rtc, conversation, call, brain, voice, post, log, isHuman });
+		const session = new CallSession({ client, rtc, conversation, call, brain, voice, tts, post, log, isHuman });
 		sessions.set(conversation.id, session);
 		session.onClose = () => sessions.delete(conversation.id);
 		try {
