@@ -21,7 +21,8 @@ const result = await Bun.build({
 	target: 'node',
 	format: 'esm',
 	splitting: true,
-	external: Object.keys(pkg.dependencies),
+	// Runtime dependencies and optional peers (@livekit/rtc-node, for qc agent call) are installed by npm, not bundled.
+	external: [...Object.keys(pkg.dependencies), ...Object.keys(pkg.peerDependencies ?? {})],
 	naming: { entry: '[name].js', chunk: 'chunk-[hash].js' },
 });
 if (!result.success) {

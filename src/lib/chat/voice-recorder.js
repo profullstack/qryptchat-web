@@ -109,7 +109,7 @@ export function setAudioSession(type, win = globalThis) {
  * Speech/silence from a stream of RMS levels, sampled every `stepMs`.
  * Calibrates the noise floor on the first samples so a noisy room still ends.
  */
-export function createEndpointer({ stepMs = 50, silenceMs = 1100, noSpeechMs = 8000, maxMs = 60000, minLevel = 0.012, maxThreshold = 0.05 } = {}) {
+export function createEndpointer({ stepMs = 50, silenceMs = 1100, noSpeechMs = 8000, maxMs = 60000, minLevel = 0.012, maxThreshold = 0.05, speechMs = 150 } = {}) {
 	let t = 0;
 	let floor = null;
 	let loud = 0;
@@ -131,7 +131,7 @@ export function createEndpointer({ stepMs = 50, silenceMs = 1100, noSpeechMs = 8
 			if (rms > threshold) {
 				loud += 1;
 				quietFor = 0;
-				if (!spoke && loud >= 3) {
+				if (!spoke && loud * stepMs >= speechMs) {
 					spoke = true;
 					return 'speech-start';
 				}
