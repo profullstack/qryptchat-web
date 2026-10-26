@@ -12,6 +12,9 @@ import { snippet } from '@/lib/chat/reactions.js';
 import { newVoiceRoomLink, parseSlashCommand, voiceMessage } from '@/lib/chat/voice.js';
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 import { IRC_COMMANDS, listLines, namesLines } from '@/lib/chat/irc.js';
+import { agentsIn } from '@/lib/chat/voice-mode.js';
+import { useVoiceMode } from '@/lib/hooks/useVoiceMode.js';
+import VoiceBar from './VoiceBar.jsx';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
@@ -53,9 +56,10 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const typingTimeoutRef = useRef(null);
 
   const user = useAuthStore((s) => s.user);
-  const { conversations, sendMessage, setTyping, stopTyping, loadMessages, replyingTo, clearReplyingTo } = useChatStore(
+  const { conversations, messages, sendMessage, setTyping, stopTyping, loadMessages, replyingTo, clearReplyingTo } = useChatStore(
     useShallow((s) => ({
       conversations: s.conversations,
+      messages: s.messages,
       sendMessage: s.sendMessage,
       setTyping: s.setTyping,
       stopTyping: s.stopTyping,
@@ -64,6 +68,16 @@ export default function MessageInput({ conversationId, disabled = false }) {
       clearReplyingTo: s.clearReplyingTo,
     }))
   );
+
+  // Voice mode: talk to the chat (your agents) and hear the replies.
+  const activeConversation = conversations?.find((c) => c.id === conversationId);
+  const voice = useVoiceMode({
+    conversation: activeConversation,
+    messages,
+    selfId: user?.id,
+    send: (text) => sendMessage(conversationId, text, 'text'),
+  });
+  const voiceOn = voice.phase !== 'off';
 
   // Choosing Reply on a message puts the caret straight in the composer.
   useEffect(() => {
@@ -214,6 +228,11 @@ export default function MessageInput({ conversationId, disabled = false }) {
     let content = messageText.trim();
     const irc = !selectedFiles.length && parseSlashCommand(content, IRC_COMMANDS);
     if (irc) return runIrcCommand(irc);
+    // /talk: hands-free voice mode (same as the mic button).
+    if (!selectedFiles.length && parseSlashCommand(content, ['talk'])) {
+      setMessageText('');
+      return voice.start();
+    }
     // /voice: post a fresh end-to-end encrypted PairUX room and open it here.
     // window.open runs before any await so the popup blocker allows it.
     if (!selectedFiles.length && parseSlashCommand(content, ['voice'])) {
@@ -309,6 +328,8 @@ export default function MessageInput({ conversationId, disabled = false }) {
         </div>
       )}
 
+      <VoiceBar voice={voice} agents={agentsIn(activeConversation, user?.id)} />
+
       {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
 
       {replyingTo && (
@@ -352,6 +373,18 @@ export default function MessageInput({ conversationId, disabled = false }) {
           placeholder="Type a message... (/voice starts a voice room)"
           disabled={disabled || isSending}
         />
+        {voice.support.listen && (
+          <button
+            type="button"
+            className={`mic-btn${voiceOn ? ' active' : ''}${voice.phase === 'listening' ? ' live' : ''}`}
+            onClick={voice.talk}
+            disabled={disabled}
+            title={voiceOn ? 'Talk now' : 'Voice mode: talk instead of typing, hear the replies'}
+            aria-label={voiceOn ? 'Talk now' : 'Start voice mode'}
+          >
+            <Icon name="mic" size={20} />
+          </button>
+        )}
         <button
           className="send-btn"
           onClick={handleSend}
@@ -395,7 +428,11 @@ export default function MessageInput({ conversationId, disabled = false }) {
         .message-textarea[data-empty="true"]::before { content: attr(data-placeholder); color: var(--color-text-muted); pointer-events: none; }
         .message-textarea[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }
         .message-textarea img.openemoji { width: 1.35em; height: 1.35em; vertical-align: -0.3em; margin: 0 .05em; }
-        .attach-btn, .emoji-btn, .send-btn { flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; }
+        .mic-btn { background: transparent; color: var(--color-text-secondary); }
+        .mic-btn:hover:not(:disabled), .mic-btn.active { background: var(--color-bg-tertiary); color: var(--color-brand-primary); }
+        .mic-btn.live { color: var(--color-error, #ef4444); }
+        .mic-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .attach-btn, .emoji-btn, .mic-btn, .send-btn { flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; }
         .attach-btn, .emoji-btn { background: transparent; color: var(--color-text-secondary); }
         .attach-btn:hover:not(:disabled), .emoji-btn:hover:not(:disabled), .emoji-btn.active { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
         .attach-btn:disabled, .emoji-btn:disabled { opacity: .5; cursor: not-allowed; }

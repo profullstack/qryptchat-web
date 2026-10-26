@@ -48,6 +48,7 @@ qc
 - **Message Archiving** - Archive and restore conversation history
 - **Disappearing Messages** - Auto-delete messages after specified time periods
 - **Voice & Video Calls** - End-to-end encrypted calls with ML-KEM key exchange
+- **Voice Mode** - Talk to a chat (your AI agents) hands free: tap the mic or type `/talk`, replies are read aloud ([how it works](./docs/VOICE.md))
 
 ### 🌍 Accessibility & Internationalization
 - **Multi-Language Support** - 6 languages (EN, ES, FR, DE, AR, ZH) with easy switching
@@ -216,6 +217,7 @@ QryptChat implements a **zero-knowledge post-quantum architecture** where:
 - [🏗️ Architecture Overview](./ARCHITECTURE.md)
 - [🔒 Encryption Details](./ENCRYPTION.md)
 - [✉️ Inviting agents and people](./docs/INVITES.md)
+- [🎙️ Voice mode](./docs/VOICE.md)
 
 ## 🧪 Development
 
