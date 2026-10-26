@@ -39,7 +39,8 @@ export const e2eeOptions = (key) => ({
 });
 
 export const JOIN_RECENT_MS = 30 * 60 * 1000; // on start-up, join calls started this recently
-const ALONE_LEAVE_MS = 30 * 1000; // leave once no person has been in the call this long
+const ALONE_LEAVE_MS = 30 * 1000; // leave once the people have gone for this long
+export const FIRST_WAIT_MS = 10 * 60 * 1000; // wait this long for the first person to join
 const MAX_CALL_MS = 3 * 60 * 60 * 1000;
 const RATE = 16000; // what we listen at
 const SPEAK_RATE = 24000; // what /api/voice/speak returns
@@ -131,6 +132,7 @@ export class CallSession {
 		this.closed = false;
 		this.started = Date.now();
 		this.lastHuman = Date.now();
+		this.humanSeen = false;
 	}
 
 	get id() {
@@ -163,8 +165,13 @@ export class CallSession {
 	}
 
 	checkAlone() {
-		if (this.humansPresent()) this.lastHuman = Date.now();
-		if (Date.now() - this.lastHuman > ALONE_LEAVE_MS) return this.close('everyone left');
+		if (this.humansPresent()) {
+			this.lastHuman = Date.now();
+			this.humanSeen = true;
+		}
+		// Whoever started the call may still be on their way in: wait for them before giving up.
+		const limit = this.humanSeen ? ALONE_LEAVE_MS : FIRST_WAIT_MS;
+		if (Date.now() - this.lastHuman > limit) return this.close(this.humanSeen ? 'everyone left' : 'nobody came');
 		if (Date.now() - this.started > MAX_CALL_MS) return this.close('call too long');
 	}
 

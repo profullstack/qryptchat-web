@@ -96,6 +96,43 @@ describe('CallSession', () => {
 		expect(frames).toEqual([]);
 	});
 
+	it('waits for the first person, then leaves 30 s after the last one goes', () => {
+		const { s } = make('echo PASS');
+		const closed = [];
+		s.close = (why) => closed.push(why);
+		let people = false;
+		s.humansPresent = () => people;
+		const t0 = Date.now();
+		const at = (ms) => vi.spyOn(Date, 'now').mockReturnValue(t0 + ms);
+		s.lastHuman = t0;
+		at(5 * 60 * 1000);
+		s.checkAlone();
+		expect(closed).toEqual([]); // nobody yet, but well inside 10 minutes
+		people = true;
+		s.checkAlone();
+		people = false;
+		at(5 * 60 * 1000 + 20 * 1000);
+		s.checkAlone();
+		expect(closed).toEqual([]);
+		at(5 * 60 * 1000 + 31 * 1000);
+		s.checkAlone();
+		expect(closed).toEqual(['everyone left']);
+		vi.restoreAllMocks();
+	});
+
+	it('gives up when nobody comes within 10 minutes', () => {
+		const { s } = make('echo PASS');
+		const closed = [];
+		s.close = (why) => closed.push(why);
+		s.humansPresent = () => false;
+		const t0 = Date.now();
+		s.lastHuman = t0;
+		vi.spyOn(Date, 'now').mockReturnValue(t0 + 10 * 60 * 1000 + 1000);
+		s.checkAlone();
+		expect(closed).toEqual(['nobody came']);
+		vi.restoreAllMocks();
+	});
+
 	it('stays quiet on PASS and stops talking when interrupted', async () => {
 		const { s, frames, sent } = make('echo PASS');
 		await s.heard(new Float32Array(1600), 'chovy', 'h');
