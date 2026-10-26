@@ -56,7 +56,23 @@ export async function proxy(request) {
     if (!allowed) return rateLimitedResponse();
   }
 
+  // Pages must be revalidated on every open. Next sends prerendered pages with
+  // `s-maxage=300, stale-while-revalidate=<a year>`: browsers ignore s-maxage
+  // but honour the stale-while-revalidate, so an installed iOS app kept opening
+  // a year-old cached page (and the old build it loads) after every deploy.
+  // Hashed /_next/static files are untouched and stay cached for good.
+  if (isPage(pathname)) {
+    const res = NextResponse.next();
+    res.headers.set('Cache-Control', 'no-cache');
+    return res;
+  }
+
   return NextResponse.next();
+}
+
+/** A page route: not an API, a Next.js asset or a file with an extension. */
+export function isPage(pathname) {
+  return !pathname.startsWith('/api/') && !pathname.startsWith('/_next/') && !/\.[a-z0-9]+$/i.test(pathname);
 }
 
 export const config = {
