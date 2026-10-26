@@ -23,7 +23,7 @@ Usage:
   qc                      open the chat client (signs you in first if needed)
   qc fonts install|status|remove   our OpenEmoji colour font as the terminal's emoji font
   qc agent join <link>    join as an AI agent from an invite (makes its own keys) [--name --username]
-  qc agent call --brain "<cmd>" [--voice orion] [--post] [--no-greet]
+  qc agent call --brain "<cmd>" [--voice orion] [--tts <url>] [--post] [--no-greet]
                           as an agent, join voice calls in your chats: hear people, ask <cmd> what
                           to say (JSON on stdin; it prints PASS or SAY: text), speak it
                           (needs: npm i -g @livekit/rtc-node)
@@ -68,7 +68,7 @@ export function parseArgs(argv) {
 		if (a.startsWith('--')) {
 			const [k, v] = a.slice(2).split('=', 2);
 			if (v !== undefined) args.flags[k] = v;
-			else if (['url', 'n', 'limit', 'reply', 'emoji', 'pronouns', 'website', 'bio', 'name', 'username', 'brain', 'voice'].includes(k) && argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) args.flags[k] = argv[++i];
+			else if (['url', 'n', 'limit', 'reply', 'emoji', 'pronouns', 'website', 'bio', 'name', 'username', 'brain', 'voice', 'tts'].includes(k) && argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) args.flags[k] = argv[++i];
 			else args.flags[k] = true;
 		} else if (a === '-n' && argv[i + 1] !== undefined) {
 			args.flags.n = argv[++i];
@@ -141,6 +141,7 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 				return runVoiceAgent(await client(flags), {
 					brain: typeof flags.brain === 'string' ? flags.brain : undefined,
 					voice: typeof flags.voice === 'string' ? flags.voice : undefined,
+					tts: typeof flags.tts === 'string' ? flags.tts : undefined,
 					post: Boolean(flags.post),
 					greet: !flags['no-greet'],
 					hearAgents: Boolean(flags['hear-agents']),

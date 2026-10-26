@@ -42,7 +42,7 @@ describe('voice agent helpers', () => {
 });
 
 describe('CallSession', () => {
-	const make = (brain) => {
+	const make = (brain, tts) => {
 		const frames = [];
 		const sent = [];
 		const client = {
@@ -53,6 +53,7 @@ describe('CallSession', () => {
 			fetch: vi.fn(async (url, init) => {
 				if (url.endsWith('/api/voice/transcribe')) return { ok: true, json: async () => ({ text: 'is the deploy green?' }) };
 				if (url.endsWith('/api/voice/speak')) return { ok: true, arrayBuffer: async () => encodeWav(new Float32Array(480).fill(0.1), 24000).buffer };
+				if (url === 'http://kokoro/speak') return init.body.includes('broken') ? { ok: false, status: 500 } : { ok: true, arrayBuffer: async () => encodeWav(new Float32Array(240).fill(0.2), 24000).buffer };
 				throw new Error(url);
 			}),
 		};
@@ -63,6 +64,7 @@ describe('CallSession', () => {
 			conversation: { id: 'g1', title: 'Agents', participants: [{ user_id: 'h', user: { username: 'chovy' } }] },
 			call: { key: new Uint8Array(32) },
 			brain,
+			tts,
 			voice: 'orion',
 			post: true,
 			log: () => {},
@@ -83,6 +85,15 @@ describe('CallSession', () => {
 		expect(JSON.parse(client.fetch.mock.calls[1][1].body)).toEqual({ text: 'chovy asked: is the deploy green?', voice: 'orion' });
 		expect(frames).toHaveLength(2); // 480 samples at 24 kHz = two 10 ms frames
 		expect(s.transcript.map((t) => t.who)).toEqual(['chovy', 'riotcoder (you)']);
+	});
+
+	it('speaks with its own voice server and falls back to qrypt.chat when it fails', async () => {
+		const { s, client, frames } = make('echo PASS', 'http://kokoro/speak');
+		await s.tts('fine').then((pcm) => expect(pcm.length).toBe(240));
+		const pcm = await s.tts('broken');
+		expect(pcm.length).toBe(480);
+		expect(client.fetch.mock.calls.map(([u]) => u)).toEqual(['http://kokoro/speak', 'http://kokoro/speak', 'https://q/api/voice/speak']);
+		expect(frames).toEqual([]);
 	});
 
 	it('stays quiet on PASS and stops talking when interrupted', async () => {

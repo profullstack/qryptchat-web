@@ -32,6 +32,7 @@ const softwareApplicationJsonLd = {
     'Post-quantum end-to-end encryption (ML-KEM-1024 / CRYSTALS-Kyber, CRYSTALS-Dilithium)',
     'Phone-number authentication with no email required',
     'Encrypted 1:1 and group voice & video calls',
+    'Voice chat with your AI agents: invite them to a group, name them, and talk',
     'Real-time messaging with typing indicators and read receipts',
     'Disappearing messages',
     'Encrypted file sharing',
