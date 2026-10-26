@@ -15,6 +15,8 @@
  * Composer commands: /voice posts a fresh end-to-end encrypted PairUX room,
  * /archive and /unarchive file the open chat away, /archived flips the list
  * between your chats and the archived ones (also Ctrl+O; `a` in the list).
+ * /names (who is here) and /list (your chats) answer IRC-style in the
+ * transcript, shown only to you and never sent.
  * The chat list reloads every 15 s as well as on live events, so it never
  * goes stale if the events stream drops.
  *
@@ -28,6 +30,7 @@ import { join } from 'node:path';
 import { configDir } from './config.js';
 import { notify } from './notify.js';
 import { newVoiceRoomLink, parseSlashCommand, PAIRUX_URL, voiceMessage } from '../lib/chat/voice.js';
+import { listLines, namesLines } from '../lib/chat/irc.js';
 import { CHAT_LIST_EVENTS, MEMBERSHIP_EVENTS } from '../lib/chat/membership-events.js';
 
 const SIDEBAR = 30;
@@ -66,7 +69,7 @@ export function chatsWithNews(prev, next) {
 }
 
 /** Composer slash commands the TUI handles itself; anything else is sent as typed. */
-export const SLASH_COMMANDS = ['voice', 'archive', 'unarchive', 'archived'];
+export const SLASH_COMMANDS = ['voice', 'archive', 'unarchive', 'archived', 'names', 'list'];
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const timeOf = (iso) => {
@@ -305,7 +308,9 @@ export async function runTui(client, { initialChat } = {}) {
 	async function loadMessages(id) {
 		try {
 			const { messages } = await client.messages(id, { limit: 100 });
-			state.messages[id] = messages;
+			// Local /names and /list answers stay put between reloads.
+			const local = (state.messages[id] || []).filter((m) => m.local);
+			state.messages[id] = local.length ? [...messages, ...local].sort((a, b) => String(a.at).localeCompare(String(b.at))) : messages;
 			redraw();
 		} catch (err) {
 			note(`Could not load messages: ${err.message}`);
@@ -408,6 +413,14 @@ export async function runTui(client, { initialChat } = {}) {
 		state.field = { value: '', cursor: 0 };
 		if (cmd.name === 'archived') toggleArchivedView();
 		else if (!active) note('Pick a chat first');
+		else if (cmd.name === 'names' || cmd.name === 'list') {
+			// IRC-style, answered from the loaded chat list and shown only here.
+			const lines = cmd.name === 'names' ? namesLines(active, active.title) : listLines(state.conversations, (c) => c.title);
+			const at = new Date().toISOString();
+			const local = { id: `local-${Date.now()}`, senderId: 'qc', sender: `qc /${cmd.name}`, local: true, text: lines.join('\n'), at };
+			state.messages[active.id] = [...(state.messages[active.id] || []), local];
+			state.scrollBack = 0;
+		}
 		else if (cmd.name === 'voice') {
 			// Made here (src/lib/chat/voice.js) and sent inside the encrypted message.
 			const url = newVoiceRoomLink(process.env.PAIRUX_API_URL || PAIRUX_URL);

@@ -11,6 +11,7 @@ import EmojiEditor from './EmojiEditor.jsx';
 import { snippet } from '@/lib/chat/reactions.js';
 import { newVoiceRoomLink, parseSlashCommand, voiceMessage } from '@/lib/chat/voice.js';
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
+import { IRC_COMMANDS, listLines, namesLines } from '@/lib/chat/irc.js';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.scr', '.vbs', '.js'];
@@ -45,14 +46,16 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadError, setUploadError] = useState('');
+  const [notice, setNotice] = useState(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   const user = useAuthStore((s) => s.user);
-  const { sendMessage, setTyping, stopTyping, loadMessages, replyingTo, clearReplyingTo } = useChatStore(
+  const { conversations, sendMessage, setTyping, stopTyping, loadMessages, replyingTo, clearReplyingTo } = useChatStore(
     useShallow((s) => ({
+      conversations: s.conversations,
       sendMessage: s.sendMessage,
       setTyping: s.setTyping,
       stopTyping: s.stopTyping,
@@ -70,7 +73,30 @@ export default function MessageInput({ conversationId, disabled = false }) {
   // A reply belongs to one conversation; switching chats drops it.
   useEffect(() => {
     clearReplyingTo();
+    setNotice(null);
   }, [conversationId]);
+
+  // A chat's name, or the other people in it for a direct chat.
+  function titleOf(c) {
+    if (c.name) return c.name;
+    if (c.type === 'note_to_self') return 'Note to self';
+    const others = (c.participants || [])
+      .filter((p) => (p.user_id ?? p.id) !== user?.id)
+      .map((p) => p.user?.display_name || p.user?.username)
+      .filter(Boolean);
+    return others.join(', ') || 'Chat';
+  }
+
+  // IRC-style /names and /list: answered here from the loaded chat list, never sent.
+  function runIrcCommand(cmd) {
+    if (cmd.name === 'names') {
+      const active = conversations.find((c) => c.id === conversationId);
+      setNotice(active ? namesLines(active, titleOf(active)) : ['Pick a chat first']);
+    } else {
+      setNotice(listLines(conversations, titleOf));
+    }
+    setMessageText('');
+  }
 
   function handleChange(val) {
     setMessageText(val);
@@ -186,6 +212,8 @@ export default function MessageInput({ conversationId, disabled = false }) {
     if (!conversationId || isSending || isUploadingFiles) return;
 
     let content = messageText.trim();
+    const irc = !selectedFiles.length && parseSlashCommand(content, IRC_COMMANDS);
+    if (irc) return runIrcCommand(irc);
     // /voice: post a fresh end-to-end encrypted PairUX room and open it here.
     // window.open runs before any await so the popup blocker allows it.
     if (!selectedFiles.length && parseSlashCommand(content, ['voice'])) {
@@ -255,6 +283,15 @@ export default function MessageInput({ conversationId, disabled = false }) {
   return (
     <div className="message-input-container">
       {uploadError && <div className="encryption-error">{uploadError}</div>}
+
+      {notice && (
+        <div className="irc-notice" role="status">
+          <button className="irc-notice-close" onClick={() => setNotice(null)} aria-label="Close" title="Close">×</button>
+          <div className="irc-notice-title">{notice[0]}</div>
+          {notice.slice(1).map((line, i) => <div key={i}>{line}</div>)}
+          <div className="irc-notice-hint">Only you see this.</div>
+        </div>
+      )}
 
       {selectedFiles.length > 0 && (
         <div className="file-preview-list">
@@ -331,6 +368,10 @@ export default function MessageInput({ conversationId, disabled = false }) {
 
       <style>{`
         .message-input-container { position: absolute; bottom: 0; left: 0; right: 0; padding: .75rem 1rem; background: var(--color-bg-primary); border-top: 1px solid var(--color-border-primary); z-index: 10; }
+        .irc-notice { position: relative; font-family: var(--font-mono, ui-monospace, monospace); font-size: .8125rem; line-height: 1.5; margin-bottom: .5rem; padding: .5rem 2rem .5rem .75rem; background: var(--color-surface, rgba(127,127,127,.08)); border: 1px solid var(--color-border, rgba(127,127,127,.25)); border-radius: .375rem; max-height: 14rem; overflow: auto; white-space: pre-wrap; }
+        .irc-notice-title { font-weight: 600; }
+        .irc-notice-hint { opacity: .6; font-size: .75rem; margin-top: .25rem; }
+        .irc-notice-close { position: absolute; top: .25rem; right: .5rem; background: none; border: 0; color: inherit; font-size: 1rem; cursor: pointer; opacity: .7; }
         .encryption-error { color: var(--color-error); font-size: .8125rem; margin-bottom: .5rem; padding: .5rem; background: rgba(239,68,68,.1); border-radius: .375rem; }
         .file-preview-list { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
         .file-chip { display: flex; align-items: center; gap: .4rem; max-width: 240px; padding: .35rem .5rem; background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary); border-radius: .5rem; font-size: .8125rem; color: var(--color-text-primary); }
