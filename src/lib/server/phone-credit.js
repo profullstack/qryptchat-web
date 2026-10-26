@@ -7,13 +7,16 @@
  * Env (from `coinpay-onboard site qryptchat-web`): COINPAY_API_URL, COINPAY_API_KEY,
  * COINPAY_WEBHOOK_SECRET.
  */
-import { CoinPay, readWebhook, verifyWebhook } from '@profullstack/coinpay-onboard';
+import { createCheckoutSession, readWebhook, verifyWebhook } from './coinpay.js';
 import { TOPUP_DOLLARS } from '@/lib/phone/rules.js';
 import { PhoneError } from './phone.js';
 
 export const coinpayConfigured = (env = process.env) => !!(env.COINPAY_API_KEY && env.COINPAY_WEBHOOK_SECRET);
 
-export const coinpayClient = (env = process.env) => new CoinPay({ base: env.COINPAY_API_URL || undefined, token: env.COINPAY_API_KEY });
+/** A CoinPay client for the business key (only what the top-up needs). */
+export const coinpayClient = (env = process.env) => ({
+	createCheckoutSession: (input) => createCheckoutSession({ base: env.COINPAY_API_URL || undefined, token: env.COINPAY_API_KEY }, input),
+});
 
 const SITE = 'https://qrypt.chat';
 
