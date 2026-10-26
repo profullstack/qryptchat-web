@@ -45,7 +45,7 @@ export const POST = withAuth(async ({ locals }) => {
 				participants:conversation_participants(
 					user_id,
 					role,
-					user:users!conversation_participants_user_id_fkey(id, username, display_name, avatar_url, is_online, last_seen)
+					user:users!conversation_participants_user_id_fkey(id, username, display_name, avatar_url, is_online, last_seen, account_type)
 				)
 			`)
 			.in('id', conversationIds)

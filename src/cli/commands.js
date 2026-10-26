@@ -11,6 +11,7 @@ import { em, fail, info, mark, ok, warn, who } from './style.js';
 import { notify } from './notify.js';
 import { parseVoiceArgs, runPairux, voiceLink, VOICE_HELP } from './voice.js';
 import { voiceMessage } from '../lib/chat/voice.js';
+import { namesLines } from '../lib/chat/irc.js';
 export { exitWhenFlushed } from './exit.js';
 
 /** An error as qc prints it: the error icon and the message. */
@@ -29,7 +30,8 @@ Usage:
   qc profile [--emoji 🔭] [--pronouns she/her] [--website URL] [--bio TEXT]
                           show or set your public profile (an empty value clears it);
                           --openprofile prints it as OpenProfile.md
-  qc chats [--archived]   list your chats (archived ones only with --archived)
+  qc chats [--archived]   list your chats (archived ones only with --archived); qc list is the same
+  qc names <chat>         who is in a chat (@ = admin, 🤖 = agent), like IRC /names
   qc archive <chat>       archive a chat for you (qc unarchive <chat> brings it back)
   qc voice [--send <chat>]   a link to a fresh end-to-end encrypted PairUX voice room (no account
                           needed to join); qc voice login|join|... runs the pairux CLI (qc voice help)
@@ -198,6 +200,7 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			return;
 		}
 		case 'chats':
+		case 'list':
 		case 'ls': {
 			const all = await (await client(flags)).conversations();
 			const chats = all.filter((c) => !!c.is_archived === !!flags.archived);
@@ -213,6 +216,15 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			await c.archive(chat.id, cmd === 'archive');
 			if (flags.json) return json({ id: chat.id, archived: cmd === 'archive' });
 			return out(ok(cmd === 'archive' ? `Archived ${chat.title}. qc chats --archived lists it; qc unarchive brings it back.` : `${chat.title} is back in your chats.`));
+		}
+		case 'names': {
+			if (!rest[0]) throw new Error('Usage: qc names <chat>');
+			const chat = findChat(await (await client(flags)).conversations(), rest[0]);
+			if (flags.json) {
+				return json((chat.participants || []).map((p) => ({ id: p.user_id, username: p.user?.username, display_name: p.user?.display_name, role: p.role, agent: p.user?.account_type === 'agent' })));
+			}
+			for (const line of namesLines(chat, chat.title)) out(line);
+			return;
 		}
 		case 'read': {
 			if (!rest[0]) throw new Error('Usage: qc read <chat> [-n 20]');
