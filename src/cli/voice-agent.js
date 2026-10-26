@@ -114,6 +114,8 @@ export function askBrain(cmd, input, { timeoutMs = 90_000, env = process.env } =
 			clearTimeout(timer);
 			resolve({ say: parseBrain(out), error: code ? `brain exited ${code}: ${err.trim().slice(-200)}` : '' });
 		});
+		// A brain that answers without reading its input closes stdin early: that EPIPE is not an error.
+		child.stdin.on('error', () => {});
 		child.stdin.end(JSON.stringify(input));
 	});
 }
