@@ -376,7 +376,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
         {voice.support.listen && (
           <button
             type="button"
-            className={`mic-btn${voiceOn ? ' active' : ''}${voice.phase === 'listening' ? ' live' : ''}`}
+            className={`mic-btn${voiceOn ? ' active' : ''}${voice.phase === 'listening' && voice.stage !== 'transcribing' ? ' live' : ''}`}
             onClick={voice.talk}
             disabled={disabled}
             title={voiceOn ? 'Talk now' : 'Voice mode: talk instead of typing, hear the replies'}

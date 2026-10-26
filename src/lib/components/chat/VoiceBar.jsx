@@ -10,9 +10,20 @@ const STATUS = {
   paused: 'Paused. Tap the mic to talk.',
 };
 
+const STAGE = {
+  hearing: 'Hearing you…',
+  transcribing: 'Transcribing…',
+};
+
+const PRIVACY = {
+  'on-device': 'Speech is recognised on this device.',
+  browser: "Speech is recognised by your browser's speech service. Messages are still end-to-end encrypted.",
+  server: 'Speech is transcribed by qrypt.chat (Cloudflare Workers AI) and not stored. Messages are still end-to-end encrypted.',
+};
+
 /** The strip above the composer while voice mode is on. */
 export default function VoiceBar({ voice, agents = [] }) {
-  const { phase, transcript, onDevice, muted, error } = voice;
+  const { phase, stage, transcript, engine, muted, error } = voice;
   if (phase === 'off') return null;
   const names = agents.map((a) => a.display_name || a.username).filter(Boolean);
 
@@ -22,15 +33,13 @@ export default function VoiceBar({ voice, agents = [] }) {
         <span className="voice-dot" aria-hidden="true" />
         <div className="voice-text">
           <div className="voice-status">
-            {STATUS[phase] || 'Voice mode'}
+            {(phase === 'listening' && STAGE[stage]) || STATUS[phase] || 'Voice mode'}
             {names.length > 0 && <span className="voice-who"> · with {names.join(', ')}</span>}
           </div>
           {transcript && <div className="voice-transcript">“{transcript}”</div>}
           {error && <div className="voice-error">{error}</div>}
           <div className="voice-privacy">
-            {onDevice
-              ? 'Speech is recognised on this device.'
-              : "Speech is recognised by your browser's speech service. Messages are still end-to-end encrypted."}
+            {PRIVACY[engine] || PRIVACY.browser}
             {' '}Say “stop” to end.
           </div>
         </div>
