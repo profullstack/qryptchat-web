@@ -13,7 +13,6 @@ import { newVoiceRoomLink, parseSlashCommand, voiceMessage } from '@/lib/chat/vo
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 import { IRC_COMMANDS, listLines, namesLines } from '@/lib/chat/irc.js';
 import { agentsIn } from '@/lib/chat/voice-mode.js';
-import { CALL_TYPE, isJoinable, parseCall } from '@/lib/chat/calls.js';
 import { useVoiceMode } from '@/lib/hooks/useVoiceMode.js';
 import VoiceBar from './VoiceBar.jsx';
 import { setBusy } from '@/lib/app-update.js';
@@ -82,15 +81,10 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const voiceOn = voice.phase !== 'off';
 
   // With AI agents in the chat the mic is a real voice call: they join it, hear
-  // you and talk back in their own voices (qc agent call). Join the call that is
-  // already going, if any, else start one.
+  // you and talk back in their own voices (qc agent call). Always a fresh call: a
+  // new call message is what brings the agents in, and they may have left an old one.
   const chatAgents = agentsIn(activeConversation, user?.id);
   function talkToAgents() {
-    const recent = [...messages].reverse().find((m) => m.conversation_id === conversationId && m.message_type === CALL_TYPE);
-    const call = recent && parseCall(recent.content);
-    if (call && isJoinable(call, recent.created_at) && Date.now() - Date.parse(call.at ?? recent.created_at) < 30 * 60 * 1000) {
-      return useChatStore.getState().joinCall(conversationId, call.key, false);
-    }
     return useChatStore.getState().startCall(conversationId, { video: false });
   }
 
