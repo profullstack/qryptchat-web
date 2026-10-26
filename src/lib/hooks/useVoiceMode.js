@@ -263,6 +263,7 @@ export function useVoiceMode({ conversation, messages, selfId, send }) {
 		queueRef.current = [];
 		setTranscript('');
 		setStage('');
+		setError('');
 		setPhase('off');
 	}, [stopListening, stopSpeaking]);
 
@@ -292,8 +293,17 @@ export function useVoiceMode({ conversation, messages, selfId, send }) {
 		listenRef.current();
 	}, [messages, lang, chooseEngine]);
 
-	/** Tap to talk: interrupts whatever is being read and listens now. */
-	const talk = useCallback(() => {
+	/** Tap to talk: interrupts whatever is being read and listens now. Any failure is shown, never swallowed. */
+	const talk = () => {
+		try {
+			talkNow();
+		} catch (err) {
+			setError(`Voice could not start: ${err?.message || err}`);
+			go('paused');
+		}
+	};
+
+	const talkNow = () => {
 		if (phaseRef.current === 'off') return start();
 		setError('');
 		silentRef.current = 0;
@@ -301,7 +311,7 @@ export function useVoiceMode({ conversation, messages, selfId, send }) {
 		stopSpeaking();
 		queueRef.current = [];
 		listenRef.current();
-	}, [start, stopSpeaking]);
+	};
 
 	/** Finish the current utterance early and send it. */
 	const done = useCallback(() => {

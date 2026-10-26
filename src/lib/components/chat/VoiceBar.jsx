@@ -24,7 +24,8 @@ const PRIVACY = {
 /** The strip above the composer while voice mode is on. */
 export default function VoiceBar({ voice, agents = [] }) {
   const { phase, stage, transcript, engine, muted, error } = voice;
-  if (phase === 'off') return null;
+  // An error stays on screen even when voice mode could not start at all.
+  if (phase === 'off' && !error) return null;
   const names = agents.map((a) => a.display_name || a.username).filter(Boolean);
 
   return (
