@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { signWebhook } from '@profullstack/coinpay-onboard';
+import { signWebhook } from './coinpay.js';
 import { describe, expect, it, vi } from 'vitest';
 import { handleEvent, hangupCall, settleCall, settlePending, startCall } from './phone.js';
 import { createTopup, handleCoinpayWebhook } from './phone-credit.js';
