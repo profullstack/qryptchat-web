@@ -385,18 +385,17 @@ export default function MessageInput({ conversationId, disabled = false }) {
           placeholder="Type a message... (/voice starts a voice room)"
           disabled={disabled || isSending}
         />
-        {voice.support.listen && (
-          <button
-            type="button"
-            className={`mic-btn${voiceOn ? ' active' : ''}${voice.phase === 'listening' && voice.stage !== 'transcribing' ? ' live' : ''}`}
-            onClick={voice.talk}
-            disabled={disabled}
-            title={voiceOn ? 'Talk now' : 'Voice mode: talk instead of typing, hear the replies'}
-            aria-label={voiceOn ? 'Talk now' : 'Start voice mode'}
-          >
-            <Icon name="mic" size={20} />
-          </button>
-        )}
+        {/* Always drawn: where voice cannot work, the tap says why (a hidden button explains nothing). */}
+        <button
+          type="button"
+          className={`mic-btn${voiceOn ? ' active' : ''}${voice.phase === 'listening' && voice.stage !== 'transcribing' ? ' live' : ''}`}
+          onClick={voice.talk}
+          disabled={disabled}
+          title={voiceOn ? 'Talk now' : 'Voice mode: talk instead of typing, hear the replies'}
+          aria-label={voiceOn ? 'Talk now' : 'Start voice mode'}
+        >
+          <Icon name="mic" size={20} />
+        </button>
         <button
           className="send-btn"
           onClick={handleSend}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import EncryptionSettings from '@/lib/components/settings/EncryptionSettings.jsx';
@@ -12,10 +12,28 @@ import PasskeySettings from '@/lib/components/settings/PasskeySettings.jsx';
 import ProfileSettings from '@/lib/components/settings/ProfileSettings.jsx';
 import AgentSettings from '@/lib/components/settings/AgentSettings.jsx';
 import { CURRENT_BUILD } from '@/lib/app-update.js';
+import { pickEngine, recognitionCtor } from '@/lib/chat/voice-mode.js';
+import { isIOS, micMissing } from '@/lib/chat/voice-recorder.js';
+
+/** One line on what voice mode can use on this device, for "the mic doesn't work" reports. */
+function voiceDiagnostics() {
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+  const missing = micMissing(window);
+  return [
+    `voice: ${pickEngine(window) || 'none'}`,
+    `iOS: ${isIOS(window) ? 'yes' : 'no'}`,
+    `app: ${standalone ? 'home screen' : 'browser'}`,
+    `recognizer: ${recognitionCtor(window) ? 'yes' : 'no'}`,
+    `recorder: ${window.MediaRecorder ? 'yes' : 'no'}`,
+    `mic: ${missing.length ? `missing ${missing.join(', ')}` : 'ok'}`,
+  ].join(' · ');
+}
 
 export default function SettingsPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const [diag, setDiag] = useState('');
+  useEffect(() => setDiag(voiceDiagnostics()), []);
 
   useEffect(() => {
     if (!user) router.replace('/auth');
@@ -32,6 +50,7 @@ export default function SettingsPage() {
           Version {CURRENT_BUILD || 'unknown'}
           <button type="button" onClick={() => window.location.reload()}>Reload app</button>
         </p>
+        {diag && <p className="settings-diag">{diag}</p>}
         <div className="settings-grid">
           <section className="settings-section-card">
             <h2>Profile</h2>
@@ -71,6 +90,7 @@ export default function SettingsPage() {
         .settings-page { padding: 2rem 0; }
         .settings-page h1 { font-size: 2rem; font-weight: 700; margin-bottom: .5rem; color: var(--color-text-primary); }
         .settings-version { display: flex; align-items: center; gap: .75rem; margin-bottom: 2rem; font-size: .8125rem; color: var(--color-text-muted); font-family: var(--font-mono, ui-monospace, monospace); }
+        .settings-diag { margin: -1.5rem 0 2rem; font-size: .75rem; color: var(--color-text-muted); font-family: var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere; }
         .settings-version button { font: inherit; font-family: inherit; padding: .2rem .6rem; border: 1px solid var(--color-border-primary); border-radius: 1rem; background: var(--color-bg-secondary); color: var(--color-text-primary); cursor: pointer; }
         .settings-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
         .settings-section-card { background: var(--color-bg-primary); border: 1px solid var(--color-border-primary); border-radius: 1rem; padding: 1.5rem; }
