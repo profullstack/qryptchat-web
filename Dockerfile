@@ -9,7 +9,7 @@
 # secrets from app.env at run time, keeps the onion keys on the
 # /var/lib/tor/hidden_service volume.
 
-FROM oven/bun:1.4.0-slim AS deps
+FROM oven/bun:1.4.4-slim AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -47,7 +47,7 @@ COPY . .
 # `bun --bun next build` (the build script): Next runs on Bun, not Node.
 RUN bun run build
 
-FROM oven/bun:1.4.0-slim AS runtime
+FROM oven/bun:1.4.4-slim AS runtime
 # tor for the onion service, tini as PID 1.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tor ca-certificates tini \
