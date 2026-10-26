@@ -8,11 +8,14 @@ import { hasRawEmoji, render, selectionOffsets, serialize, setCaret, spliceValue
  * value stays plain text. Drop-in for the composer's textarea:
  *   value / onChange(value)   the message text
  *   onSubmit()                Enter (Shift+Enter is a new line)
+ *   onKeyDown(e, { value, selection })   runs first; preventDefault() to take the key (@mentions)
+ *   onCaret(offset)           the caret moved (typing, arrows, clicks)
  *   ref.insert(text)          put text at the caret (the emoji picker)
+ *   ref.replace(value, caret) set the whole value and the caret (completing an @mention)
  *   ref.focus()
  */
 const EmojiEditor = forwardRef(function EmojiEditor(
-  { value, onChange, onSubmit, onEscape, placeholder = '', disabled = false, className = '', ariaLabel = 'Message' },
+  { value, onChange, onSubmit, onEscape, onKeyDown, onCaret, placeholder = '', disabled = false, className = '', ariaLabel = 'Message' },
   ref
 ) {
   const el = useRef(null);
@@ -34,6 +37,7 @@ const EmojiEditor = forwardRef(function EmojiEditor(
     last.current = next;
     if (caret != null && root.ownerDocument.activeElement === root) setCaret(root, caret);
     onChange?.(next);
+    if (caret != null) onCaret?.(caret);
   }
 
   useImperativeHandle(ref, () => ({
@@ -45,6 +49,12 @@ const EmojiEditor = forwardRef(function EmojiEditor(
       if (!root) return;
       const sel = selectionOffsets(root) ?? caretRef.current;
       const { value: next, caret } = spliceValue(last.current, sel, text);
+      root.focus();
+      commit(next, caret);
+    },
+    replace(next, caret) {
+      const root = el.current;
+      if (!root) return;
       root.focus();
       commit(next, caret);
     },
@@ -61,9 +71,15 @@ const EmojiEditor = forwardRef(function EmojiEditor(
     }
     last.current = next;
     onChange?.(next);
+    const sel = selectionOffsets(root);
+    if (sel) onCaret?.(sel.end);
   }
 
   function handleKeyDown(e) {
+    if (onKeyDown && !composing.current) {
+      onKeyDown(e, { value: last.current, selection: selectionOffsets(el.current) });
+      if (e.defaultPrevented) return;
+    }
     if (e.key === 'Escape' && onEscape) {
       onEscape();
       return;
@@ -92,7 +108,10 @@ const EmojiEditor = forwardRef(function EmojiEditor(
   // Remember where the caret was, so the picker (which takes focus) inserts there.
   function rememberCaret() {
     const sel = el.current && selectionOffsets(el.current);
-    if (sel) caretRef.current = sel;
+    if (sel) {
+      caretRef.current = sel;
+      onCaret?.(sel.end);
+    }
   }
 
   return (

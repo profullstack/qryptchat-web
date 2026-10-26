@@ -180,7 +180,7 @@ describe('qc mcp', () => {
 		const init = await handle(fake, { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, { version: '1' });
 		expect(init.serverInfo.name).toBe('qc');
 		const { tools } = await handle(fake, { id: 2, method: 'tools/list' }, { version: '1' });
-		expect(tools.map((t) => t.name)).toEqual(['list_chats', 'read_chat', 'send_message', 'react_to_message']);
+		expect(tools.map((t) => t.name)).toEqual(['list_chats', 'read_chat', 'send_message', 'list_mentions', 'react_to_message']);
 	});
 
 	it('calls tools and reports errors as tool errors', async () => {
@@ -190,6 +190,42 @@ describe('qc mcp', () => {
 		expect(bad.isError).toBe(true);
 		await expect(handle(fake, { id: 5, method: 'nope' }, { version: '1' })).rejects.toThrow(/Method not found/);
 		expect(await handle(fake, { method: 'notifications/initialized' }, { version: '1' })).toBeUndefined();
+	});
+
+	const group = {
+		me: { id: 'me' },
+		conversations: async () => [
+			{
+				id: 'g1',
+				title: 'Team',
+				participants: [
+					{ user_id: 'me', user: { username: 'chovy' } },
+					{ user_id: 'a', user: { username: 'alice', display_name: 'Alice Smith' } },
+					{ user_id: 'b', user: { username: 'alina' } },
+					{ user_id: 'r', user: { username: 'riotcoder', account_type: 'agent' } },
+				],
+			},
+		],
+		sent: [],
+		async send(id, text) {
+			this.sent.push(text);
+			return { message: { id: 'm' }, skipped: 0 };
+		},
+	};
+	const call = (name, args) => handle(group, { id: 9, method: 'tools/call', params: { name, arguments: args } }, { version: '1' });
+
+	it('list_mentions completes an @partial like Tab does', async () => {
+		const all = await call('list_mentions', { chat: 'team' });
+		expect(all.structuredContent.mentions.map((m) => m.mention)).toEqual(['@alice', '@alina', '@riotcoder']);
+		const al = await call('list_mentions', { chat: 'team', partial: '@al' });
+		expect(al.structuredContent.mentions.map((m) => m.username)).toEqual(['alice', 'alina']);
+	});
+
+	it('send_message writes out a unique @partial and reports ambiguous ones', async () => {
+		const r = await call('send_message', { chat: 'team', text: '@ri can you and @al look?' });
+		expect(group.sent.at(-1)).toBe('@riotcoder can you and @al look?');
+		expect(r.structuredContent.mentions).toEqual(['riotcoder']);
+		expect(r.structuredContent.ambiguous).toEqual([{ query: 'al', matches: ['alice', 'alina'] }]);
 	});
 });
 

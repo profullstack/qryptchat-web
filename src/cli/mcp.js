@@ -4,7 +4,7 @@
  * the keys; the server only ever sees ciphertext.
  */
 import { createInterface } from 'node:readline';
-import { findChat } from './commands.js';
+import { findChat, mentionMatches, withMentions } from './commands.js';
 
 const TOOLS = [
 	{
@@ -27,7 +27,7 @@ const TOOLS = [
 	},
 	{
 		name: 'send_message',
-		description: 'Send an end-to-end encrypted message (ML-KEM-1024) to a conversation.',
+		description: 'Send an end-to-end encrypted message (ML-KEM-1024) to a conversation. An @partial in the text that matches exactly one participant is written out as their full @username (list_mentions shows who matches).',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -36,6 +36,19 @@ const TOOLS = [
 				reply_to: { type: 'string', description: 'Optional: id of the message this replies to (from read_chat)' },
 			},
 			required: ['chat', 'text'],
+			additionalProperties: false,
+		},
+	},
+	{
+		name: 'list_mentions',
+		description: 'Who an @mention can complete to in a conversation, best match first (like typing @ali then Tab). Without partial: everyone you can mention.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				chat: { type: 'string', description: 'Conversation id or part of its name' },
+				partial: { type: 'string', description: 'Optional: the start of a name, with or without the @' },
+			},
+			required: ['chat'],
 			additionalProperties: false,
 		},
 	},
@@ -80,8 +93,14 @@ export async function callTool(client, name, args = {}) {
 	if (name === 'send_message') {
 		if (!args.text || typeof args.text !== 'string') throw new Error('text is required');
 		const chat = findChat(await client.conversations(), args.chat);
-		const { message, skipped } = await client.send(chat.id, args.text, { replyTo: typeof args.reply_to === 'string' ? args.reply_to : undefined });
-		return { sent: true, id: message?.id, chat: chat.title, skipped };
+		const m = withMentions(chat, client.me, args.text);
+		const { message, skipped } = await client.send(chat.id, m.text, { replyTo: typeof args.reply_to === 'string' ? args.reply_to : undefined });
+		return { sent: true, id: message?.id, chat: chat.title, skipped, ...(m.mentions.length ? { mentions: m.mentions } : {}), ...(m.ambiguous.length ? { ambiguous: m.ambiguous } : {}) };
+	}
+	if (name === 'list_mentions') {
+		const chat = findChat(await client.conversations(), args.chat);
+		const matches = mentionMatches(chat, client.me, typeof args.partial === 'string' ? args.partial : '');
+		return { chat: chat.title, mentions: matches.map(({ username, name: display_name, agent }) => ({ mention: `@${username}`, username, ...(display_name ? { display_name } : {}), agent })) };
 	}
 	if (name === 'react_to_message') {
 		if (!args.emoji || typeof args.emoji !== 'string') throw new Error('emoji is required');

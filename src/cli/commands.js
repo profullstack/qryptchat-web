@@ -12,6 +12,7 @@ import { notify } from './notify.js';
 import { parseVoiceArgs, runPairux, voiceLink, VOICE_HELP } from './voice.js';
 import { voiceMessage } from '../lib/chat/voice.js';
 import { namesLines } from '../lib/chat/irc.js';
+import { expandMentions, matchMentions, mentionCandidates } from '../lib/chat/mentions.js';
 export { exitWhenFlushed } from './exit.js';
 
 /** An error as qc prints it: the error icon and the message. */
@@ -43,10 +44,12 @@ Usage:
   qc call <number>        call a phone (US/Canada free 10 min a day; +country code for others):
                           opens qrypt.chat's dialer with the number filled in
   qc read <chat> [-n 20]  print the last messages of a chat
-  qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply)
+  qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply);
+                          an @partial that matches one person becomes their @username
+  qc mentions <chat> [@partial]   who @ completes to in a chat, best match first (one per line)
   qc react <chat> <message-id> <emoji> [--remove]   react to a message
   qc listen               print new messages as they arrive (NDJSON with --json; --notify alerts with it)
-  qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message)
+  qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message, list_mentions)
   qc join <link>          join a group chat from its invite link (https://qrypt.chat/join/...)
   qc invite <chat>        print a group's invite link (group admins) [--reset makes a new one, --off turns it off]
 
@@ -98,6 +101,12 @@ export function findChat(chats, query) {
 	if (some.length > 1) throw new Error(`"${query}" matches ${some.length} chats: ${some.map((c) => c.title).join(', ')}`);
 	throw new Error(`No chat matches "${query}". Try qc chats.`);
 }
+
+/** Who @ can complete to in a chat (everyone with a username but you), best match first. */
+export const mentionMatches = (chat, me, partial = '') => matchMentions(mentionCandidates(chat.participants, me?.id), String(partial).replace(/^@/, ''));
+
+/** Text about to be sent with each @partial that matches one person written out in full. */
+export const withMentions = (chat, me, text) => expandMentions(text, mentionCandidates(chat.participants, me?.id));
 
 async function client(flags, { interactive = false } = {}) {
 	if (flags.url) process.env.QC_URL = flags.url;
@@ -266,6 +275,15 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			for (const line of namesLines(chat, chat.title)) out(line);
 			return;
 		}
+		case 'mentions': {
+			if (!rest[0]) throw new Error('Usage: qc mentions <chat> [@partial]');
+			const c = await client(flags);
+			const chat = findChat(await c.conversations(), rest[0]);
+			const matches = mentionMatches(chat, c.me, rest[1] ?? '');
+			if (flags.json) return json(matches);
+			for (const p of matches) out(`@${p.username}${p.agent ? ' 🤖' : ''}${p.name ? `  ${p.name}` : ''}`);
+			return;
+		}
 		case 'read': {
 			if (!rest[0]) throw new Error('Usage: qc read <chat> [-n 20]');
 			const c = await client(flags);
@@ -317,9 +335,11 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			if (!text) throw new Error('Nothing to send.');
 			const c = await client(flags);
 			const chat = findChat(await c.conversations(), rest[0]);
-			const { message, skipped } = await c.send(chat.id, text, { replyTo: flags.reply || undefined });
-			if (flags.json) return json({ id: message?.id, conversation: chat.id, skipped });
+			const m = withMentions(chat, c.me, text);
+			const { message, skipped } = await c.send(chat.id, m.text, { replyTo: flags.reply || undefined });
+			if (flags.json) return json({ id: message?.id, conversation: chat.id, skipped, mentions: m.mentions, ambiguous: m.ambiguous });
 			if (skipped) out(warn(`${skipped} participant(s) have no key yet and will not see it.`));
+			for (const a of m.ambiguous) out(warn(`@${a.query} could be ${a.matches.join(', ')}: sent as typed.`));
 			return out(`${mark('send')}Sent to ${chat.title}.`);
 		}
 		case 'listen': {

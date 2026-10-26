@@ -35,7 +35,8 @@ The first run signs you in through your browser, then opens your chats.
 | Enter | send (or open the highlighted chat) |
 | Ctrl+E | the emoji picker: search, recents and every group, drawn with [OpenEmoji](https://github.com/profullstack/openemoji) |
 | `:rocket:` | shortcodes turn into emoji when you send |
-| Tab / Esc | move between the chat list and the composer |
+| `@` `@ali` + Tab | complete a mention, like x.com and IRC: Tab again cycles the matches, Shift+Tab goes back; the line above the composer lists who matches |
+| Tab / Esc | move between the chat list and the composer (Tab completes instead when the cursor is in an `@name`) |
 | Ctrl+N / Ctrl+P | next / previous chat |
 | PgUp / PgDn, wheel | scroll back through the conversation |
 | Ctrl+R | reload |
@@ -49,6 +50,8 @@ The mouse works too: click a chat, scroll the transcript, click an emoji. Unread
 qc chats                        # id and name of every chat
 qc read alice -n 20             # the last 20 messages, decrypted
 qc send alice "on my way"       # encrypted to every participant
+qc send ops "@ri deploy is done" # an @partial matching one person is sent as @riotcoder
+qc mentions ops @al             # who @al completes to: @alice, @alina
 echo "deploy done" | qc send ops -
 qc listen --json                # new messages as NDJSON, until you stop it
 qc whoami
@@ -62,7 +65,7 @@ qc whoami
 qc mcp
 ```
 
-runs an MCP server on stdio with three tools: `list_chats`, `read_chat` and `send_message`. Encryption and decryption happen on this machine; the server only ever sees ciphertext. For Claude Code:
+runs an MCP server on stdio with `list_chats`, `read_chat`, `send_message`, `list_mentions` (who an `@partial` completes to) and `react_to_message`; `send_message` writes out an `@partial` that matches exactly one person. Encryption and decryption happen on this machine; the server only ever sees ciphertext. For Claude Code:
 
 ```sh
 claude mcp add qryptchat -- qc mcp

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToScreen } from '@profullstack/hqtui/testing';
 import { setIconMode } from '@profullstack/hqtui';
-import { CHAT_LIST_REFRESH_MS, chatsWithNews, initialState, listed, render, SLASH_COMMANDS, transcriptLines } from '../../src/cli/tui.js';
+import { CHAT_LIST_REFRESH_MS, chatsWithNews, initialState, listed, mentionSuggestions, render, SLASH_COMMANDS, tabComplete, transcriptLines } from '../../src/cli/tui.js';
 
 setIconMode('unicode');
 
@@ -135,5 +135,48 @@ describe('the periodic chat list refresh', () => {
 		expect(chatsWithNews(prev, next)).toEqual(['a', 'c']);
 		expect(chatsWithNews(next, next)).toEqual([]);
 		expect(CHAT_LIST_REFRESH_MS).toBeLessThanOrEqual(30_000);
+	});
+});
+
+describe('@mention completion in the composer', () => {
+	function group() {
+		const s = state();
+		s.conversations[0].participants = [
+			{ user_id: 'me', user: { username: 'anthony' } },
+			{ user_id: 'a', user: { username: 'alice' } },
+			{ user_id: 'b', user: { username: 'alina' } },
+			{ user_id: 'r', user: { username: 'riotcoder', account_type: 'agent' } },
+		];
+		return s;
+	}
+	const type = (s, value) => (s.field = { value, cursor: value.length });
+
+	it('Tab completes @partial, Tab again cycles, Shift+Tab goes back', () => {
+		const s = group();
+		type(s, 'hey @al');
+		expect(tabComplete(s)).toBe(true);
+		expect(s.field).toEqual({ value: 'hey @alice ', cursor: 11 });
+		tabComplete(s);
+		expect(s.field.value).toBe('hey @alina ');
+		tabComplete(s, -1);
+		expect(s.field.value).toBe('hey @alice ');
+	});
+
+	it('a bare @ offers everyone but you; Tab outside an @name is left for pane switching', () => {
+		const s = group();
+		type(s, '@');
+		expect(mentionSuggestions(s).matches.map((c) => c.username)).toEqual(['alice', 'alina', 'riotcoder']);
+		type(s, 'hello');
+		expect(tabComplete(s)).toBe(false);
+		expect(mentionSuggestions(s)).toBeNull();
+	});
+
+	it('lists the matches above the composer while typing @…', () => {
+		const s = group();
+		type(s, '@al');
+		const text = draw(s).text();
+		expect(text).toContain('@al → alice  alina  (Tab)');
+		expect(text).not.toContain('alice is typing…');
+		expect(text).toMatch(/TAB\s+complete @/i);
 	});
 });
