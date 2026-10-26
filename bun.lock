@@ -372,7 +372,7 @@
 
     "@profullstack/encrypt": ["@profullstack/encrypt@0.1.0", "", { "dependencies": { "@noble/ciphers": "^2.0.0", "@noble/hashes": "^2.0.0", "mlkem": "^2.5.0" }, "bin": { "pfencrypt": "bin/pfencrypt.js" } }, "sha512-FPwim78SLavWt/j2phmFkxlH8wv6oOGamcPCei4PxgNRDaBF+j/OcSRYB7pOJqhpaU3VD1oYX0V9ReVjnWSanA=="],
 
-    "@profullstack/footer": ["@profullstack/footer@0.3.0", "", { "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"], "bin": { "profullstack-footer": "bin/profullstack-footer.js" } }, "sha512-T95BxnTLRWj0OdEZQwGQkHJCPSBs8VpDATyAIPUqomnC9IRMMvgLEFeION1HSqIvwgHgiC0vbs15ydZyFq99ew=="],
+    "@profullstack/footer": ["@profullstack/footer@0.4.0", "", { "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"], "bin": { "profullstack-footer": "bin/profullstack-footer.js" } }, "sha512-EJZnMUQmWDi9Gzx6BAjogloeaPFFSSCHtHJuC9dsXiOz8M87hfn6Z+Zx9AMYWk8s6xemPrPlkXKGB3PZugkcEA=="],
 
     "@profullstack/form-guard": ["@profullstack/form-guard@0.1.1", "", {}, "sha512-RGLGfQhjq40f+JqEhSmsJnS0I5sFWjYdrYx4VYtkUqz8xvioN2yyR+6uFK0mnDAStKrYytlngg3meUsrChm/OQ=="],
 
