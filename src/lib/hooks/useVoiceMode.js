@@ -14,7 +14,7 @@ import {
 	spokenLine,
 	voiceSupport,
 } from '@/lib/chat/voice-mode.js';
-import { RecorderRecognition, canRecord, setAudioSession, unlockAudio } from '@/lib/chat/voice-recorder.js';
+import { RecorderRecognition, canRecord, micMissing, setAudioSession, unlockAudio } from '@/lib/chat/voice-recorder.js';
 
 /** Chrome stops reading an utterance after ~15 s, so long replies go out in sentence-sized pieces. */
 function chunks(text, max = 220) {
@@ -143,7 +143,8 @@ export function useVoiceMode({ conversation, messages, selfId, send }) {
 		const kind = engineRef.current;
 		const Ctor = kind === 'native' ? recognitionCtor(window) : kind === 'server' ? RecorderRecognition : null;
 		if (!Ctor) {
-			setError('This browser cannot listen. Try Chrome, Edge or Safari.');
+			const missing = micMissing(window);
+			setError(`Voice can't start here: ${missing.length ? `missing ${missing.join(', ')}` : 'no speech recognition and no way to record'}.`);
 			return go('paused');
 		}
 		stopListening();
