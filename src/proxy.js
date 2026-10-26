@@ -48,7 +48,7 @@ export async function proxy(request) {
   } else if (pathname.startsWith('/api/auth/')) {
     const { allowed } = authRateLimiter.check(ip);
     if (!allowed) return rateLimitedResponse();
-  } else if (pathname.startsWith('/api/webhooks/') || pathname === '/api/phone/webhook') {
+  } else if (pathname.startsWith('/api/webhooks/') || pathname === '/api/phone/webhook' || pathname === '/api/phone/coinpay-webhook' || pathname.startsWith('/api/phone/agent-')) {
     const { allowed } = webhookRateLimiter.check(ip);
     if (!allowed) return rateLimitedResponse();
   } else if (pathname.startsWith('/api/')) {

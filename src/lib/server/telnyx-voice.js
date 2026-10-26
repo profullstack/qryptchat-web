@@ -62,6 +62,27 @@ export function telnyxClient({ apiKey, fetchImpl = fetch } = telnyxConfig()) {
 		dial: (body) => call('/calls', { body }),
 		transfer: (callControlId, body) => call(`${cc(callControlId)}/transfer`, { body }),
 		hangup: (callControlId) => call(`${cc(callControlId)}/hangup`, { body: {} }),
+		/**
+		 * Telnyx's billing records for one call session (every leg, with `cost` in USD).
+		 * Records appear a minute or so after the call; [] until then.
+		 */
+		async callRecords(sessionId) {
+			if (!sessionId) return [];
+			const out = [];
+			for (const range of ['today', 'yesterday']) {
+				for (let page = 1; page <= 4; page++) {
+					const q = new URLSearchParams({ 'filter[record_type]': 'call-control', 'filter[date_range]': range, 'page[size]': '50', 'page[number]': String(page) });
+					const res = await fetchImpl(`${API}/detail_records?${q}`, { headers: { Authorization: `Bearer ${apiKey}` } });
+					const data = await res.json().catch(() => ({}));
+					if (!res.ok) throw new TelnyxError(data?.errors?.[0]?.detail || `Telnyx HTTP ${res.status}`, res.status);
+					const rows = data.data || [];
+					out.push(...rows.filter((r) => r.telnyx_session_id === sessionId));
+					if (rows.length < 50) break;
+				}
+				if (out.length) break;
+			}
+			return out;
+		},
 	};
 }
 

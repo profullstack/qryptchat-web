@@ -218,6 +218,7 @@ QryptChat implements a **zero-knowledge post-quantum architecture** where:
 - [🔒 Encryption Details](./ENCRYPTION.md)
 - [✉️ Inviting agents and people](./docs/INVITES.md)
 - [🎙️ Voice mode](./docs/VOICE.md)
+- [📞 Phone calls](./docs/PHONE.md)
 
 ## 🧪 Development
 
