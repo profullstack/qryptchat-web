@@ -83,7 +83,10 @@ export default function Navbar() {
             <Link href="/" className={`nav-link${pathname === '/' ? ' active' : ''}`}>{t('nav.home')}</Link>
             <Link href="/blog" className={`nav-link${pathname.startsWith('/blog') ? ' active' : ''}`}>Blog</Link>
             {isAuthenticated && (
-              <Link href="/chat" className={`nav-link${pathname === '/chat' ? ' active' : ''}`}>{t('nav.chat')}</Link>
+              <>
+                <Link href="/chat" className={`nav-link${pathname === '/chat' ? ' active' : ''}`}>{t('nav.chat')}</Link>
+                <Link href="/phone" className={`nav-link${pathname === '/phone' ? ' active' : ''}`}>Phone</Link>
+              </>
             )}
           </div>
 
@@ -169,6 +172,7 @@ export default function Navbar() {
               {isAuthenticated && (
                 <>
                   <Link href="/chat" className="mobile-nav-link" onClick={closeMobileMenu}>{t('nav.chat')}</Link>
+                  <Link href="/phone" className="mobile-nav-link" onClick={closeMobileMenu}>Phone</Link>
                   {user?.username && <Link href={`/u/${user.username}`} className="mobile-nav-link" onClick={closeMobileMenu}>Profile</Link>}
                   <Link href="/settings" className="mobile-nav-link" onClick={closeMobileMenu}>{t('nav.settings')}</Link>
                 </>
