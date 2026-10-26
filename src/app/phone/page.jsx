@@ -1,18 +1,20 @@
 'use client';
 
 /**
- * Call ordinary phones (US and Canada) from qrypt.chat, like Skype used to.
- * 10 free minutes a day for signed-in accounts. The browser's phone line only
- * receives calls: the server rings it, then connects it to the number with a
- * hard time limit (src/lib/server/phone.js).
+ * Call ordinary phones from qrypt.chat, like Skype used to. 10 free minutes a
+ * day to the US and Canada for signed-in accounts; prepaid credit (CoinPay) for
+ * more and for other countries. The browser's phone line only receives calls:
+ * the server rings it, then connects it to the number with a hard time limit
+ * (src/lib/server/phone.js).
  */
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/stores/auth.js';
-import { blockedReason, formatNumber, normalizeNumber } from '@/lib/phone/rules.js';
+import { blockedReason, countryName, formatMoney, formatNumber, isFreeCountry, parseNumber } from '@/lib/phone/rules.js';
 import { setBusy } from '@/lib/app-update.js';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+const DIAL_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '0', '#'];
 const mmss = (s) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 
 export default function PhonePage() {
@@ -26,6 +28,8 @@ export default function PhonePage() {
   const [elapsed, setElapsed] = useState(0);
   const [limit, setLimit] = useState(0);
   const [showKeys, setShowKeys] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [paidNote, setPaidNote] = useState(false);
   const clientRef = useRef(null);
   const callRef = useRef(null);
   const callIdRef = useRef(null);
@@ -42,8 +46,33 @@ export default function PhonePage() {
     else setError(data.error || 'Phone calls are unavailable right now.');
   }
   useEffect(() => {
-    if (user) refresh();
+    if (!user) return;
+    refresh();
+    // Back from CoinPay's checkout: credit lands when the payment confirms (usually within a minute).
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paid')) {
+      setPaidNote(true);
+      const t = setInterval(refresh, 10000);
+      setTimeout(() => clearInterval(t), 5 * 60 * 1000);
+      return () => clearInterval(t);
+    }
+    const to = params.get('to');
+    if (to) setNumber(to);
   }, [user]);
+
+  async function buy(dollars) {
+    setBuying(true);
+    setError('');
+    try {
+      const res = await fetch('/api/phone/topup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dollars }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || 'Could not start the checkout');
+      window.location.href = data.url;
+    } catch (e) {
+      setError(e.message);
+      setBuying(false);
+    }
+  }
 
   // The call clock, and no auto-reload after a deploy while on a call.
   useEffect(() => {
@@ -54,8 +83,9 @@ export default function PhonePage() {
   }, [phase]);
   useEffect(() => () => { setBusy('phone', false); clientRef.current?.disconnect?.(); }, []);
 
-  const e164 = normalizeNumber(number);
-  const why = number.trim() ? blockedReason(e164) : '';
+  const parsed = parseNumber(number);
+  const e164 = parsed?.e164 || null;
+  const why = number.trim().replace(/^\+$/, '') ? blockedReason(parsed) : '';
 
   function finish(msg) {
     callRef.current = null;
@@ -128,12 +158,13 @@ export default function PhonePage() {
 
   function press(k) {
     if (phase === 'connected') callRef.current?.dtmf(k);
-    else if (phase === 'idle') setNumber((n) => (n + k).slice(0, 20));
+    else if (phase === 'idle') setNumber((n) => (k === '+' && n ? n : n + k).slice(0, 24));
   }
 
   if (!user) return null;
   const onCall = phase === 'starting' || phase === 'ringing' || phase === 'connected';
   const free = info ? Math.floor(info.freeSecondsLeft / 60) : null;
+  const abroad = parsed && !isFreeCountry(parsed.country);
 
   return (
     <div className="phone-page">
@@ -141,9 +172,20 @@ export default function PhonePage() {
       <div className="phone-card">
         <h1>Phone</h1>
         <p className="phone-sub">
-          Call any US or Canadian phone.{' '}
-          {info?.operator ? 'Unlimited for you.' : info?.anonymous ? 'Sign in with a phone number, passkey or CoinPay to get 10 free minutes a day.' : `${free ?? '…'} of ${info ? info.freeSecondsPerDay / 60 : 10} free minutes left today.`}
+          Call phones in the US, Canada and {info ? info.countries.length - 2 : 69} other countries.{' '}
+          {info?.operator ? 'Unlimited for you.' : info?.anonymous ? 'Sign in with a phone number, passkey or CoinPay to get 10 free US/Canada minutes a day.' : `${free ?? '…'} of ${info ? info.freeSecondsPerDay / 60 : 10} free US/Canada minutes left today.`}
         </p>
+        {info && !info.operator && (
+          <div className="phone-credit">
+            <span>Credit: <strong>{formatMoney(info.balanceMicros)}</strong></span>
+            {info.topups?.length > 0 && (
+              <span className="phone-buy">
+                {info.topups.map((d) => <button key={d} type="button" disabled={buying} onClick={() => buy(d)}>+${d}</button>)}
+              </span>
+            )}
+          </div>
+        )}
+        {paidNote && <p className="phone-sub">Thanks! Your credit shows up here as soon as the payment confirms.</p>}
 
         {!onCall ? (
           <>
@@ -151,7 +193,7 @@ export default function PhonePage() {
               className="phone-number"
               inputMode="tel"
               autoComplete="tel"
-              placeholder="(555) 123-4567"
+              placeholder="(555) 123-4567 or +44 20…"
               value={number}
               onChange={(e) => setNumber(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && call()}
@@ -159,8 +201,15 @@ export default function PhonePage() {
             />
             {why && <p className="phone-error">{why}</p>}
             <div className="phone-keys">
-              {KEYS.map((k) => <button key={k} type="button" onClick={() => press(k)}>{k}</button>)}
+              {DIAL_KEYS.map((k) => <button key={k} type="button" onClick={() => press(k)}>{k}</button>)}
             </div>
+            {parsed && !why && (
+              <p className="phone-rate">
+                {abroad
+                  ? `${countryName(parsed.country)}: twice what our carrier charges, at most ${formatMoney(info?.prices?.intlMaxMicrosPerMinute || 204000)}/min, from credit.`
+                  : `US/Canada: free minutes first, then 1¢ a minute from credit.`}
+              </p>
+            )}
             <div className="phone-actions">
               <button type="button" className="phone-call" onClick={call} disabled={!e164 || !!why || phase !== 'idle'}>📞 Call {e164 ? formatNumber(e164) : ''}</button>
               {number && <button type="button" className="phone-clear" onClick={() => setNumber((n) => n.slice(0, -1))} aria-label="Delete">⌫</button>}
@@ -192,6 +241,7 @@ export default function PhonePage() {
         <p className="phone-note">
           Calls to phones go over the public phone network, so unlike calls between qrypt.chat users they are not end-to-end
           encrypted. The person you call sees {info?.callerId ? formatNumber(info.callerId) : 'our number'}. Emergency (911) and premium-rate numbers can't be called.
+          Credit is bought with crypto or PayPal on CoinPay and never expires.
         </p>
 
         {info?.calls?.length > 0 && (
@@ -202,6 +252,7 @@ export default function PhonePage() {
                 <li key={c.id}>
                   <button type="button" onClick={() => !onCall && setNumber(c.to_number)}>{formatNumber(c.to_number)}</button>
                   <span>{c.billed_seconds ? mmss(c.billed_seconds) : c.status === 'ended' || c.status === 'failed' ? 'not connected' : c.status}</span>
+                  <span>{c.charged_micros ? formatMoney(c.charged_micros) : c.billed_seconds && !c.reconciled_at ? 'pricing…' : c.billed_seconds ? 'free' : ''}</span>
                   <span>{new Date(c.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </li>
               ))}
@@ -231,10 +282,15 @@ export default function PhonePage() {
         .phone-live-state { font-size: 1.2rem; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
         .phone-left { font-size: .95rem; opacity: .75; }
         .phone-error { color: var(--color-error); }
+        .phone-credit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .8rem; border: 1px solid var(--color-border-primary); border-radius: .75rem; background: var(--color-bg-secondary); color: var(--color-text-secondary); }
+        .phone-credit strong { color: var(--color-text-primary); }
+        .phone-buy { display: flex; gap: .4rem; }
+        .phone-buy button { padding: .35rem .7rem; border-radius: 999px; border: 1px solid var(--color-border-primary); background: var(--color-bg-primary); color: var(--color-text-primary); font-weight: 600; cursor: pointer; }
+        .phone-rate { font-size: .8125rem; color: var(--color-text-secondary); }
         .phone-note { font-size: .8125rem; color: var(--color-text-muted); line-height: 1.5; }
         .phone-recent h2 { font-size: 1rem; font-weight: 600; color: var(--color-text-primary); margin-bottom: .5rem; }
         .phone-recent ul { list-style: none; display: flex; flex-direction: column; gap: .35rem; padding: 0; }
-        .phone-recent li { display: grid; grid-template-columns: 1fr auto auto; gap: .75rem; align-items: center; font-size: .875rem; color: var(--color-text-secondary); }
+        .phone-recent li { display: grid; grid-template-columns: 1fr auto auto auto; gap: .75rem; align-items: center; font-size: .875rem; color: var(--color-text-secondary); }
         .phone-recent li button { text-align: left; background: none; border: none; color: var(--color-text-primary); cursor: pointer; padding: 0; font: inherit; }
       `}</style>
     </div>

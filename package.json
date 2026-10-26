@@ -1,7 +1,7 @@
 {
   "name": "qryptchat-web",
   "private": true,
-  "version": "0.14.0",
+  "version": "0.15.0",
   "type": "module",
   "bin": {
     "qc": "./bin/qc.js",
@@ -60,6 +60,7 @@
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
     "@profullstack/autoblog": "github:profullstack/autoblog#75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f",
+    "@profullstack/coinpay-onboard": "0.2.0",
     "@profullstack/encrypt": "^0.1.0",
     "@profullstack/footer": "latest",
     "@profullstack/openprofile": "^0.2.0",
@@ -75,6 +76,7 @@
     "blessed": "^0.1.81",
     "dilithium-crystals": "^1.0.6",
     "dotenv": "^17.2.2",
+    "libphonenumber-js": "1.12.25",
     "mlkem": "^2.5.0",
     "next": "16.4.3",
     "openpgp": "^6.2.0",

@@ -39,6 +39,9 @@ Usage:
   qc archive <chat>       archive a chat for you (qc unarchive <chat> brings it back)
   qc voice [--send <chat>]   a link to a fresh end-to-end encrypted PairUX voice room (no account
                           needed to join); qc voice login|join|... runs the pairux CLI (qc voice help)
+  qc phone                your free phone minutes, credit and recent calls to phones
+  qc call <number>        call a phone (US/Canada free 10 min a day; +country code for others):
+                          opens qrypt.chat's dialer with the number filled in
   qc read <chat> [-n 20]  print the last messages of a chat
   qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply)
   qc react <chat> <message-id> <emoji> [--remove]   react to a message
@@ -231,6 +234,28 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			await c.archive(chat.id, cmd === 'archive');
 			if (flags.json) return json({ id: chat.id, archived: cmd === 'archive' });
 			return out(ok(cmd === 'archive' ? `Archived ${chat.title}. qc chats --archived lists it; qc unarchive brings it back.` : `${chat.title} is back in your chats.`));
+		}
+		case 'phone': {
+			const c = await client(flags);
+			const p = await c.request('/api/phone');
+			if (flags.json) return json(p);
+			const money = (m) => `$${(Math.floor(Math.max(0, m || 0) / 10000) / 100).toFixed(2)}`;
+			out(p.operator ? `${mark('info')}Phone: unlimited (operator).` : `${mark('info')}Phone: ${Math.floor(p.freeSecondsLeft / 60)} free US/Canada minutes left today, credit ${money(p.balanceMicros)}.`);
+			out(`  Calls show caller ID ${p.callerId}. Buy credit or call at ${c.base}/phone`);
+			for (const call of (p.calls || []).slice(0, 10)) {
+				const secs = call.billed_seconds || 0;
+				const len = secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : 'not connected';
+				out(`  ${stamp(call.created_at)}  ${call.to_number}  ${len}${call.charged_micros ? `  ${money(call.charged_micros)}` : ''}`);
+			}
+			return;
+		}
+		case 'call': {
+			if (!rest[0]) throw new Error('Usage: qc call <number>   (e.g. qc call "(415) 555-1234" or qc call +442079460958)');
+			const c = await client(flags);
+			const url = `${c.base}/phone?to=${encodeURIComponent(rest.join(' '))}`;
+			const { openBrowser } = await import('./login.js');
+			const opened = openBrowser(url);
+			return out(`${mark('send')}${opened === false ? 'Open' : 'Opened'} ${url}\n  Calls to phones need your browser for the audio; tap Call there.`);
 		}
 		case 'names': {
 			if (!rest[0]) throw new Error('Usage: qc names <chat>');
