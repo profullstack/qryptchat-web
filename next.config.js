@@ -27,11 +27,6 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/plugins': ['./community-plugins/**/*'],
   },
-  // Linting is a dev/CI concern — don't let an ESLint error (e.g. a parse
-  // error in an unused util) fail the production build / Railway deploy.
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   async headers() {
     // OpenEmoji/OpenIcon files change only when scripts/sync-openemoji.js runs
     // against a new set release; a week of caching keeps a busy chat from
