@@ -14,7 +14,7 @@ function rateLimitedResponse() {
   );
 }
 
-export async function middleware(request) {
+export async function proxy(request) {
   const { pathname, host } = request.nextUrl;
 
   // WWW redirect
