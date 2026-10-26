@@ -162,7 +162,8 @@ export async function GET(request, { params } = {}) {
 					id,
 					username,
 					display_name,
-					avatar_url
+					avatar_url,
+					account_type
 				)
 			`)
 			.eq('conversation_id', conversationId)

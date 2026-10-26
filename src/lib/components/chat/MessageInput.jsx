@@ -71,7 +71,23 @@ export default function MessageInput({ conversationId, disabled = false }) {
   );
 
   // Voice mode: talk to the chat (your agents) and hear the replies.
-  const activeConversation = conversations?.find((c) => c.id === conversationId);
+  // The chat's members, loaded here: the sidebar keeps its own chat list, so the
+  // store's copy can be empty, and then the mic never knew the chat had agents.
+  const [members, setMembers] = useState(null);
+  useEffect(() => {
+    setMembers(null);
+    if (!conversationId) return;
+    let stale = false;
+    fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/participants`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!stale && Array.isArray(d?.participants)) setMembers(d.participants); })
+      .catch(() => {});
+    return () => { stale = true; };
+  }, [conversationId]);
+  const storedConversation = conversations?.find((c) => c.id === conversationId);
+  const activeConversation = members
+    ? { ...(storedConversation || { id: conversationId }), participants: members }
+    : storedConversation;
   const voice = useVoiceMode({
     conversation: activeConversation,
     messages,
