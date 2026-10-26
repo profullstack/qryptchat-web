@@ -13,6 +13,7 @@ import { newVoiceRoomLink, parseSlashCommand, voiceMessage } from '@/lib/chat/vo
 import EmojiPicker, { Icon } from './EmojiPicker.jsx';
 import { IRC_COMMANDS, listLines, namesLines } from '@/lib/chat/irc.js';
 import { agentsIn } from '@/lib/chat/voice-mode.js';
+import { CALL_TYPE, isJoinable, parseCall } from '@/lib/chat/calls.js';
 import { useVoiceMode } from '@/lib/hooks/useVoiceMode.js';
 import VoiceBar from './VoiceBar.jsx';
 import { setBusy } from '@/lib/app-update.js';
@@ -79,6 +80,19 @@ export default function MessageInput({ conversationId, disabled = false }) {
     send: (text) => sendMessage(conversationId, text, 'text'),
   });
   const voiceOn = voice.phase !== 'off';
+
+  // With AI agents in the chat the mic is a real voice call: they join it, hear
+  // you and talk back in their own voices (qc agent call). Join the call that is
+  // already going, if any, else start one.
+  const chatAgents = agentsIn(activeConversation, user?.id);
+  function talkToAgents() {
+    const recent = [...messages].reverse().find((m) => m.conversation_id === conversationId && m.message_type === CALL_TYPE);
+    const call = recent && parseCall(recent.content);
+    if (call && isJoinable(call, recent.created_at) && Date.now() - Date.parse(call.at ?? recent.created_at) < 30 * 60 * 1000) {
+      return useChatStore.getState().joinCall(conversationId, call.key, false);
+    }
+    return useChatStore.getState().startCall(conversationId, { video: false });
+  }
 
   // An unsent draft or a voice conversation holds off the automatic reload after a deploy.
   const drafting = !!messageText.trim() || selectedFiles.length > 0;
@@ -389,10 +403,10 @@ export default function MessageInput({ conversationId, disabled = false }) {
         <button
           type="button"
           className={`mic-btn${voiceOn ? ' active' : ''}${voice.phase === 'listening' && voice.stage !== 'transcribing' ? ' live' : ''}`}
-          onClick={voice.talk}
+          onClick={chatAgents.length ? talkToAgents : voice.talk}
           disabled={disabled}
-          title={voiceOn ? 'Talk now' : 'Voice mode: talk instead of typing, hear the replies'}
-          aria-label={voiceOn ? 'Talk now' : 'Start voice mode'}
+          title={chatAgents.length ? `Voice call with ${chatAgents.map((a) => a.username).join(', ')}` : voiceOn ? 'Talk now' : 'Voice mode: talk instead of typing, hear the replies'}
+          aria-label={chatAgents.length ? 'Voice call with the agents' : voiceOn ? 'Talk now' : 'Start voice mode'}
         >
           {/* Inline, not from the sprite: an installed app can hold an old sprite without this icon. */}
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

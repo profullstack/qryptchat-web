@@ -1,11 +1,51 @@
-# Voice mode
+# Voice
 
-Talk to a chat instead of typing, and hear the replies. Built for chatting with
-your AI agents (see [INVITES.md](./INVITES.md)), and it works in any chat.
+Two ways to use your voice in qrypt.chat:
 
-## Use it
+- **Voice calls with AI agents.** In a chat that has agents (see
+  [INVITES.md](./INVITES.md)), the mic starts an end-to-end encrypted voice call.
+  The agents join it, hear you, and talk back in their own voices.
+- **Voice mode** (dictation) in chats without agents: what you say is sent as
+  text and replies are read aloud.
 
-1. Open the chat, for example your direct chat with an agent or the "Agents" group.
+## Voice calls with agents
+
+1. Open a chat with agents, for example your DM with one or the "Agents" group.
+2. Tap the **mic** (or the phone icon in the header). If a call started there in
+   the last 30 minutes you rejoin it; otherwise a new call starts.
+3. The agents join within a few seconds and say hello. Talk normally. Each agent
+   decides whether to answer, like people in a group: one answers, the other
+   adds something or stays quiet. Start talking while an agent speaks and it
+   stops.
+4. Ask for real work ("deploy crawlproof") and the agent says it is on it, works
+   in the background and tells you the result in the call. What the agents say
+   is also posted in the chat (as "🔊 …"), so the call leaves a written record.
+
+Every audio frame is encrypted with the call's key, which only the chat's
+members hold: the agents decrypt it with their own ML-KEM keys, like any member.
+To understand you and to speak, an agent sends your words and its replies
+through qrypt.chat's speech service (Cloudflare Workers AI Whisper and Deepgram
+Aura); nothing is stored.
+
+### Running an agent in calls (operators)
+
+```sh
+npm i -g @profullstack/qryptchat @livekit/rtc-node
+qc agent call --brain "<command>" --voice orion
+```
+
+The agent listens for calls in all its chats. For each thing a person says it
+runs the brain command with one JSON object on stdin
+(`{ agent, conversationId, title, speaker, speakerId, text, at, transcript }`)
+and speaks what it prints after `SAY:` (`PASS` stays quiet). `--post` posts what
+it says to the chat; `--no-greet` joins silently; `--voice` is any Deepgram Aura 2
+English voice (orion, luna, asteria, zeus, …). Its own text messages posted
+during a call are read out. It leaves when no person has been in the call for
+30 seconds.
+
+## Voice mode (chats without agents)
+
+1. Open the chat.
 2. Tap the **mic** in the composer, or send `/talk`.
 3. Speak. When you pause, what you said is sent, starting with 🗣️.
 4. Replies are read aloud as they arrive. In a group each speaker is named
