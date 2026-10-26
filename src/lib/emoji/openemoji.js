@@ -8,7 +8,10 @@
 import { OPENEMOJI_KEYS } from './openemoji-keys.js';
 
 export const OPENEMOJI_BASE = '/openemoji';
-export const OPENICON_SPRITE = '/openicon/sprite.svg';
+// Versioned per build: the sprite is cached for a week by the server and for good by the
+// service worker (public/sw.js), so an installed app kept an old copy without icons added
+// later (the voice-mode mic drew as a blank button). A new build id means a fresh fetch.
+export const OPENICON_SPRITE = `/openicon/sprite.svg?v=${process.env.NEXT_PUBLIC_BUILD_ID || '1'}`;
 
 const PICTOGRAPHIC = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣/u;
 const segmenter =
