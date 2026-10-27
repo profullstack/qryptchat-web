@@ -32,6 +32,8 @@ Usage:
   qc logout               forget this terminal's session and keys
   qc update [--check]     update qc to the latest release (--check only says whether there is one)
   qc whoami               who this terminal is signed in as
+  qc keys [publish]       whether this terminal's keys are your account's; publish makes them the
+                          account's again (when another device published keys qc does not hold)
   qc profile [--emoji 🔭] [--pronouns she/her] [--website URL] [--bio TEXT]
                           show or set your public profile (an empty value clears it);
                           --openprofile prints it as OpenProfile.md
@@ -204,6 +206,29 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 				out("Warning: the browser handed over keys that are not your account's current keys, so messages will not decrypt here. Restore your keys in that browser (Settings > Keys) or approve from the device you chat on, then run qc login again.");
 			}
 			return;
+		}
+		case 'keys': {
+			const c = await client(flags);
+			const status = await c.keyCheck();
+			if (rest[0] !== 'publish') {
+				if (flags.json) return json({ keys: status });
+				if (status === 'ok') return out(ok("This terminal's keys are your account's keys."));
+				if (status === 'mismatch') return out(warn("Your account publishes a different key, so messages sent to you since then won't decrypt here. If older messages read fine in qc read, run qc keys publish."));
+				return out(info("Could not compare keys (no key on file, or the check failed)."));
+			}
+			if (status === 'ok') return out(ok('Already published: nothing to do.'));
+			// Everyone encrypts to the published key: replacing it is a deliberate act.
+			if (!flags.yes) {
+				if (!process.stdin.isTTY) throw new Error('qc keys publish replaces the key everyone encrypts to. Add --yes to confirm.');
+				const { createInterface } = await import('node:readline/promises');
+				const rl = createInterface({ input: process.stdin, output: process.stdout });
+				const answer = await rl.question("Publish this terminal's key? Devices holding the other key will stop decrypting new messages until they restore your keys. [y/N] ");
+				rl.close();
+				if (!/^y(es)?$/i.test(answer.trim())) return out(info('Left the published key alone.'));
+			}
+			const after = await c.publishKey();
+			if (flags.json) return json({ published: true, keys: after });
+			return out(ok("Published. New messages are encrypted to this terminal's key again; other devices on the other key should restore from Settings > Keys."));
 		}
 		case 'logout':
 			clearSession();

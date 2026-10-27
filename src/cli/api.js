@@ -111,6 +111,18 @@ export class QcClient {
 		}
 	}
 
+	/**
+	 * Make this terminal's public key the account's again: everyone encrypts to
+	 * the published key, so only do this when these keys read your history
+	 * (another device published a key qc does not hold).
+	 */
+	async publishKey() {
+		const mine = this.session.keys?.keys1024?.publicKey;
+		if (!mine) throw new QcError('This terminal holds no keys. Run qc login.');
+		await this.request('/api/crypto/public-keys', { method: 'PUT', body: { public_key: mine, key_type: 'ML-KEM-1024' } });
+		return this.keyCheck();
+	}
+
 	/** Your public profile (what qrypt.chat/u/<you> shows): emoji, pronouns, website, bio. */
 	async profile() {
 		const { user } = await this.request(`/api/users/by-username/${encodeURIComponent(this.me?.username ?? '')}`);

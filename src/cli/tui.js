@@ -309,7 +309,7 @@ function saveRecent(list) {
 }
 
 /** Run the full-screen client until Ctrl+C. */
-const KEY_MISMATCH = "Keys don't match your account, so messages can't decrypt. Run qc login and approve from a browser that can read your chats.";
+const KEY_MISMATCH = "Keys don't match your account, so new messages can't decrypt. If your history reads here, run qc keys publish; else qc login from a browser that reads your chats.";
 
 export async function runTui(client, { initialChat } = {}) {
 	const state = initialState(client.me);
