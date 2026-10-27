@@ -23,6 +23,12 @@ export function sessionMessage(session, user) {
 
 /**
  * Find the auth user that carries this CoinPay subject (paged admin scan).
+ *
+ * The binding lives in `app_metadata`, which only the service role can write.
+ * `user_metadata` is NOT trusted: any signed-in user can set it with
+ * `auth.updateUser({ data })`, so a binding read from there would let someone
+ * who learned a victim's CoinPay sub stamp it on their own account and have the
+ * victim's next CoinPay login land in it (GoTrue lists newest users first).
  * @param {import('@supabase/supabase-js').SupabaseClient} service
  * @param {string} sub
  */
@@ -32,7 +38,7 @@ export async function findAuthUserByCoinpaySub(service, sub) {
 		// eslint-disable-next-line no-await-in-loop
 		const { data, error } = await service.auth.admin.listUsers({ page, perPage });
 		if (error) throw error;
-		const match = (data?.users || []).find((u) => u.user_metadata?.coinpay_sub === sub);
+		const match = (data?.users || []).find((u) => u.app_metadata?.coinpay_sub === sub);
 		if (match) return match;
 		if (!data?.users || data.users.length < perPage) break;
 	}

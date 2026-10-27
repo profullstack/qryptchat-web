@@ -133,6 +133,8 @@ export async function GET(request) {
 			const { data: created, error: createAuthError } = await service.auth.admin.createUser({
 				email: coinpayEmail(coinpaySub),
 				email_confirm: true,
+				// The binding is server-only (app_metadata); user_metadata is user-writable.
+				app_metadata: { coinpay_sub: coinpaySub },
 				user_metadata: { coinpay_sub: coinpaySub, coinpay_email: claimedEmail || null, provider: 'coinpay' }
 			});
 			if (createAuthError || !created?.user) {
