@@ -75,4 +75,20 @@ describe('keyCheck', () => {
 		const client = new QcClient(session(), { fetch: withServerKey(undefined) });
 		expect(await client.keyCheck()).toBe('unknown');
 	});
+	it('publishKey puts this terminal\'s key back as the account key', async () => {
+		let published = 'someone-else';
+		const fetch = vi.fn(async (url, init) => {
+			if (init?.method === 'PUT') {
+				published = JSON.parse(init.body).public_key;
+				return json({ success: true });
+			}
+			return json({ public_keys: { a: published } });
+		});
+		const client = new QcClient(session(), { fetch });
+		expect(await client.keyCheck()).toBe('mismatch');
+		expect(await client.publishKey()).toBe('ok');
+		const put = fetch.mock.calls.find(([, init]) => init?.method === 'PUT');
+		expect(new URL(put[0]).pathname).toBe('/api/crypto/public-keys');
+		expect(JSON.parse(put[1].body)).toEqual({ public_key: keys.keys1024.publicKey, key_type: 'ML-KEM-1024' });
+	});
 });

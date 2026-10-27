@@ -64,9 +64,26 @@ describe('keySyncService.needsKeySync', () => {
 		await expect(keySyncService.needsKeySync()).resolves.toBe(true);
 	});
 
-	it('syncs when the stored key belongs to a different keypair', async () => {
+	// 2026-10-27: a browser with empty storage made itself a fresh keypair and the
+	// sign-in sync published it over the account's key, so qc and every other
+	// device stopped decrypting new messages. A different key is reported, never replaced.
+	it('never replaces a published key that differs from this device; reports the mismatch', async () => {
 		stubFetch({ body: { public_key: 'some-other-key-bbbb' } });
-		await expect(keySyncService.needsKeySync()).resolves.toBe(true);
+		const seen = vi.fn();
+		window.addEventListener('qrypt:key-mismatch', seen);
+		await expect(keySyncService.needsKeySync()).resolves.toBe(false);
+		await expect(keySyncService.publishedKeyStatus()).resolves.toBe('differs');
+		window.removeEventListener('qrypt:key-mismatch', seen);
+		expect(seen).toHaveBeenCalledTimes(1);
+	});
+
+	it('publishedKeyStatus tells match, missing and unknown apart', async () => {
+		stubFetch({ body: { public_key: LOCAL_KEY } });
+		await expect(keySyncService.publishedKeyStatus()).resolves.toBe('match');
+		stubFetch({ body: { public_key: null } });
+		await expect(keySyncService.publishedKeyStatus()).resolves.toBe('missing');
+		stubFetch({ ok: false, body: {} });
+		await expect(keySyncService.publishedKeyStatus()).resolves.toBe('unknown');
 	});
 
 	// Publishing replaces the key everyone encrypts to, so an unknown answer must not

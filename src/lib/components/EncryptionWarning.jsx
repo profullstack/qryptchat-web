@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { keyManager } from '@/lib/crypto/key-manager.js';
+import { keySyncService } from '@/lib/crypto/key-sync-service.js';
 
 export default function EncryptionWarning() {
   const router = useRouter();
   const [hasKeys, setHasKeys] = useState(true);
+  // This device's keys are not the account's: messages sent to you won't open here.
+  const [mismatch, setMismatch] = useState(false);
   const [checked, setChecked] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
@@ -15,14 +18,37 @@ export default function EncryptionWarning() {
     async function check() {
       try {
         await keyManager.initialize();
-        setHasKeys(await keyManager.hasUserKeys());
+        const has = await keyManager.hasUserKeys();
+        setHasKeys(has);
+        if (has) setMismatch((await keySyncService.publishedKeyStatus()) === 'differs');
       } catch {
         setHasKeys(false);
       }
       setChecked(true);
     }
     check();
+    const onMismatch = () => setMismatch(true);
+    window.addEventListener('qrypt:key-mismatch', onMismatch);
+    return () => window.removeEventListener('qrypt:key-mismatch', onMismatch);
   }, []);
+
+  async function handleUseThisDevice() {
+    const ok = window.confirm(
+      "Make this device's keys your account's keys?\n\nEveryone will encrypt new messages to this device's key. Your other devices (and qc) will stop reading new messages until they restore these keys, and this device still won't read your past messages. Restoring your keys here is almost always the better choice."
+    );
+    if (!ok) return;
+    setGenerating(true);
+    setError('');
+    try {
+      const result = await keySyncService.forceSyncPublicKey();
+      if (!result.success) throw new Error(result.error || 'Could not publish this device\'s key');
+      setMismatch(false);
+    } catch (err) {
+      setError(err?.message || 'Could not publish this device\'s key');
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handleGenerate() {
     // New keys give you a fresh identity but make every message that was
@@ -36,7 +62,11 @@ export default function EncryptionWarning() {
     setError('');
     try {
       await keyManager.generateUserKeys();
+      // Chosen on purpose, so publish it: sign-in never replaces a published key by itself.
+      const result = await keySyncService.forceSyncPublicKey();
+      if (!result.success) throw new Error(result.error || 'Keys made, but publishing them failed');
       setHasKeys(true);
+      setMismatch(false);
     } catch (err) {
       setError(err?.message || 'Failed to generate keys');
     } finally {
@@ -44,7 +74,32 @@ export default function EncryptionWarning() {
     }
   }
 
-  if (!checked || hasKeys) return null;
+  if (!checked || (hasKeys && !mismatch)) return null;
+
+  if (hasKeys && mismatch) {
+    return (
+      <div className="encryption-warning" role="alert">
+        <div className="warning-icon">⚠️</div>
+        <div className="warning-content">
+          <strong>This device has different keys from your account</strong>
+          <p>
+            Messages sent to you are encrypted to your account&apos;s key, which this browser doesn&apos;t hold, so they
+            won&apos;t open here. Restore your keys (backup PIN or key file) to read everything.
+          </p>
+          {error && <p className="warning-error">{error}</p>}
+          <div className="warning-actions">
+            <button type="button" className="warn-btn warn-btn-primary" onClick={() => router.push('/settings')} disabled={generating}>
+              Restore my keys
+            </button>
+            <button type="button" className="warn-btn warn-btn-secondary" onClick={handleUseThisDevice} disabled={generating}>
+              {generating ? 'Publishing…' : "Use this device's keys"}
+            </button>
+          </div>
+        </div>
+        <style>{warningCss}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="encryption-warning">
@@ -79,7 +134,12 @@ export default function EncryptionWarning() {
           loses access to all past messages.
         </p>
       </div>
-      <style>{`
+      <style>{warningCss}</style>
+    </div>
+  );
+}
+
+const warningCss = `
         .encryption-warning { display: flex; align-items: flex-start; gap: 1rem; padding: .75rem 1rem; background: rgba(245,158,11,.1); border-bottom: 1px solid #f59e0b; color: #92400e; }
         .warning-icon { font-size: 1.25rem; flex-shrink: 0; line-height: 1.4; }
         .warning-content p { font-size: .875rem; margin-top: .25rem; }
@@ -90,7 +150,4 @@ export default function EncryptionWarning() {
         .warn-btn-primary { background: #92400e; color: #fff; }
         .warn-btn-secondary { background: transparent; color: #92400e; border-color: #92400e; }
         .warning-hint { font-size: .75rem; margin-top: .5rem; opacity: .85; }
-      `}</style>
-    </div>
-  );
-}
+      `;

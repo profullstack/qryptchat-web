@@ -110,11 +110,32 @@ export class KeySyncService {
 	}
 
 	/**
-	 * Check if user needs key sync (has keys locally but not in database)
+	 * Check if user needs key sync (has keys locally but not in database).
+	 *
+	 * Only an account with NO published key is synced. A published key that
+	 * differs from this device's is never replaced here: a browser with empty
+	 * storage generates a fresh keypair on its own (initialize()), and publishing
+	 * that on sign-in (2026-10-27) silently moved the account to a key no other
+	 * device or qc held, so every new message failed to decrypt everywhere else.
+	 * A mismatch is reported instead (publishedKeyStatus / 'qrypt:key-mismatch')
+	 * and the person chooses: restore their keys here, or publish this device's.
 	 * @returns {Promise<boolean>}
 	 */
 	async needsKeySync() {
-		if (typeof window === 'undefined') return false;
+		const status = await this.publishedKeyStatus();
+		if (status === 'differs' && typeof window !== 'undefined') {
+			window.dispatchEvent(new CustomEvent('qrypt:key-mismatch'));
+		}
+		return status === 'missing';
+	}
+
+	/**
+	 * How this device's public key compares with the account's published one:
+	 * 'match', 'missing' (none published), 'differs', 'no-local-key' or 'unknown'.
+	 * @returns {Promise<'match'|'missing'|'differs'|'no-local-key'|'unknown'>}
+	 */
+	async publishedKeyStatus() {
+		if (typeof window === 'undefined') return 'unknown';
 
 		try {
 			// Check if we have local keys
@@ -125,14 +146,14 @@ export class KeySyncService {
 			const publicKey = await postQuantumEncryption.getPublicKey();
 			if (!publicKey) {
 				console.log('🔑 No local public key found, sync not needed');
-				return false;
+				return 'no-local-key';
 			}
 
 			const currentUserId = this.getCurrentUserId();
 
 			if (!currentUserId) {
 				console.log('🔑 No current user ID, cannot determine sync status');
-				return false;
+				return 'unknown';
 			}
 
 			// Ask for our own key specifically rather than scanning the all-keys list.
@@ -157,7 +178,7 @@ export class KeySyncService {
 				// Fail closed: re-uploading is the destructive direction, so an unreadable
 				// answer must not be treated as "the database has nothing".
 				console.log('🔑 Cannot check database keys, leaving the published key alone');
-				return false;
+				return 'unknown';
 			}
 
 			const data = await response.json();
@@ -165,23 +186,23 @@ export class KeySyncService {
 
 			if (!dbKey) {
 				console.log('🔑 Public key not found in database, sync needed');
-				return true;
+				return 'missing';
 			}
 
 			if (dbKey !== publicKey) {
-				console.log('🔑 Database public key differs from local key (rotated/new device), sync needed');
-				return true;
+				console.log('🔑 This device holds different keys from the account; leaving the published key alone');
+				return 'differs';
 			}
 
 			console.log('🔑 Public key already synced to database');
-			return false;
+			return 'match';
 
 		} catch (error) {
 			console.error('🔑 Error checking key sync status:', error);
 			// Publishing is the side with consequences -- it replaces the key everyone
 			// encrypts to. Not knowing the answer is a reason to leave it alone, not to
 			// overwrite it.
-			return false;
+			return 'unknown';
 		}
 	}
 

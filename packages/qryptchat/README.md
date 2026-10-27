@@ -55,6 +55,7 @@ qc mentions ops @al             # who @al completes to: @alice, @alina
 echo "deploy done" | qc send ops -
 qc listen --json                # new messages as NDJSON, until you stop it
 qc whoami
+qc keys                         # are this terminal's keys your account's? (qc keys publish puts them back)
 ```
 
 `<chat>` is a chat id or any unique part of its name. Add `--json` for machine output.
