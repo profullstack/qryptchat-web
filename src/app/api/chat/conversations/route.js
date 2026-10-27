@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { authenticateRequest } from '@/lib/api/middleware/auth.js';
+import { sseManager } from '@/lib/api/sse-manager.js';
+import { announceJoined } from '@/lib/chat/membership-events.js';
 
 
 export async function GET(request, { params } = {}) {
@@ -84,12 +87,11 @@ export async function GET(request, { params } = {}) {
 
 export async function POST(request, { params } = {}) {
 	try {
-		const supabase = await createSupabaseServerClient();
 		const { type, name, participant_ids, group_id } = await request.json();
-		
-		// Get user from session
-		const { data: { user }, error: userError } = await supabase.auth.getUser();
-		if (userError || !user) {
+
+		// Bearer (qc, MCP, passkey and CoinPay sessions) or the cookie session.
+		const { user, supabase } = await authenticateRequest(request);
+		if (!user) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -224,6 +226,9 @@ export async function POST(request, { params } = {}) {
 			console.error('Add participants error:', participantsError);
 			return NextResponse.json({ error: 'Failed to add participants' }, { status: 500 });
 		}
+
+		// Every member's open devices get the new chat in their list now.
+		announceJoined(sseManager, conversationId, participants.map((p) => p.user_id));
 
 		return NextResponse.json({ 
 			conversation_id: conversationId,

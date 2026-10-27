@@ -40,6 +40,19 @@ const TOOLS = [
 		},
 	},
 	{
+		name: 'start_direct_chat',
+		description: 'Start (or reopen) an end-to-end encrypted direct chat with anyone on qrypt.chat, by @username or a name only one person has, and optionally send the first message. Returns the chat id for read_chat/send_message.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				user: { type: 'string', description: 'Their @username (or a name that matches only them)' },
+				text: { type: 'string', description: 'Optional: the first message' },
+			},
+			required: ['user'],
+			additionalProperties: false,
+		},
+	},
+	{
 		name: 'list_mentions',
 		description: 'Who an @mention can complete to in a conversation, best match first (like typing @ali then Tab). Without partial: everyone you can mention.',
 		inputSchema: {
@@ -96,6 +109,12 @@ export async function callTool(client, name, args = {}) {
 		const m = withMentions(chat, client.me, args.text);
 		const { message, skipped } = await client.send(chat.id, m.text, { replyTo: typeof args.reply_to === 'string' ? args.reply_to : undefined });
 		return { sent: true, id: message?.id, chat: chat.title, skipped, ...(m.mentions.length ? { mentions: m.mentions } : {}), ...(m.ambiguous.length ? { ambiguous: m.ambiguous } : {}) };
+	}
+	if (name === 'start_direct_chat') {
+		if (!args.user || typeof args.user !== 'string') throw new Error('user is required');
+		const chat = await client.startDirect(args.user);
+		const sent = typeof args.text === 'string' && args.text.trim() ? await client.send(chat.id, args.text.trim()) : null;
+		return { chat: chat.title, id: chat.id, ...(sent ? { sent: true, message_id: sent.message?.id, skipped: sent.skipped } : {}) };
 	}
 	if (name === 'list_mentions') {
 		const chat = findChat(await client.conversations(), args.chat);

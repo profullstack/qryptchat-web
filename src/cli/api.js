@@ -195,6 +195,30 @@ export class QcClient {
 		return { messages: out, hasMore };
 	}
 
+	/** People on qrypt.chat matching a username, name or unique id (best first, never you). */
+	async searchUsers(query) {
+		const q = String(query ?? '').trim().replace(/^@/, '');
+		if (!q) return [];
+		const { users = [] } = await this.request(`/api/users/search?q=${encodeURIComponent(q)}`);
+		return users;
+	}
+
+	/**
+	 * Open a direct chat with one person, given their @username (or a name that
+	 * matches only them). An existing chat between the two of you is reused.
+	 * Returns the chat as conversations() lists it.
+	 */
+	async startDirect(who) {
+		const user = pickUser(await this.searchUsers(who), who);
+		const { conversation_id: id } = await this.request('/api/chat/conversations', {
+			method: 'POST',
+			body: { type: 'direct', participant_ids: [user.id] },
+		});
+		if (!id) throw new QcError(`Could not start a chat with @${user.username}`);
+		const chat = (await this.conversations()).find((c) => c.id === id);
+		return chat ?? { id, title: user.display_name || user.username, participants: [] };
+	}
+
 	/** Join a group from its invite link or code. Returns { conversation_id, joined }. */
 	async joinGroup(code) {
 		return this.request('/api/conversations/join', { method: 'POST', body: { code } });
@@ -328,6 +352,20 @@ function sleep(ms, signal) {
 			resolve();
 		});
 	});
+}
+
+/**
+ * The one person `query` means among search results: an exact @username (or
+ * unique id) first, else the only result. Anything else says who it could be.
+ */
+export function pickUser(users, query) {
+	const q = String(query ?? '').trim().replace(/^@/, '').toLowerCase();
+	const exact = users.filter((u) => u.username?.toLowerCase() === q || u.unique_identifier?.toLowerCase() === q);
+	if (exact.length === 1) return exact[0];
+	if (users.length === 1) return users[0];
+	if (!users.length) throw new QcError(`Nobody on qrypt.chat matches "${query}"`, 404);
+	const names = users.slice(0, 8).map((u) => `@${u.username}${u.display_name && u.display_name !== u.username ? ` (${u.display_name})` : ''}`);
+	throw new QcError(`"${query}" matches ${users.length} people: ${names.join(', ')}${users.length > 8 ? ', …' : ''}. Use their @username.`, 409);
 }
 
 /** A conversation's name, or the other participants' names for a direct chat. */
