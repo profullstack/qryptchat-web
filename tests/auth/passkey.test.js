@@ -152,14 +152,26 @@ describe('CoinPay identity', () => {
 		expect(coinpayEmail('a b/c')).toBe('a-b-c@coinpay.qrypt.chat');
 	});
 
-	it('finds the account by coinpay_sub metadata, ignoring a matching email', async () => {
+	it('finds the account by coinpay_sub app_metadata, ignoring a matching email', async () => {
 		const users = [
-			{ id: 'victim', email: 'anthony@example.com', user_metadata: {} },
-			{ id: 'cp', email: 'cp@coinpay.qrypt.chat', user_metadata: { coinpay_sub: 'sub-1' } },
+			{ id: 'victim', email: 'anthony@example.com', user_metadata: {}, app_metadata: {} },
+			{ id: 'cp', email: 'cp@coinpay.qrypt.chat', user_metadata: { coinpay_sub: 'sub-1' }, app_metadata: { coinpay_sub: 'sub-1' } },
 		];
 		const service = { auth: { admin: { listUsers: async () => ({ data: { users } }) } } };
 		expect((await findAuthUserByCoinpaySub(service, 'sub-1')).id).toBe('cp');
 		expect(await findAuthUserByCoinpaySub(service, 'sub-2')).toBeNull();
+	});
+
+	it('ignores a coinpay_sub a user wrote into their own user_metadata', async () => {
+		// GoTrue lists newest first: the attacker's account would be found first.
+		const users = [
+			{ id: 'attacker', email: 'attacker@example.com', user_metadata: { coinpay_sub: 'sub-1' }, app_metadata: { provider: 'email' } },
+			{ id: 'cp', email: 'cp@coinpay.qrypt.chat', user_metadata: { coinpay_sub: 'sub-1' }, app_metadata: { coinpay_sub: 'sub-1' } },
+		];
+		const service = { auth: { admin: { listUsers: async () => ({ data: { users } }) } } };
+		expect((await findAuthUserByCoinpaySub(service, 'sub-1')).id).toBe('cp');
+		const onlyForged = { auth: { admin: { listUsers: async () => ({ data: { users: [users[0]] } }) } } };
+		expect(await findAuthUserByCoinpaySub(onlyForged, 'sub-1')).toBeNull();
 	});
 
 	it('carries expires_at, which the auth store requires', () => {
