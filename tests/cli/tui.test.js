@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToScreen } from '@profullstack/hqtui/testing';
 import { setIconMode } from '@profullstack/hqtui';
-import { CHAT_LIST_REFRESH_MS, chatsWithNews, initialState, listed, mentionSuggestions, render, SLASH_COMMANDS, tabComplete, transcriptLines } from '../../src/cli/tui.js';
+import { CHAT_LIST_REFRESH_MS, chatsWithNews, initialState, listed, mentionSuggestions, NEW_CHAT_COMMANDS, parseNewChat, render, SLASH_COMMANDS, tabComplete, transcriptLines } from '../../src/cli/tui.js';
 
 setIconMode('unicode');
 
@@ -89,7 +89,7 @@ describe('the qc client screen', () => {
 		const s = initialState({ username: 'x' });
 		expect(draw(s).text()).toContain('Loading your chats');
 		s.loading = false;
-		expect(draw(s).text()).toContain('Pick a chat on the left');
+		expect(draw(s).text()).toContain('No chats yet. Type /msg @name');
 	});
 });
 
@@ -178,5 +178,29 @@ describe('@mention completion in the composer', () => {
 		expect(text).toContain('@al → alice  alina  (Tab)');
 		expect(text).not.toContain('alice is typing…');
 		expect(text).toMatch(/TAB\s+complete @/i);
+	});
+});
+
+describe('messaging someone new from the qc client', () => {
+	it('/msg, /dm, /query and /new start a direct chat, with an optional first message', () => {
+		expect(SLASH_COMMANDS).toEqual(expect.arrayContaining(NEW_CHAT_COMMANDS));
+		expect(NEW_CHAT_COMMANDS).toEqual(expect.arrayContaining(['msg', 'dm', 'query', 'new']));
+		expect(parseNewChat('@alice hi there\nsecond line')).toEqual({ who: '@alice', text: 'hi there\nsecond line' });
+		expect(parseNewChat('  bob  ')).toEqual({ who: 'bob', text: '' });
+		expect(parseNewChat('')).toBeNull();
+	});
+
+	it('tells someone with no chats how to start one', () => {
+		const s = initialState({ id: 'me', username: 'anthony' });
+		s.loading = false;
+		const text = draw(s).text();
+		expect(text).toContain('No chats yet. Type /msg @name to message someone.');
+		expect(text).toContain('/msg @name to start a chat');
+	});
+
+	it('offers n for a new chat in the chat list', () => {
+		const s = state();
+		s.focus = 'list';
+		expect(draw(s).text()).toContain('new chat');
 	});
 });

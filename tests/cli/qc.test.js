@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ephemeralKeypair, keyring, openKeyBlob } from '../../src/cli/crypto.js';
-import { QcClient, readSse, conversationTitle } from '../../src/cli/api.js';
+import { QcClient, readSse, conversationTitle, pickUser } from '../../src/cli/api.js';
 import { parseArgs, findChat } from '../../src/cli/commands.js';
 import { handle } from '../../src/cli/mcp.js';
 import { matchCode } from '../../src/lib/auth/cli-match.js';
@@ -180,7 +180,7 @@ describe('qc mcp', () => {
 		const init = await handle(fake, { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, { version: '1' });
 		expect(init.serverInfo.name).toBe('qc');
 		const { tools } = await handle(fake, { id: 2, method: 'tools/list' }, { version: '1' });
-		expect(tools.map((t) => t.name)).toEqual(['list_chats', 'read_chat', 'send_message', 'list_mentions', 'react_to_message']);
+		expect(tools.map((t) => t.name)).toEqual(['list_chats', 'read_chat', 'send_message', 'start_direct_chat', 'list_mentions', 'react_to_message']);
 	});
 
 	it('calls tools and reports errors as tool errors', async () => {
@@ -249,5 +249,43 @@ describe('qc login on a remote box', () => {
 		expect(() => parsePasted(`http://127.0.0.1:1/callback?code=${code}&state=zzz`, 'abc')).toThrow(/different login/);
 		expect(parsePasted('nope', 'abc')).toBeNull();
 		expect(parsePasted('', 'abc')).toBeNull();
+	});
+});
+
+describe('starting a direct chat', () => {
+	const people = [
+		{ id: 'u1', username: 'alice', display_name: 'Alice Liddell' },
+		{ id: 'u2', username: 'alicia', display_name: 'Alicia' },
+	];
+
+	it('picks an exact @username, else the only match, else names the candidates', () => {
+		expect(pickUser(people, '@alice').id).toBe('u1');
+		expect(pickUser(people, 'ALICE').id).toBe('u1');
+		expect(pickUser([people[1]], 'ali').id).toBe('u2');
+		expect(() => pickUser(people, 'ali')).toThrow(/matches 2 people: @alice \(Alice Liddell\), @alicia/);
+		expect(() => pickUser([], 'zed')).toThrow(/Nobody on qrypt.chat matches "zed"/);
+	});
+
+	it('searches with the Bearer token, creates the direct chat and returns it from the chat list', async () => {
+		const calls = [];
+		const fetch = vi.fn(async (url, init) => {
+			const u = new URL(url);
+			calls.push(`${init?.method || 'GET'} ${u.pathname}${u.search}`);
+			expect(init.headers.Authorization).toBe('Bearer tok');
+			if (u.pathname === '/api/users/search') return json({ users: people });
+			if (u.pathname === '/api/chat/conversations') {
+				expect(JSON.parse(init.body)).toEqual({ type: 'direct', participant_ids: ['u1'] });
+				return json({ conversation_id: 'c9' });
+			}
+			if (u.pathname === '/api/conversations/load') return json({ conversations: [{ id: 'c9', participants: [{ user_id: 'me' }, { user_id: 'u1', user: { username: 'alice', display_name: 'Alice Liddell' } }] }] });
+			return json({ error: 'nope' }, 404);
+		});
+		const client = new QcClient(
+			{ base: 'https://chat.test', access_token: 'tok', refresh_token: 'r', expires_at: Date.now() / 1000 + 3600, user: { id: 'me' }, keys: await account() },
+			{ fetch, save: () => {} },
+		);
+		const chat = await client.startDirect('@alice');
+		expect(chat).toMatchObject({ id: 'c9', title: 'Alice Liddell' });
+		expect(calls).toEqual(['GET /api/users/search?q=alice', 'POST /api/chat/conversations', 'POST /api/conversations/load']);
 	});
 });

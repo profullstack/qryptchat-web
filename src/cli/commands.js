@@ -48,10 +48,12 @@ Usage:
   qc read <chat> [-n 20]  print the last messages of a chat
   qc send <chat> <text>   send a message (text "-" reads stdin; --reply <message-id> to reply);
                           an @partial that matches one person becomes their @username
+  qc dm <@user> [text]    start (or reopen) a direct chat with anyone on qrypt.chat and send
+                          text if given ("-" reads stdin); qc msg is the same. In the client: /msg @user
   qc mentions <chat> [@partial]   who @ completes to in a chat, best match first (one per line)
   qc react <chat> <message-id> <emoji> [--remove]   react to a message
   qc listen               print new messages as they arrive (NDJSON with --json; --notify alerts with it)
-  qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message, list_mentions)
+  qc mcp                  run as an MCP server on stdio (list_chats, read_chat, send_message, start_direct_chat, list_mentions)
   qc join <link>          join a group chat from its invite link (https://qrypt.chat/join/...)
   qc invite <chat>        print a group's invite link (group admins) [--reset makes a new one, --off turns it off]
 
@@ -366,6 +368,17 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			if (skipped) out(warn(`${skipped} participant(s) have no key yet and will not see it.`));
 			for (const a of m.ambiguous) out(warn(`@${a.query} could be ${a.matches.join(', ')}: sent as typed.`));
 			return out(`${mark('send')}Sent to ${chat.title}.`);
+		}
+		case 'dm':
+		case 'msg': {
+			if (!rest[0]) throw new Error(`Usage: qc ${cmd} <@user> [text]   (a username, or a name only one person has)`);
+			const text = rest[1] === '-' && rest.length === 2 ? (await readStdin()).trim() : rest.slice(1).join(' ');
+			const c = await client(flags);
+			const chat = await c.startDirect(rest[0]);
+			const sent = text ? await c.send(chat.id, text) : null;
+			if (flags.json) return json({ conversation: chat.id, title: chat.title, ...(sent ? { id: sent.message?.id, skipped: sent.skipped } : {}) });
+			if (sent?.skipped) out(warn(`${chat.title} has no key yet and will not see it until they sign in.`));
+			return out(`${mark('send')}${sent ? `Sent to ${chat.title}` : `Chat with ${chat.title} is open (qc send "${chat.title}" <text>)`}.`);
 		}
 		case 'listen': {
 			const c = await client(flags);

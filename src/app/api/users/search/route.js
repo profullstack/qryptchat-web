@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase.js';
+import { authenticateRequest } from '@/lib/api/middleware/auth.js';
 import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
 
 // Directory search has to reach across every user, which is the one thing the narrowed
@@ -16,13 +16,12 @@ const MIN_PHONE_QUERY_LENGTH = 7;
 
 export async function GET(request, { params } = {}) {
 	try {
-		const supabase = await createSupabaseServerClient();
 		const url = new URL(request.url);
 		const query = url.searchParams.get('q');
-		
-		// Get user from session
-		const { data: { user }, error: userError } = await supabase.auth.getUser();
-		if (userError || !user) {
+
+		// Bearer (qc, MCP, passkey and CoinPay sessions) or the cookie session.
+		const { user } = await authenticateRequest(request);
+		if (!user) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 

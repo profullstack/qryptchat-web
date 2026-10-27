@@ -12,7 +12,9 @@
  *   └─────────────┘└──────────────────────────────────────────────┘
  *    ENTER send  CTRL+E emoji  TAB chats  PGUP scroll      ● live
  *
- * Composer commands: /voice posts a fresh end-to-end encrypted PairUX room,
+ * Composer commands: /msg @name [text] starts (or reopens) a direct chat with
+ * anyone on qrypt.chat, IRC-style (/dm, /query and /new too; `n` in the list
+ * types it for you), /voice posts a fresh end-to-end encrypted PairUX room,
  * /archive and /unarchive file the open chat away, /archived flips the list
  * between your chats and the archived ones (also Ctrl+O; `a` in the list).
  * /names (who is here) and /list (your chats) answer IRC-style in the
@@ -95,7 +97,16 @@ export function chatsWithNews(prev, next) {
 }
 
 /** Composer slash commands the TUI handles itself; anything else is sent as typed. */
-export const SLASH_COMMANDS = ['voice', 'archive', 'unarchive', 'archived', 'names', 'list'];
+export const SLASH_COMMANDS = ['voice', 'archive', 'unarchive', 'archived', 'names', 'list', 'msg', 'dm', 'query', 'new'];
+
+/** The slash commands that start a direct chat: /msg @name [first message]. */
+export const NEW_CHAT_COMMANDS = ['msg', 'dm', 'query', 'new'];
+
+/** "/msg @alice hi there" args as { who: '@alice', text: 'hi there' }. */
+export function parseNewChat(args) {
+	const m = /^(\S+)(?:\s+([\s\S]*))?$/.exec(String(args ?? '').trim());
+	return m ? { who: m[1], text: (m[2] ?? '').trim() } : null;
+}
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const timeOf = (iso) => {
@@ -156,7 +167,8 @@ function drawTranscript(surface, state) {
 	const theme = surface.theme;
 	const messages = state.messages[state.activeId] || [];
 	if (!state.activeId) {
-		surface.text(1, 1, state.loading ? 'Loading your chats…' : 'Pick a chat on the left.', { fg: theme.muted });
+		const hint = state.loading ? 'Loading your chats…' : state.conversations.length ? 'Pick a chat on the left, or type /msg @name to start one.' : 'No chats yet. Type /msg @name to message someone.';
+		surface.text(1, 1, hint, { fg: theme.muted });
 		return;
 	}
 	if (!messages.length) {
@@ -256,7 +268,7 @@ export function render({ ui, width, height, theme }, state, on = {}) {
 				p.textInput({
 					value: state.field.value,
 					cursor: state.field.cursor,
-					placeholder: active ? `Message ${active.title}  (@name Tab, Ctrl+E emoji, :rocket: works too)` : 'Pick a chat first',
+					placeholder: active ? `Message ${active.title}  (@name Tab, Ctrl+E emoji, /msg @name for a new chat)` : '/msg @name to start a chat',
 					focused: state.focus === 'compose' && !state.picker,
 					size: 1,
 				});
@@ -270,7 +282,7 @@ export function render({ ui, width, height, theme }, state, on = {}) {
 			{ key: 'Ctrl+E', label: 'emoji' },
 			{ key: 'Tab', label: state.focus === 'list' ? 'compose' : mention?.matches.length ? 'complete @' : 'chats' },
 			{ key: 'PgUp', label: 'scroll' },
-			...(state.focus === 'list' ? [{ key: 'a', label: state.showArchived ? 'unarchive' : 'archive' }] : []),
+			...(state.focus === 'list' ? [{ key: 'n', label: 'new chat' }, { key: 'a', label: state.showArchived ? 'unarchive' : 'archive' }] : []),
 			{ key: 'Ctrl+O', label: state.showArchived ? 'chats' : 'archived' },
 			{ key: 'Ctrl+C', label: 'quit' },
 		],
@@ -439,13 +451,43 @@ export async function runTui(client, { initialChat } = {}) {
 		}
 	}
 
+	/** Open a chat already in state.conversations, switching to the archived view if that is where it is. */
+	function openById(id) {
+		const chat = state.conversations.find((c) => c.id === id);
+		if (!chat) return;
+		state.showArchived = !!chat.is_archived;
+		openAt(listed(state).findIndex((c) => c.id === id));
+		state.focus = 'compose';
+	}
+
+	/** /msg @name [text]: find the person, open (or reuse) your direct chat, send the text if any. */
+	async function startChat(args) {
+		const want = parseNewChat(args);
+		if (!want) return note('Usage: /msg @name [message]  (a username, or a name only one person has)');
+		note(`Looking up ${want.who}…`, { sticky: true });
+		try {
+			const chat = await client.startDirect(want.who);
+			if (!state.conversations.some((c) => c.id === chat.id)) state.conversations = [chat, ...state.conversations];
+			openById(chat.id);
+			note(`Chat with ${chat.title} is open`);
+			if (want.text) {
+				state.field = { value: want.text, cursor: want.text.length };
+				await send({ text: true });
+			}
+		} catch (err) {
+			note(err.message, { sticky: err.status === 409 });
+		}
+		redraw();
+	}
+
 	/** A slash command typed in the composer; true when it was one. */
 	function runSlash(raw) {
 		const cmd = parseSlashCommand(raw, SLASH_COMMANDS);
 		if (!cmd) return false;
 		const active = state.conversations.find((c) => c.id === state.activeId);
 		state.field = { value: '', cursor: 0 };
-		if (cmd.name === 'archived') toggleArchivedView();
+		if (NEW_CHAT_COMMANDS.includes(cmd.name)) startChat(cmd.args);
+		else if (cmd.name === 'archived') toggleArchivedView();
 		else if (!active) note('Pick a chat first');
 		else if (cmd.name === 'names' || cmd.name === 'list') {
 			// IRC-style, answered from the loaded chat list and shown only here.
@@ -465,8 +507,9 @@ export async function runTui(client, { initialChat } = {}) {
 		return true;
 	}
 
-	async function send({ raw = false } = {}) {
-		if (!raw && runSlash(state.field.value)) return;
+	/** raw: send exactly as typed (no :shortcodes:); text: plain text, never a slash command. */
+	async function send({ raw = false, text: plain = false } = {}) {
+		if (!raw && !plain && runSlash(state.field.value)) return;
 		const text = raw ? state.field.value.trim() : emojify(state.field.value.trim(), { mode: 'emoji' });
 		if (!text || !state.activeId) return;
 		const id = state.activeId;
@@ -544,7 +587,10 @@ export async function runTui(client, { initialChat } = {}) {
 			if (event.key === 'up' || event.key === 'k') state.selected = Math.max(0, state.selected - 1);
 			else if (event.key === 'down' || event.key === 'j') state.selected = Math.min(listed(state).length - 1, state.selected + 1);
 			else if (event.key === 'enter' || event.key === 'right' || event.key === 'l') handlers.open(state.selected);
-			else if (event.key === 'a') {
+			else if (event.key === 'n') {
+				state.field = { value: '/msg @', cursor: 6 };
+				state.focus = 'compose';
+			} else if (event.key === 'a') {
 				const c = listed(state)[state.selected];
 				if (c) setArchived(c, !c.is_archived);
 			}

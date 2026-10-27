@@ -49,6 +49,7 @@ The mouse works too: click a chat, scroll the transcript, click an emoji. Unread
 ```sh
 qc chats                        # id and name of every chat
 qc read alice -n 20             # the last 20 messages, decrypted
+qc dm @alice "hey, it's me"     # start (or reopen) a direct chat with anyone, by @username
 qc send alice "on my way"       # encrypted to every participant
 qc send ops "@ri deploy is done" # an @partial matching one person is sent as @riotcoder
 qc mentions ops @al             # who @al completes to: @alice, @alina
