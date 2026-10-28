@@ -66,7 +66,7 @@
     "@profullstack/pairux-embed": "^0.1.0",
     "@profullstack/stack": "^0.5.0",
     "@profullstack/text-type-detection": "^1.0.0",
-    "@profullstack/x402-gateway": "^0.15.2",
+    "@profullstack/x402-gateway": "^0.15.3",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.3",
     "@supabase/ssr": "^0.12.7",
