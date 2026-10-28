@@ -14,7 +14,7 @@
         "@profullstack/pairux-embed": "^0.1.0",
         "@profullstack/stack": "^0.5.0",
         "@profullstack/text-type-detection": "^1.0.0",
-        "@profullstack/x402-gateway": "^0.15.1",
+        "@profullstack/x402-gateway": "^0.15.2",
         "@simplewebauthn/browser": "^14.0.0",
         "@simplewebauthn/server": "^14.0.3",
         "@supabase/ssr": "^0.12.7",
@@ -390,7 +390,7 @@
 
     "@profullstack/text-type-detection": ["@profullstack/text-type-detection@1.0.0", "", {}, "sha512-3tG0Icz2gwLfwbOwdYxgCTTcjCyAAhEnU82ReIrbOQiN8f3R84WrPLWfE4Pqg/ce57VFVPpNkSmd5doaXKV+dw=="],
 
-    "@profullstack/x402-gateway": ["@profullstack/x402-gateway@0.15.1", "", { "dependencies": { "@profullstack/keys": "^0.1.0" } }, "sha512-yw4q8XAtop9p6jHV3z5tRnCF7af8O7pn7ZlbuWeeN87XXtynFNZnoJFd1xZTTHEj994Bvnxg9yIjwkv7coI4rQ=="],
+    "@profullstack/x402-gateway": ["@profullstack/x402-gateway@0.15.2", "", { "dependencies": { "@profullstack/keys": "^0.1.0" } }, "sha512-f0el7rPd13StA04OxA0PGrrG0kxg/vvGPtvI0XYn8wlTGPut3G+2UKcMRzSxQdaF4LkYAOLnkg9S+LhmIKvDBA=="],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.15", "", { "os": "android", "cpu": "arm" }, "sha512-aLcgK9gIJ3YRvrrtfSBbRa27F5WrpiTaPulnFpsHPxpUHgFlSgnU4854MHwoRGEBhfRJDWCS2WQ7lIjskE9Olw=="],
 
