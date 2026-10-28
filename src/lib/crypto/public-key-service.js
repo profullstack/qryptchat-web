@@ -9,6 +9,35 @@ import { Base64 } from './index.js';
 /**
  * Public key management service
  */
+/** A participant or key lookup that failed on the wire (status 0 = network). */
+export class KeyLookupError extends Error {
+	constructor(status) {
+		super(
+			status === 429
+				? 'The server is busy (rate limited), so the message was not sent. Wait a few seconds and send again.'
+				: `Could not load this chat's encryption keys (${status ? `HTTP ${status}` : 'network error'}), so the message was not sent. Try again.`
+		);
+		this.name = 'KeyLookupError';
+		this.status = status;
+	}
+}
+
+/**
+ * fetch that waits out a 429/503 (Retry-After, capped) up to twice.
+ * @param {string} url
+ * @param {RequestInit} [init]
+ */
+export async function fetchRetrying(url, init, { tries = 3, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+	let response;
+	for (let attempt = 1; attempt <= tries; attempt++) {
+		response = await fetch(url, init);
+		if ((response.status !== 429 && response.status !== 503) || attempt === tries) return response;
+		const retryAfter = Number(response.headers?.get?.('retry-after'));
+		await sleep(Math.min(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * attempt, 3000));
+	}
+	return response;
+}
+
 export class PublicKeyService {
 	constructor() {
 		this.cache = new Map(); // userId -> publicKey cache
@@ -109,7 +138,7 @@ export class PublicKeyService {
 			console.log(`🔑 Fetching public keys for ${userIds.length} users via API`);
 
 			// Use the bulk API endpoint for better performance (SvelteKit handles auth via cookies/session)
-			const response = await fetch('/api/crypto/public-keys', {
+			const response = await fetchRetrying('/api/crypto/public-keys', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -165,10 +194,10 @@ export class PublicKeyService {
 	async getConversationParticipantKeys(conversationId) {
 		try {
 			// Get conversation participants via API (SvelteKit handles auth via cookies/session)
-			const response = await fetch(`/api/chat/conversations/${conversationId}/participants`);
-			
+			const response = await fetchRetrying(`/api/chat/conversations/${conversationId}/participants`);
+
 			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				throw new KeyLookupError(response.status);
 			}
 
 			const data = await response.json();
@@ -186,7 +215,10 @@ export class PublicKeyService {
 
 		} catch (error) {
 			console.error(`🔑 ❌ Failed to get participant keys for conversation ${conversationId}:`, error);
-			return new Map();
+			// A failed lookup is not "nobody has keys": reporting it as an empty map
+			// told people their keys were gone when the server had only said 429.
+			if (error instanceof KeyLookupError) throw error;
+			throw new KeyLookupError(0);
 		}
 	}
 

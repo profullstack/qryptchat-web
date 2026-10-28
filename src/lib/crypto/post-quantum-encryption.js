@@ -177,6 +177,26 @@ export class PostQuantumEncryptionService {
 	}
 
 	/**
+	 * This device's key pair for `alg`, loaded but never generated. Decrypting
+	 * with a freshly generated key can only fail, and making one here quietly
+	 * replaced keys that had been wiped, so the next sign-in saw "this device's
+	 * keys differ" and asked for a restore.
+	 * @param {string} alg
+	 * @returns {Promise<{publicKey: string, privateKey: string}>}
+	 */
+	async storedUserKeys(alg) {
+		const is768 = alg === this.kemName768;
+		if (is768 ? !this.userKeys768 : !this.userKeys) {
+			await (is768 ? this.loadUserKeys768() : this.loadUserKeys());
+		}
+		const keys = is768 ? this.userKeys768 : this.userKeys;
+		if (!keys?.privateKey) {
+			throw new Error('No encryption keys on this device. Restore them in Settings > Keys (backup PIN).');
+		}
+		return keys;
+	}
+
+	/**
 	 * Get user's public key (for sharing with others)
 	 * @returns {Promise<string>} Base64 encoded public key
 	 */
@@ -396,7 +416,7 @@ export class PostQuantumEncryptionService {
 			// Decrypt with one parameter set and our matching private key. The cipher
 			// itself is @profullstack/encrypt's; this keeps qrypt.chat's key handling.
 			const open = async (alg) => {
-				const keys = alg === this.kemName768 ? await this.getUserKeys768() : await this.getUserKeys();
+				const keys = await this.storedUserKeys(alg);
 				const privateKeyBytes = this.stripKeyHeaderIfPresent(Base64.decode(keys.privateKey));
 				const expected = alg === this.kemName768 ? 2400 : 3168;
 				if (privateKeyBytes.length !== expected) {

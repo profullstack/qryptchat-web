@@ -208,7 +208,8 @@ export class PWASessionManager {
 			
 			if (sessionResult.error) {
 				console.log('⚠️ Session validation failed:', sessionResult.error);
-				return false;
+				// Offline or the auth server is restarting: keep the session and retry later.
+				return !!sessionResult.transient;
 			}
 			
 			console.log('✅ Session is valid');
@@ -314,8 +315,10 @@ export class PWASessionManager {
 		// Disconnect SSE
 		chat.disconnect();
 		
-		// Reset auth state
-		auth.logout();
+		// Reset auth state. Keep this device's E2EE keys: an expired session is
+		// not "a different person is using this browser", and wiping them made
+		// every expiry end in a key restore.
+		auth.logout({ keepKeys: true });
 		
 		console.log('🔄 Session cleared - user needs to re-authenticate');
 	}

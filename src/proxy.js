@@ -4,7 +4,12 @@ import { gate } from '@/lib/server/crawl-gateway.js';
 
 const authRateLimiter = new RateLimiter({ maxRequests: 10, windowMs: 60 * 1000 });
 const webhookRateLimiter = new RateLimiter({ maxRequests: 100, windowMs: 60 * 1000 });
-const apiRateLimiter = new RateLimiter({ maxRequests: 60, windowMs: 60 * 1000 });
+// The chat app alone polls conversations every few seconds and reloads after
+// each send, so 60/min starved a signed-in tab: the next send's key lookup got
+// 429 and showed as "no encryption keys" (2026-10-28). House rule is 5x headroom.
+const apiRateLimiter = new RateLimiter({ maxRequests: 300, windowMs: 60 * 1000 });
+// Typing indicators are cheap and chatty; they must never eat the API budget.
+const typingRateLimiter = new RateLimiter({ maxRequests: 120, windowMs: 60 * 1000 });
 const keyBackupRateLimiter = new RateLimiter({ maxRequests: 10, windowMs: 15 * 60 * 1000 });
 
 function rateLimitedResponse() {
@@ -50,6 +55,9 @@ export async function proxy(request) {
     if (!allowed) return rateLimitedResponse();
   } else if (pathname.startsWith('/api/webhooks/') || pathname === '/api/phone/webhook' || pathname === '/api/phone/coinpay-webhook' || pathname.startsWith('/api/phone/agent-')) {
     const { allowed } = webhookRateLimiter.check(ip);
+    if (!allowed) return rateLimitedResponse();
+  } else if (pathname.startsWith('/api/typing/')) {
+    const { allowed } = typingRateLimiter.check(ip);
     if (!allowed) return rateLimitedResponse();
   } else if (pathname.startsWith('/api/')) {
     const { allowed } = apiRateLimiter.check(ip);

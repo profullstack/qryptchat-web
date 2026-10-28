@@ -27,7 +27,8 @@ export const useAuthStore = create((set, get) => ({
             return;
           } else if (session.refresh_token) {
             const refreshResult = await get().refreshSession(session.refresh_token);
-            if (refreshResult.success) {
+            // A network blip or a restarting auth server is not a sign-out.
+            if (refreshResult.success || refreshResult.transient) {
               set({ user, loading: false });
               setTimeout(async () => {
                 try { await keySyncService.autoSyncOnLogin(); } catch {}
@@ -51,13 +52,18 @@ export const useAuthStore = create((set, get) => ({
     try {
       const supabase = createSupabaseClient();
       const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-      if (error || !data.session) return { success: false, error: error?.message };
+      if (error || !data.session) {
+        // 4xx = the refresh token is really dead; anything else (network, 5xx
+        // while the DB restarts) is temporary and must not sign anyone out.
+        const status = Number(error?.status) || 0;
+        return { success: false, error: error?.message, transient: !(status >= 400 && status < 500) };
+      }
       if (typeof window !== 'undefined') {
         localStorage.setItem('qrypt_session', JSON.stringify(data.session));
       }
       return { success: true, session: data.session };
     } catch {
-      return { success: false, error: 'Failed to refresh session' };
+      return { success: false, error: 'Failed to refresh session', transient: true };
     }
   },
 
@@ -72,7 +78,7 @@ export const useAuthStore = create((set, get) => ({
         if (session.refresh_token) {
           const result = await get().refreshSession(session.refresh_token);
           if (result.success) return { session: result.session };
-          return { error: 'Session expired and refresh failed' };
+          return { error: 'Session expired and refresh failed', transient: !!result.transient };
         }
       }
       return { error: 'Session expired' };
@@ -161,7 +167,12 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  async logout() {
+  /**
+   * @param {{ keepKeys?: boolean }} [options] keepKeys: an automatic sign-out
+   *   (session expired) leaves this device's E2EE keys alone. Wiping them there
+   *   made people restore their keys every time a refresh failed (2026-10-28).
+   */
+  async logout({ keepKeys = false } = {}) {
     set({ loading: true });
     try {
       const supabase = createSupabaseClient();
@@ -175,16 +186,19 @@ export const useAuthStore = create((set, get) => ({
     // restores your keys exactly like signing in on a new device. (The
     // "Complete Key Reset" in settings is the nuclear option that ALSO deletes
     // the server backup — logout must never do that.)
+    if (!keepKeys) {
+      try {
+        await keyManager.clearAllKeys();
+      } catch {}
+      try {
+        // Memory and both key pairs, not just the IndexedDB copy of one.
+        const { postQuantumEncryption } = await import('@/lib/crypto/post-quantum-encryption.js');
+        await postQuantumEncryption.clearUserKeys();
+      } catch {}
+    }
     try {
-      await keyManager.clearAllKeys();
-    } catch {}
-    try {
-      const { indexedDBManager } = await import('@/lib/crypto/indexed-db-manager.js');
-      await indexedDBManager.delete('qryptchat_pq_keypair');
-    } catch {}
-    try {
-      ['qrypt_user', 'qrypt_session', 'supabase.auth.token',
-       'qryptchat_keys', 'qryptchat_storage_enc_key', 'qryptchat_user_keys']
+      const keys = keepKeys ? [] : ['qryptchat_keys', 'qryptchat_storage_enc_key', 'qryptchat_user_keys'];
+      ['qrypt_user', 'qrypt_session', 'supabase.auth.token', ...keys]
         .forEach((k) => localStorage.removeItem(k));
     } catch {}
 
@@ -214,7 +228,7 @@ export const auth = {
   init: () => useAuthStore.getState().init(),
   sendSMS: (...args) => useAuthStore.getState().sendSMS(...args),
   verifySMS: (...args) => useAuthStore.getState().verifySMS(...args),
-  logout: () => useAuthStore.getState().logout(),
+  logout: (options) => useAuthStore.getState().logout(options),
   getCurrentSession: () => useAuthStore.getState().getCurrentSession(),
   refreshSession: (...args) => useAuthStore.getState().refreshSession(...args),
   updateUser: (...args) => useAuthStore.getState().updateUser(...args),

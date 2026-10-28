@@ -9,6 +9,8 @@ import { reactionEnvelope, REACTION_TYPE } from '@/lib/chat/reactions.js';
 import { callEnvelope, newCallKey, CALL_TYPE } from '@/lib/chat/calls.js';
 import { CHAT_LIST_EVENTS, CHATS_CHANGED_EVENT } from '@/lib/chat/membership-events.js';
 
+const TYPING_RESEND_MS = 2500;
+
 export const useChatStore = create((set, get) => {
   let eventSource = null;
   let reconnectAttempts = 0;
@@ -16,6 +18,11 @@ export const useChatStore = create((set, get) => {
   let reconnectDelay = 1000;
   const maxReconnectDelay = 30000;
   let typingTimeout = null;
+  // One typing/start per conversation every few seconds, not one per keystroke:
+  // a keystroke each burned the per-IP API budget, so the next send's key
+  // lookup came back 429 and looked like missing keys (2026-10-28).
+  let typingSentAt = 0;
+  let typingSentFor = null;
   let reconnectTimeout = null;
   let connectionToken = null;
 
@@ -327,12 +334,18 @@ export const useChatStore = create((set, get) => {
     },
 
     async stopTyping(conversationId) {
+      typingSentFor = null;
       try { await apiPost('/api/typing/stop', { conversationId }); } catch {}
     },
 
     setTyping(conversationId) {
       if (typingTimeout) clearTimeout(typingTimeout);
-      get().startTyping(conversationId);
+      const now = Date.now();
+      if (typingSentFor !== conversationId || now - typingSentAt > TYPING_RESEND_MS) {
+        typingSentAt = now;
+        typingSentFor = conversationId;
+        get().startTyping(conversationId);
+      }
       typingTimeout = setTimeout(() => get().stopTyping(conversationId), 3000);
     },
 
