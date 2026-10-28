@@ -14,8 +14,12 @@ import IncomingCallModal from '@/lib/components/voice-call/IncomingCallModal.jsx
 import ActiveCallInterface from '@/lib/components/voice-call/ActiveCallInterface.jsx';
 
 // Before anything fetches: every /api/ call carries the session as a Bearer
-// token, since passkey/CoinPay/phone sessions have no cookie.
-installApiAuth({ refresh: (token) => useAuthStore.getState().refreshSession(token) });
+// token, since passkey/CoinPay/phone sessions have no cookie. A session the
+// server has revoked signs out locally, keeping this device's E2EE keys.
+installApiAuth({
+  refresh: (token) => useAuthStore.getState().refreshSession(token),
+  onExpired: () => useAuthStore.getState().logout({ keepKeys: true }),
+});
 
 export default function ClientLayout({ children, footerBottom }) {
   const pathname = usePathname();

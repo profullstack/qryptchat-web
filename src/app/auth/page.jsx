@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { afterSignInPath } from '@/lib/auth/after-sign-in.js';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useMessagesStore } from '@/lib/stores/messages.js';
@@ -101,7 +102,7 @@ export default function AuthPage() {
       hasPin = r.ok ? (await r.json()).hasPin : false;
     } catch {}
     if (!hasPin && hasLocalKeys) { setVerifiedSession(session); setStep('backup'); return; }
-    router.push('/chat');
+    router.push(afterSignInPath());
   }
 
   // A CoinPay redirect (popups blocked) hands the session over in a short-lived
@@ -173,7 +174,7 @@ export default function AuthPage() {
   }
 
   useEffect(() => {
-    if (authenticated) router.replace('/chat');
+    if (authenticated) router.replace(afterSignInPath());
   }, [authenticated]);
 
   // CoinPay popup flow: the popup completes OAuth and postMessages the session
@@ -230,7 +231,7 @@ export default function AuthPage() {
 
     if (result.success) {
       if (result.isNewUser) {
-        router.push('/chat');
+        router.push(afterSignInPath());
       } else {
         const sessionToken = result.session?.access_token;
         const authHeaders = sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {};
@@ -251,7 +252,7 @@ export default function AuthPage() {
             return;
           }
         } catch { setVerifiedSession(result.session); setStep('restore'); return; }
-        router.push('/chat');
+        router.push(afterSignInPath());
       }
     } else if (result.requiresUsername) {
       setVerifiedSession(result.session);
@@ -281,7 +282,7 @@ export default function AuthPage() {
           await keyManager.generateUserKeys();
           setStep('backup');
           msgStore.success('Account created! Please set a Backup PIN.');
-        } catch { msgStore.warning('Account created but failed to generate encryption keys.'); router.push('/chat'); }
+        } catch { msgStore.warning('Account created but failed to generate encryption keys.'); router.push(afterSignInPath()); }
       } else { msgStore.error(data.error || 'Failed to create account'); }
     } catch { msgStore.error('Failed to create account. Please try again.'); }
   }
@@ -301,7 +302,7 @@ export default function AuthPage() {
       const backupRes = await fetch('/api/auth/key-backup', { method: 'PUT', headers: backupHeaders, body: JSON.stringify({ encrypted_keys: encryptedData, pin: backupPin }) });
       if (!backupRes.ok) { const e = await backupRes.json().catch(() => ({})); throw new Error(e.error || 'Key backup failed'); }
       msgStore.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
-      router.push('/chat');
+      router.push(afterSignInPath());
     } catch (err) { msgStore.error('Failed to set backup PIN: ' + (err.message || 'Unknown error')); }
   }
 
@@ -313,7 +314,7 @@ export default function AuthPage() {
       await privateKeyManager.restoreKeysFromServer(restorePin);
       msgStore.success('Encryption keys restored successfully!');
       setRestorePin(''); setRestoreAttempts(0);
-      router.push('/chat');
+      router.push(afterSignInPath());
     } catch (err) {
       // The server counts wrong PINs and locks restore; its message says how
       // many tries are left or how long to wait.
@@ -463,7 +464,7 @@ export default function AuthPage() {
                 <button type="submit" disabled={loading || !backupPin || !confirmBackupPin} className="primary-button">
                   {loading ? <><span className="loading-spinner" /> Setting PIN...</> : 'Set Backup PIN'}
                 </button>
-                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Backup PIN skipped. You can set one later in Settings.'); router.push('/chat'); }}>Skip (Not Recommended)</button>
+                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Backup PIN skipped. You can set one later in Settings.'); router.push(afterSignInPath()); }}>Skip (Not Recommended)</button>
               </div>
             </form>
           </div>
@@ -485,7 +486,7 @@ export default function AuthPage() {
                 <button type="submit" disabled={isRestoring || !restorePin} className="primary-button">
                   {isRestoring ? <><span className="loading-spinner" /> Restoring...</> : 'Restore Keys'}
                 </button>
-                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Key restore skipped.'); router.push('/chat'); }}>Skip</button>
+                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Key restore skipped.'); router.push(afterSignInPath()); }}>Skip</button>
               </div>
             </form>
           </div>

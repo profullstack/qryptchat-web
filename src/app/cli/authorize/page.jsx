@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import { matchCode } from '@/lib/auth/cli-match.js';
+import { returnAfterSignIn } from '@/lib/auth/after-sign-in.js';
 
 /**
  * Approve a `qc login`. The terminal opened this page with a PKCE challenge,
@@ -54,13 +55,12 @@ function Authorize() {
         ...(k768?.publicKey && k768?.privateKey ? { keys768: { ...k768, algorithm: postQuantumEncryption.kemName768 } } : {}),
       };
       const keyBlob = await postQuantumEncryption.encryptForRecipient(JSON.stringify({ v: 1, ...keys }), kem);
-      const session = JSON.parse(localStorage.getItem('qrypt_session') || '{}');
+      // No Authorization here: the app's fetch wrapper adds the session token,
+      // refreshing it first, and retries once on 401. A hand-built header from
+      // localStorage skipped all that and failed with a bare "Unauthorized".
       const res = await fetch('/api/cli/authorize', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code_challenge: challenge,
           code_challenge_method: 'S256',
@@ -71,6 +71,11 @@ function Authorize() {
         }),
       });
       const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        // The wrapper signs a dead session out, which shows "Sign in again"
+        // below; a refresh that only failed for now lands here instead.
+        throw new Error('Your sign-in could not be confirmed. Reload this page and try again, or sign in again.');
+      }
       if (!res.ok || !body.code) throw new Error(body.error_description || body.error || `HTTP ${res.status}`);
       setStatus('done');
       if (redirectUri === 'oob') {
@@ -111,8 +116,17 @@ function Authorize() {
     content = (
       <>
         <h1>Sign in first</h1>
-        <p>Sign in to qrypt.chat in this browser, then open the link from your terminal again.</p>
-        <Link className="cli-btn primary" href="/auth">Sign in</Link>
+        <p>
+          Sign in to qrypt.chat in this browser (your session may have expired). You will come straight back here to
+          approve the terminal, so keep <code>qc login</code> running.
+        </p>
+        <Link
+          className="cli-btn primary"
+          href="/auth"
+          onClick={() => returnAfterSignIn(window.location.pathname + window.location.search)}
+        >
+          Sign in
+        </Link>
       </>
     );
   } else if (status === 'done' && oobCode) {

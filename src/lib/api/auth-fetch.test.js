@@ -63,6 +63,37 @@ describe('installApiAuth', () => {
 		expect(w.calls[0].auth).toBeNull();
 	});
 
+	it('refreshes and retries once when a live-looking token is refused (signing keys rotated)', async () => {
+		session(3600, 'dead');
+		const refresh = vi.fn(async () => {
+			storage.setItem('qrypt_session', JSON.stringify({ access_token: 'new', refresh_token: 'r2', expires_at: Date.now() / 1000 + 3600 }));
+			return { success: true, session: { access_token: 'new' } };
+		});
+		const w = fakeWindow();
+		w.fetch.mockImplementation(async (input, init = {}) => {
+			const auth = new Headers(init.headers).get('authorization');
+			w.calls.push({ input, auth });
+			return new Response('{}', { status: auth === 'Bearer dead' ? 401 : 200 });
+		});
+		installApiAuth({ target: w, refresh });
+		const res = await w.fetch('/api/cli/authorize', { method: 'POST', body: '{}' });
+		expect(res.status).toBe(200);
+		expect(refresh).toHaveBeenCalledTimes(1);
+		expect(w.calls.map((c) => c.auth)).toEqual(['Bearer dead', 'Bearer new']);
+	});
+
+	it('ends the session when the refresh token is dead too, but not on a blip', async () => {
+		for (const [result, expired] of [[{ success: false, transient: false }, 1], [{ success: false, transient: true }, 0]]) {
+			session(3600, 'dead');
+			const onExpired = vi.fn();
+			const w = fakeWindow();
+			w.fetch.mockImplementation(async () => new Response('{}', { status: 401 }));
+			installApiAuth({ target: w, refresh: async () => result, onExpired });
+			expect((await w.fetch('/api/x')).status).toBe(401);
+			expect(onExpired).toHaveBeenCalledTimes(expired);
+		}
+	});
+
 	it('never targets the token endpoint itself', () => {
 		expect(isOwnApi('/api/cli/token', ORIGIN)).toBe(false);
 		expect(isOwnApi('/api/messages/send', ORIGIN)).toBe(true);
