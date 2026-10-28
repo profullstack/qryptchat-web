@@ -29,7 +29,12 @@ describe('exitWhenFlushed', () => {
 		expect(run('exitWhenFlushed(3);').status).toBe(3);
 	});
 
-	it('is needed: a bare process.exit truncates at the pipe buffer', () => {
+	// Why exitWhenFlushed exists: a bare process.exit usually truncates at the
+	// pipe buffer. "Usually" is the problem: whether the reader drains in time
+	// is up to the runner, and CI flushed the whole 1 MiB twice on 2026-10-28,
+	// so asserting the truncation made the suite flaky. The test above pins the
+	// behaviour that matters.
+	it.skip('is needed: a bare process.exit truncates at the pipe buffer', () => {
 		expect(run('process.exit(0);').stdout.length).toBeLessThan(SIZE);
 	});
 });
