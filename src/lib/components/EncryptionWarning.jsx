@@ -84,7 +84,7 @@ export default function EncryptionWarning() {
           <strong>This device has different keys from your account</strong>
           <p>
             Messages sent to you are encrypted to your account&apos;s key, which this browser doesn&apos;t hold, so they
-            won&apos;t open here. Restore your keys (backup PIN or key file) to read everything.
+            won&apos;t open here. Restore your keys (backup passphrase, recovery key or key file) to read everything.
           </p>
           {error && <p className="warning-error">{error}</p>}
           <div className="warning-actions">

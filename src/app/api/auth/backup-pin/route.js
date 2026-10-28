@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
-import { checkPin, hashPin, PIN_ALGORITHM, PIN_PATTERN, PIN_RULE, resolveInternalUserId as resolveUserId } from '@/lib/auth/backup-pin.js';
+import { PIN_ALGORITHM, resolveInternalUserId as resolveUserId } from '@/lib/auth/backup-pin.js';
 
 // node:crypto is required for scrypt, so pin this route to the Node runtime.
 export const runtime = 'nodejs';
@@ -145,80 +145,18 @@ export async function GET(request) {
 
 /**
  * POST /api/auth/backup-pin
- * Set or update the backup PIN for the authenticated user
+ * Retired. Key backups are now sealed in the browser under a passphrase and a
+ * recovery key (seal v2), so a new PIN would protect nothing; a stored hash of a
+ * short PIN is only an offline oracle. Legacy PIN rows are still checked by the
+ * key-backup route until LEGACY_KEY_MIGRATION=off, and deleted on upgrade.
  */
 export async function POST(request) {
-	try {
-		const { user, error: authError } = await authenticateUser(request);
-		if (authError || !user) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-		}
-
-		let body;
-		try {
-			body = await request.json();
-		} catch {
-			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-		}
-
-		const { pin, currentPin } = body;
-
-		if (!pin || typeof pin !== 'string' || pin.length < 4 || pin.length > 12) {
-			return NextResponse.json({ error: PIN_RULE }, { status: 400 });
-		}
-
-		if (!PIN_PATTERN.test(pin)) {
-			return NextResponse.json({ error: 'PIN must contain only digits' }, { status: 400 });
-		}
-
-		const { userId, error: lookupError } = await resolveInternalUserId(user);
-		if (lookupError || !userId) {
-			console.error('Error setting backup PIN:', lookupError);
-			return NextResponse.json({ error: 'Failed to set backup PIN' }, { status: 500 });
-		}
-
-		// Replacing a PIN the server can verify takes the current one. Otherwise a
-		// stolen session could set its own PIN and walk through the restore gate.
-		const current = await checkPin(getServiceRoleClient(), userId, typeof currentPin === 'string' ? currentPin : '');
-		if (current.status === 'error') {
-			console.error('Error checking backup PIN:', current.error);
-			return NextResponse.json({ error: 'Failed to set backup PIN' }, { status: 500 });
-		}
-		if (current.status === 'locked' || (current.status === 'wrong' && current.retryAfter)) {
-			const retryAfter = current.retryAfter;
-			return NextResponse.json(
-				{ error: 'Too many wrong PINs. Try again later.', code: 'PIN_LOCKED', retryAfter },
-				{ status: 429, headers: { 'Retry-After': String(retryAfter) } }
-			);
-		}
-		if (current.status === 'required') {
-			return NextResponse.json({ error: 'Enter your current PIN to change it', code: 'PIN_REQUIRED' }, { status: 403 });
-		}
-		if (current.status === 'wrong') {
-			return NextResponse.json({ error: 'Current PIN is wrong', code: 'PIN_WRONG', remaining: current.remaining }, { status: 403 });
-		}
-
-		const { hash, salt, algorithm } = await hashPin(pin);
-
-		const { error } = await getServiceRoleClient()
-			.from('user_backup_pins')
-			.upsert({
-				user_id: userId,
-				pin_hash: hash,
-				pin_salt: salt,
-				algorithm,
-				updated_at: new Date().toISOString()
-			}, { onConflict: 'user_id' });
-
-		if (error) {
-			console.error('Error setting backup PIN:', error);
-			return NextResponse.json({ error: 'Failed to set backup PIN' }, { status: 500 });
-		}
-
-		console.log(`🔑 Backup PIN set for user ${user.id}`);
-		return NextResponse.json({ success: true });
-	} catch (error) {
-		console.error('Error in POST /api/auth/backup-pin:', error);
-		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+	const { user, error: authError } = await authenticateUser(request);
+	if (authError || !user) {
+		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	return NextResponse.json(
+		{ error: 'Backup PINs are retired. Back up your keys with a passphrase instead.', code: 'PIN_RETIRED' },
+		{ status: 410 }
+	);
 }

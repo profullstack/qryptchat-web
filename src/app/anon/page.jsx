@@ -7,9 +7,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { useMessagesStore } from '@/lib/stores/messages.js';
 import { createSupabaseClient } from '@/lib/supabase.js';
 import { keyManager } from '@/lib/crypto/key-manager.js';
-import { privateKeyManager } from '@/lib/crypto/private-key-manager.js';
 import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import Message from '@/lib/components/Message.jsx';
+import KeyBackupSetup from '@/lib/components/KeyBackupSetup.jsx';
 
 /** Map register-anon error codes to friendly copy. */
 const INVITE_ERRORS = {
@@ -34,9 +34,6 @@ function AnonRegister() {
 	const [displayName, setDisplayName] = useState('');
 	const [submitting, setSubmitting] = useState(false);
 	const [anonSession, setAnonSession] = useState(null);
-	const [backupPin, setBackupPin] = useState('');
-	const [confirmBackupPin, setConfirmBackupPin] = useState('');
-	const [showBackupPin, setShowBackupPin] = useState(false);
 
 	useEffect(() => {
 		if (authenticated) {
@@ -105,51 +102,9 @@ function AnonRegister() {
 
 			setAnonSession(session);
 			setStep('backup');
-			msgStore.success('Anonymous account created! Set a Backup PIN to protect your keys.');
+			msgStore.success('Anonymous account created! Now back up your keys.');
 		} catch {
 			msgStore.error('Something went wrong creating your account. Please try again.');
-		} finally {
-			setSubmitting(false);
-		}
-	}
-
-	async function setBackupPinFn(e) {
-		e?.preventDefault();
-		if (!backupPin || !/^\d{4,12}$/.test(backupPin)) {
-			msgStore.error('PIN must be 4-12 digits');
-			return;
-		}
-		if (backupPin !== confirmBackupPin) {
-			msgStore.error('PINs do not match');
-			return;
-		}
-		setSubmitting(true);
-		try {
-			const headers = { 'Content-Type': 'application/json' };
-			if (anonSession?.access_token) headers['Authorization'] = `Bearer ${anonSession.access_token}`;
-			const pinRes = await fetch('/api/auth/backup-pin', {
-				method: 'POST',
-				headers,
-				body: JSON.stringify({ pin: backupPin })
-			});
-			if (!pinRes.ok) {
-				const err = await pinRes.json().catch(() => ({}));
-				throw new Error(err.error || 'Failed to save PIN');
-			}
-			const encryptedData = await privateKeyManager.exportPrivateKeys(backupPin);
-			const backupRes = await fetch('/api/auth/key-backup', {
-				method: 'PUT',
-				headers,
-				body: JSON.stringify({ encrypted_keys: encryptedData, pin: backupPin })
-			});
-			if (!backupRes.ok) {
-				const err = await backupRes.json().catch(() => ({}));
-				throw new Error(err.error || 'Key backup failed');
-			}
-			msgStore.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
-			router.push('/chat');
-		} catch (err) {
-			msgStore.error('Failed to set backup PIN: ' + (err.message || 'Unknown error'));
 		} finally {
 			setSubmitting(false);
 		}
@@ -252,80 +207,25 @@ function AnonRegister() {
 
 				{step === 'backup' && (
 					<div className="auth-step">
-						<h2>Set Your Backup PIN</h2>
-						<p className="step-description">This PIN protects your encryption keys.</p>
+						<h2>Back Up Your Encryption Keys</h2>
 						<div className="backup-warning">
 							<p>
 								<strong>Important:</strong> There is no phone or email on this account. If you lose
-								this PIN <em>and</em> this device, your account cannot be recovered.
+								this passphrase, the recovery key <em>and</em> this device, your account cannot be recovered.
 							</p>
 						</div>
-						<form onSubmit={setBackupPinFn}>
-							<div className="input-group">
-								<label>Backup PIN (4-12 digits) *</label>
-								<div className="password-input">
-									<input
-										type={showBackupPin ? 'text' : 'password'}
-										inputMode="numeric"
-										value={backupPin}
-										onChange={(e) => setBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
-										placeholder="Enter 4-12 digit PIN"
-										required
-										disabled={submitting}
-										className="code-input"
-									/>
-									<button
-										type="button"
-										className="toggle-password"
-										onClick={() => setShowBackupPin(!showBackupPin)}
-									>
-										{showBackupPin ? '👁️' : '👁️‍🗨️'}
-									</button>
-								</div>
-							</div>
-							<div className="input-group">
-								<label>Confirm PIN *</label>
-								<div className="password-input">
-									<input
-										type={showBackupPin ? 'text' : 'password'}
-										inputMode="numeric"
-										value={confirmBackupPin}
-										onChange={(e) =>
-											setConfirmBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))
-										}
-										placeholder="Confirm your PIN"
-										required
-										disabled={submitting}
-										className="code-input"
-									/>
-								</div>
-							</div>
-							<div className="button-group">
-								<button
-									type="submit"
-									disabled={submitting || !backupPin || !confirmBackupPin}
-									className="primary-button"
-								>
-									{submitting ? (
-										<>
-											<span className="loading-spinner" /> Setting PIN…
-										</>
-									) : (
-										'Set Backup PIN'
-									)}
-								</button>
-								<button
-									type="button"
-									className="secondary-button"
-									onClick={() => {
-										msgStore.warning('Backup PIN skipped. You can set one later in Settings.');
-										router.push('/chat');
-									}}
-								>
-									Skip (Not Recommended)
-								</button>
-							</div>
-						</form>
+						<KeyBackupSetup
+							accessToken={anonSession?.access_token}
+							onError={(m) => msgStore.error(m)}
+							onDone={() => {
+								msgStore.success('Keys backed up. Welcome to QryptChat!');
+								router.push('/chat');
+							}}
+							onSkip={() => {
+								msgStore.warning('Backup skipped. You can back up later in Settings.');
+								router.push('/chat');
+							}}
+						/>
 					</div>
 				)}
 

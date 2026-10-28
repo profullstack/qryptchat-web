@@ -5,7 +5,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
-import { checkPin, hashPin, PIN_PATTERN, PIN_RULE, resolveInternalUserId } from '@/lib/auth/backup-pin.js';
+import { checkPin, legacyMigrationEnabled, PIN_PATTERN, PIN_RULE, resolveInternalUserId } from '@/lib/auth/backup-pin.js';
+import { SEAL_VERSION, sealEnvelopeProblem } from '@/lib/crypto/key-backup-seal.js';
 
 // node:crypto (scrypt) checks the PIN, so pin this route to the Node runtime.
 export const runtime = 'nodejs';
@@ -143,7 +144,7 @@ export async function GET(request) {
 
 		const { data, error } = await getServiceRoleClient()
 			.from('key_backups')
-			.select('encrypted_keys, created_at, updated_at')
+			.select('created_at, updated_at, seal_version')
 			.eq('user_id', user.id)
 			.single();
 
@@ -159,7 +160,8 @@ export async function GET(request) {
 		return NextResponse.json({
 			backup: {
 				created_at: data.created_at,
-				updated_at: data.updated_at
+				updated_at: data.updated_at,
+				seal_version: data.seal_version ?? 1
 			}
 		});
 
@@ -170,11 +172,11 @@ export async function GET(request) {
 }
 
 /**
- * POST /api/auth/key-backup  { pin }
- * Restore: return the encrypted backup once the PIN checks out. Wrong PINs
- * count toward a lockout. A backup whose PIN the server cannot verify (no PIN
- * row, or a legacy row whose unsalted hash was discarded) is returned with
- * `legacy: true`; the client registers the PIN once it has decrypted with it.
+ * POST /api/auth/key-backup  { pin? }
+ * Restore. A seal-v2 backup comes back to its owner as is: it opens only with
+ * the passphrase or recovery key, which never reach the server. A legacy PIN
+ * backup (seal_version 1) is only handed over once the PIN checks out (wrong
+ * PINs count toward a lockout), and not at all after the legacy cutoff.
  */
 export async function POST(request) {
 	try {
@@ -189,15 +191,11 @@ export async function POST(request) {
 		} catch {
 			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
 		}
-		const pin = typeof body?.pin === 'string' ? body.pin : '';
-		if (pin && !PIN_PATTERN.test(pin)) {
-			return NextResponse.json({ error: PIN_RULE }, { status: 400 });
-		}
 
 		const db = getServiceRoleClient();
 		const { data, error } = await db
 			.from('key_backups')
-			.select('encrypted_keys, created_at, updated_at')
+			.select('encrypted_keys, created_at, updated_at, seal_version')
 			.eq('user_id', user.id)
 			.single();
 		if (error) {
@@ -206,6 +204,31 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Failed to fetch key backup' }, { status: 500 });
 		}
 
+		const sealVersion = data.seal_version ?? 1;
+		const backup = {
+			encrypted_keys: data.encrypted_keys,
+			created_at: data.created_at,
+			updated_at: data.updated_at,
+			seal_version: sealVersion
+		};
+		if (sealVersion >= SEAL_VERSION) {
+			return NextResponse.json({ backup, user_id: user.id, legacy: false });
+		}
+
+		if (!legacyMigrationEnabled()) {
+			return NextResponse.json(
+				{
+					error: 'This backup used a PIN, and PIN backups are no longer served. Restore from a key file or another device, or start fresh.',
+					code: 'LEGACY_BACKUP_DISABLED'
+				},
+				{ status: 410 }
+			);
+		}
+
+		const pin = typeof body?.pin === 'string' ? body.pin : '';
+		if (pin && !PIN_PATTERN.test(pin)) {
+			return NextResponse.json({ error: PIN_RULE }, { status: 400 });
+		}
 		const { userId, error: lookupError } = await resolveInternalUserId(db, user);
 		if (lookupError || !userId) {
 			console.error('Error resolving user for key restore:', lookupError);
@@ -215,14 +238,8 @@ export async function POST(request) {
 		const rejected = pinRejection(result);
 		if (rejected) return rejected;
 
-		return NextResponse.json({
-			backup: {
-				encrypted_keys: data.encrypted_keys,
-				created_at: data.created_at,
-				updated_at: data.updated_at
-			},
-			legacy: result.status === 'unset'
-		});
+		// legacy: the client must re-seal this under a passphrase + recovery key.
+		return NextResponse.json({ backup, user_id: user.id, legacy: true, pinVerified: result.status === 'ok' });
 	} catch (error) {
 		console.error('Error in POST /api/auth/key-backup:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -252,8 +269,15 @@ export async function DELETE(request) {
 }
 
 /**
- * PUT /api/auth/key-backup
- * Store or update the authenticated user's encrypted key backup
+ * PUT /api/auth/key-backup  { encrypted_keys, pin? }
+ * Store the user's backup. Only a seal-v2 envelope is accepted: sealed in the
+ * browser under a passphrase and a recovery key the server never sees. PIN
+ * backups can no longer be written.
+ *
+ * Replacing a legacy PIN backup that has a verifiable PIN still needs that PIN,
+ * as before, so a stolen session cannot swap it out. Once the seal-v2 backup is
+ * stored, the PIN hash is deleted: it protects nothing any more, and a stored
+ * hash of a short PIN is an offline oracle for a number people reuse.
  */
 export async function PUT(request) {
 	try {
@@ -275,18 +299,27 @@ export async function PUT(request) {
 			return NextResponse.json({ error: 'Missing or invalid encrypted_keys' }, { status: 400 });
 		}
 
-		// Validate that encrypted_keys is valid JSON (it should be the export format)
+		let envelope;
 		try {
-			const backupExport = JSON.parse(encrypted_keys);
-			if (!backupExport || typeof backupExport !== 'object' || Array.isArray(backupExport)) {
-				return NextResponse.json({ error: 'encrypted_keys must be a JSON object string' }, { status: 400 });
-			}
+			envelope = JSON.parse(encrypted_keys);
 		} catch {
 			return NextResponse.json({ error: 'encrypted_keys must be a valid JSON string' }, { status: 400 });
 		}
+		if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+			return NextResponse.json({ error: 'encrypted_keys must be a JSON object string' }, { status: 400 });
+		}
+		const problem = sealEnvelopeProblem(envelope);
+		if (problem) {
+			return NextResponse.json(
+				{
+					error: 'Backups must be sealed with a passphrase and recovery key. Update the app and try again.',
+					code: 'SEAL_REQUIRED',
+					detail: problem
+				},
+				{ status: 400 }
+			);
+		}
 
-		// The backup must be encrypted with the account's backup PIN, since that is
-		// what gates restore: check it when one is set, adopt it when none is.
 		if (pin && !PIN_PATTERN.test(pin)) {
 			return NextResponse.json({ error: PIN_RULE }, { status: 400 });
 		}
@@ -296,28 +329,29 @@ export async function PUT(request) {
 			console.error('Error resolving user for key backup:', lookupError);
 			return NextResponse.json({ error: 'Failed to store key backup' }, { status: 500 });
 		}
-		const result = await checkPin(db, userId, pin);
-		const rejected = pinRejection(result);
-		if (rejected) return rejected;
-		if (result.status === 'unset' && pin) {
-			const { hash, salt, algorithm } = await hashPin(pin);
-			const { error: pinError } = await db.from('user_backup_pins').upsert(
-				{ user_id: userId, pin_hash: hash, pin_salt: salt, algorithm, failed_attempts: 0, locked_until: null, updated_at: new Date().toISOString() },
-				{ onConflict: 'user_id' }
-			);
-			if (pinError) {
-				console.error('Error setting backup PIN:', pinError);
-				return NextResponse.json({ error: 'Failed to store key backup' }, { status: 500 });
-			}
+
+		const { data: existing, error: existingError } = await db
+			.from('key_backups')
+			.select('seal_version')
+			.eq('user_id', user.id)
+			.maybeSingle();
+		if (existingError) {
+			console.error('Error reading key backup:', existingError);
+			return NextResponse.json({ error: 'Failed to store key backup' }, { status: 500 });
+		}
+		if (existing && (existing.seal_version ?? 1) < SEAL_VERSION) {
+			const result = await checkPin(db, userId, pin);
+			const rejected = pinRejection(result);
+			if (rejected) return rejected;
 		}
 
-		// Upsert: insert or update on conflict
 		const { data, error } = await db
 			.from('key_backups')
 			.upsert(
 				{
 					user_id: user.id,
 					encrypted_keys,
+					seal_version: SEAL_VERSION,
 					updated_at: new Date().toISOString()
 				},
 				{ onConflict: 'user_id' }
@@ -330,15 +364,18 @@ export async function PUT(request) {
 			return NextResponse.json({ error: 'Failed to store key backup' }, { status: 500 });
 		}
 
-		console.log(`🔑 Key backup stored for user ${user.id}`);
+		const { error: pinDeleteError } = await db.from('user_backup_pins').delete().eq('user_id', userId);
+		if (pinDeleteError) console.error('Error retiring backup PIN:', pinDeleteError.message);
+
+		console.log(`🔑 Key backup stored for user ${user.id} (seal v${SEAL_VERSION})`);
 
 		return NextResponse.json({
 			success: true,
 			backup_id: data.id,
+			seal_version: SEAL_VERSION,
 			created_at: data.created_at,
 			updated_at: data.updated_at
 		});
-
 	} catch (error) {
 		console.error('Error in PUT /api/auth/key-backup:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
