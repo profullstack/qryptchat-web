@@ -48,7 +48,7 @@ function Authorize() {
       const k1024 = postQuantumEncryption.userKeys;
       const k768 = postQuantumEncryption.userKeys768;
       if (!k1024?.publicKey || !k1024?.privateKey) {
-        throw new Error('This browser has no encryption keys. Restore them first (Settings > Keys, backup PIN), then run qc login again.');
+        throw new Error('This browser has no encryption keys. Restore them first (Settings > Keys, backup passphrase), then run qc login again.');
       }
       const keys = {
         keys1024: { ...k1024, algorithm: postQuantumEncryption.kemName },

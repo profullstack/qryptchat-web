@@ -11,6 +11,7 @@ import { keyManager } from '@/lib/crypto/key-manager.js';
 import { privateKeyManager } from '@/lib/crypto/private-key-manager.js';
 import { indexedDBManager } from '@/lib/crypto/indexed-db-manager.js';
 import Message from '@/lib/components/Message.jsx';
+import KeyBackupSetup from '@/lib/components/KeyBackupSetup.jsx';
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 
 /** Why a sign-in came back to /auth, in words a person can act on. */
@@ -43,9 +44,8 @@ export default function AuthPage() {
   const [canResend, setCanResend] = useState(true);
   const [verifiedSession, setVerifiedSession] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
-  const [backupPin, setBackupPin] = useState('');
-  const [confirmBackupPin, setConfirmBackupPin] = useState('');
-  const [showBackupPin, setShowBackupPin] = useState(false);
+  const [backupLegacy, setBackupLegacy] = useState(false);
+  const [legacyPin, setLegacyPin] = useState('');
   const [restorePin, setRestorePin] = useState('');
   const [showRestorePin, setShowRestorePin] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -82,26 +82,22 @@ export default function AuthPage() {
     localStorage.setItem('supabase.auth.token', JSON.stringify(session));
     await createSupabaseClient().auth.setSession(session);
 
-    const authHeaders = { Authorization: `Bearer ${session.access_token}` };
     if (isNew) {
       try { await keyManager.generateUserKeys(); } catch {}
       setVerifiedSession(session); setStep('backup'); return;
     }
     const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
-    let hasBackup = false;
-    try { hasBackup = (await fetch('/api/auth/key-backup', { headers: authHeaders })).ok; } catch {}
-    if (hasBackup && !hasLocalKeys) { setVerifiedSession(session); setStep('restore'); return; }
-    if (!hasLocalKeys && !hasBackup) {
-      // Brand-new keys for this account, then prompt to set a backup PIN.
+    const info = await privateKeyManager.getServerBackupInfo({ accessToken: session.access_token });
+    if (info.exists && !hasLocalKeys) { setVerifiedSession(session); setStep('restore'); return; }
+    if (!hasLocalKeys && !info.exists) {
+      // Brand-new keys for this account, then prompt for a backup passphrase.
       try { await keyManager.generateUserKeys(); } catch {}
       setVerifiedSession(session); setStep('backup'); return;
     }
-    let hasPin = false;
-    try {
-      const r = await fetch('/api/auth/backup-pin', { headers: authHeaders });
-      hasPin = r.ok ? (await r.json()).hasPin : false;
-    } catch {}
-    if (!hasPin && hasLocalKeys) { setVerifiedSession(session); setStep('backup'); return; }
+    // Keys here but no backup, or an old PIN backup: (re-)seal with a passphrase.
+    if (hasLocalKeys && (!info.exists || info.sealVersion < 2)) {
+      setBackupLegacy(info.exists); setVerifiedSession(session); setStep('backup'); return;
+    }
     router.push(afterSignInPath());
   }
 
@@ -234,19 +230,16 @@ export default function AuthPage() {
         router.push(afterSignInPath());
       } else {
         const sessionToken = result.session?.access_token;
-        const authHeaders = sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {};
         try {
           const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
-          const backupRes = await fetch('/api/auth/key-backup', { headers: authHeaders });
-          const hasBackup = backupRes.ok;
-          const pinCheckRes = await fetch('/api/auth/backup-pin', { headers: authHeaders });
-          const pinData = pinCheckRes.ok ? await pinCheckRes.json() : { hasPin: false };
-          if (hasBackup && !hasLocalKeys) {
+          const info = await privateKeyManager.getServerBackupInfo({ accessToken: sessionToken });
+          if (info.exists && !hasLocalKeys) {
             setVerifiedSession(result.session);
             setStep('restore');
             return;
           }
-          if (!pinData.hasPin && hasLocalKeys) {
+          if (hasLocalKeys && (!info.exists || info.sealVersion < 2)) {
+            setBackupLegacy(info.exists);
             setVerifiedSession(result.session);
             setStep('backup');
             return;
@@ -281,29 +274,10 @@ export default function AuthPage() {
         try {
           await keyManager.generateUserKeys();
           setStep('backup');
-          msgStore.success('Account created! Please set a Backup PIN.');
+          msgStore.success('Account created! Now back up your keys.');
         } catch { msgStore.warning('Account created but failed to generate encryption keys.'); router.push(afterSignInPath()); }
       } else { msgStore.error(data.error || 'Failed to create account'); }
     } catch { msgStore.error('Failed to create account. Please try again.'); }
-  }
-
-  async function setBackupPinFn(e) {
-    e?.preventDefault();
-    if (!backupPin || !/^\d{4,12}$/.test(backupPin)) { msgStore.error('PIN must be 4-12 digits'); return; }
-    if (backupPin !== confirmBackupPin) { msgStore.error('PINs do not match'); return; }
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (verifiedSession?.access_token) headers['Authorization'] = `Bearer ${verifiedSession.access_token}`;
-      const pinRes = await fetch('/api/auth/backup-pin', { method: 'POST', headers, body: JSON.stringify({ pin: backupPin }) });
-      if (!pinRes.ok) { const err = await pinRes.json().catch(() => ({})); throw new Error(err.error || 'Failed to save PIN'); }
-      const encryptedData = await privateKeyManager.exportPrivateKeys(backupPin);
-      const backupHeaders = { 'Content-Type': 'application/json' };
-      if (verifiedSession?.access_token) backupHeaders['Authorization'] = `Bearer ${verifiedSession.access_token}`;
-      const backupRes = await fetch('/api/auth/key-backup', { method: 'PUT', headers: backupHeaders, body: JSON.stringify({ encrypted_keys: encryptedData, pin: backupPin }) });
-      if (!backupRes.ok) { const e = await backupRes.json().catch(() => ({})); throw new Error(e.error || 'Key backup failed'); }
-      msgStore.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
-      router.push(afterSignInPath());
-    } catch (err) { msgStore.error('Failed to set backup PIN: ' + (err.message || 'Unknown error')); }
   }
 
   async function restoreWithPin(e) {
@@ -311,8 +285,14 @@ export default function AuthPage() {
     if (!restorePin || restoreAttempts >= MAX_RESTORE) return;
     setIsRestoring(true);
     try {
-      await privateKeyManager.restoreKeysFromServer(restorePin);
+      const { legacy } = await privateKeyManager.restoreKeysFromServer(restorePin, { accessToken: verifiedSession?.access_token });
       msgStore.success('Encryption keys restored successfully!');
+      if (legacy) {
+        // An old PIN backup: re-seal it under a passphrase right away.
+        setLegacyPin(restorePin); setBackupLegacy(true);
+        setRestorePin(''); setRestoreAttempts(0);
+        setStep('backup'); return;
+      }
       setRestorePin(''); setRestoreAttempts(0);
       router.push(afterSignInPath());
     } catch (err) {
@@ -322,9 +302,9 @@ export default function AuthPage() {
       const remaining = MAX_RESTORE - restoreAttempts - 1;
       setRestoreAttempts((a) => a + 1);
       setRestorePin('');
-      if (/wrong pin|too many/i.test(message)) msgStore.error(message);
+      if (/wrong|too many|older backup|no longer served/i.test(message)) msgStore.error(message);
       else if (remaining <= 0) msgStore.error('Too many failed attempts.');
-      else msgStore.error(`Wrong PIN. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+      else msgStore.error(message || 'Restore failed.');
     } finally { setIsRestoring(false); }
   }
 
@@ -443,42 +423,27 @@ export default function AuthPage() {
 
         {step === 'backup' && (
           <div className="auth-step">
-            <h2>Set Your Backup PIN</h2>
-            <p className="step-description">This PIN protects your encryption keys.</p>
-            <div className="backup-warning"><p><strong>Important:</strong> Remember this PIN! Without it, you cannot restore your encryption keys.</p></div>
-            <form onSubmit={setBackupPinFn}>
-              <div className="input-group">
-                <label>Backup PIN (4-12 digits) *</label>
-                <div className="password-input">
-                  <input type={showBackupPin ? 'text' : 'password'} inputMode="numeric" value={backupPin} onChange={(e) => setBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Enter 4-12 digit PIN" required disabled={loading} className="code-input" />
-                  <button type="button" className="toggle-password" onClick={() => setShowBackupPin(!showBackupPin)}>{showBackupPin ? '👁️' : '👁️‍🗨️'}</button>
-                </div>
-              </div>
-              <div className="input-group">
-                <label>Confirm PIN *</label>
-                <div className="password-input">
-                  <input type={showBackupPin ? 'text' : 'password'} inputMode="numeric" value={confirmBackupPin} onChange={(e) => setConfirmBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Confirm your PIN" required disabled={loading} className="code-input" />
-                </div>
-              </div>
-              <div className="button-group">
-                <button type="submit" disabled={loading || !backupPin || !confirmBackupPin} className="primary-button">
-                  {loading ? <><span className="loading-spinner" /> Setting PIN...</> : 'Set Backup PIN'}
-                </button>
-                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Backup PIN skipped. You can set one later in Settings.'); router.push(afterSignInPath()); }}>Skip (Not Recommended)</button>
-              </div>
-            </form>
+            <h2>{backupLegacy ? 'Upgrade Your Key Backup' : 'Back Up Your Encryption Keys'}</h2>
+            <KeyBackupSetup
+              accessToken={verifiedSession?.access_token}
+              legacy={backupLegacy}
+              initialLegacyPin={legacyPin}
+              onError={(m) => msgStore.error(m)}
+              onDone={() => { setLegacyPin(''); msgStore.success('Keys backed up. Welcome to QryptChat!'); router.push(afterSignInPath()); }}
+              onSkip={() => { setLegacyPin(''); msgStore.warning('Backup skipped. You can back up later in Settings.'); router.push(afterSignInPath()); }}
+            />
           </div>
         )}
 
         {step === 'restore' && (
           <div className="auth-step">
             <h2>Restore Your Encryption Keys</h2>
-            <p className="step-description">Enter your Backup PIN to restore your encryption keys on this device.</p>
+            <p className="step-description">Enter your backup passphrase or recovery key (older backups: your PIN) to restore your encryption keys on this device. It is checked on this device; we never see it.</p>
             <form onSubmit={restoreWithPin}>
               <div className="input-group">
-                <label>Backup PIN *</label>
+                <label>Passphrase, recovery key or PIN *</label>
                 <div className="password-input">
-                  <input type={showRestorePin ? 'text' : 'password'} inputMode="numeric" value={restorePin} onChange={(e) => setRestorePin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Enter your PIN" required disabled={isRestoring} className="code-input" />
+                  <input type={showRestorePin ? 'text' : 'password'} autoComplete="current-password" value={restorePin} onChange={(e) => setRestorePin(e.target.value)} placeholder="Passphrase or recovery key" required disabled={isRestoring} className="code-input" />
                   <button type="button" className="toggle-password" onClick={() => setShowRestorePin(!showRestorePin)}>{showRestorePin ? '👁️' : '👁️‍🗨️'}</button>
                 </div>
               </div>

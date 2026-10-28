@@ -1,8 +1,6 @@
 import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createHash } from 'node:crypto';
-
 const mocks = vi.hoisted(() => ({
 	authGetUser: vi.fn(),
 	serviceFrom: vi.fn(),
@@ -154,91 +152,21 @@ describe('backup PIN cookie authentication', () => {
 		expect(mocks.serviceFrom).toHaveBeenCalledWith('user_backup_pins');
 	});
 
-	it('stores a salted scrypt hash rather than an unsalted SHA-256 digest', async () => {
-		const { POST } = await import('./route.js');
-		const pin = '123456';
-		const response = await POST({
-			headers: new Headers({ authorization: 'Bearer access-token' }),
-			json: vi.fn().mockResolvedValue({ pin })
-		});
-
-		expect(response.status).toBe(200);
-		expect(mocks.pinUpsert).toHaveBeenCalledTimes(1);
-
-		const [record] = mocks.pinUpsert.mock.calls[0];
-		expect(record.user_id).toBe('internal-user-id');
-		expect(record.algorithm).toMatch(/^scrypt-/);
-
-		// A salt is present and actually mixed in: the stored hash must not be the
-		// bare SHA-256 of the PIN, which is what GHSA-jpfm-vrpc-p6rr was about.
-		expect(record.pin_salt).toMatch(/^[0-9a-f]{32}$/);
-		const unsaltedSha256 = createHash('sha256').update(pin).digest('hex');
-		expect(record.pin_hash).not.toBe(unsaltedSha256);
-		expect(record.pin_hash).toMatch(/^[0-9a-f]{128}$/);
-	});
-
-	it('derives a different hash per user for the same PIN', async () => {
-		const { POST } = await import('./route.js');
-		const request = () => ({
-			headers: new Headers({ authorization: 'Bearer access-token' }),
-			json: vi.fn().mockResolvedValue({ pin: '123456' })
-		});
-
-		await POST(request());
-		await POST(request());
-
-		const [first] = mocks.pinUpsert.mock.calls[0];
-		const [second] = mocks.pinUpsert.mock.calls[1];
-		expect(first.pin_salt).not.toBe(second.pin_salt);
-		expect(first.pin_hash).not.toBe(second.pin_hash);
-	});
-
-	it('returns 400 for malformed JSON instead of a generic 500', async () => {
-		const { POST } = await import('./route.js');
-		const response = await POST({
-			headers: new Headers({ authorization: 'Bearer access-token' }),
-			json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected token'))
-		});
-		const body = await response.json();
-
-		expect(response.status).toBe(400);
-		expect(body.error).toBe('Invalid JSON body');
-		expect(mocks.serviceFrom).not.toHaveBeenCalled();
-	});
-
-	it('accepts a 4-digit PIN', async () => {
+	it('no longer sets PINs: backups are sealed with a passphrase now', async () => {
 		const { POST } = await import('./route.js');
 		const response = await POST({
 			headers: new Headers({ authorization: 'Bearer access-token' }),
 			json: vi.fn().mockResolvedValue({ pin: '4821' })
 		});
-		expect(response.status).toBe(200);
+		expect(response.status).toBe(410);
+		expect((await response.json()).code).toBe('PIN_RETIRED');
+		expect(mocks.pinUpsert).not.toHaveBeenCalled();
 	});
 
-	it('will not replace a verifiable PIN without the current one', async () => {
-		const { hashPin } = await import('@/lib/auth/backup-pin.js');
-		const existing = await hashPin('4821');
-		mocks.serviceFrom.mockImplementation((table) => {
-			if (table === 'users') return createUsersQuery();
-			if (table === 'user_backup_pins') {
-				const query = createBackupPinsQuery();
-				query.maybeSingle = vi.fn(() =>
-					Promise.resolve({
-						data: { user_id: 'internal-user-id', pin_hash: existing.hash, pin_salt: existing.salt, algorithm: existing.algorithm, failed_attempts: 0 },
-						error: null
-					})
-				);
-				return query;
-			}
-			throw new Error(`Unexpected table: ${table}`);
-		});
+	it('still requires a session to say so', async () => {
+		mocks.authGetUser.mockResolvedValue({ data: { user: null }, error: { message: 'bad' } });
 		const { POST } = await import('./route.js');
-		const response = await POST({
-			headers: new Headers({ authorization: 'Bearer access-token' }),
-			json: vi.fn().mockResolvedValue({ pin: '1111' })
-		});
-		expect(response.status).toBe(403);
-		expect((await response.json()).code).toBe('PIN_REQUIRED');
-		expect(mocks.pinUpsert).not.toHaveBeenCalled();
+		const response = await POST(new Request('https://qrypt.chat/api/auth/backup-pin', { method: 'POST', body: '{}' }));
+		expect(response.status).toBe(401);
 	});
 });

@@ -25,6 +25,16 @@ const SCRYPT_KEYLEN = 64;
 const SCRYPT_SALT_BYTES = 16;
 export const PIN_ALGORITHM = `scrypt-n${SCRYPT_N}-r${SCRYPT_R}-p${SCRYPT_P}`;
 
+/**
+ * Old key backups (seal_version 1) are sealed under a 4-12 digit PIN. They stay
+ * restorable, behind the PIN check, until LEGACY_KEY_MIGRATION=off; that switch
+ * is the dated cutoff, after which only seal-v2 backups are served and no new
+ * PIN is accepted.
+ */
+export function legacyMigrationEnabled() {
+	return process.env.LEGACY_KEY_MIGRATION !== 'off';
+}
+
 /** Wrong PINs allowed before each lock. */
 export const ATTEMPTS_PER_LOCK = 5;
 const FIRST_LOCK_MS = 15 * 60 * 1000;

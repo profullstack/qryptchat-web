@@ -134,7 +134,7 @@ export async function assertAccountKey(service, authUserId, publicKey) {
 	if (data?.public_key && data.public_key !== publicKey) {
 		throw new CliAuthError(
 			'key_mismatch',
-			"This browser's encryption keys are not your account's current keys, so a terminal signed in with them could not read your messages. Restore your keys (Settings > Keys, backup PIN) or approve from the device you normally chat on.",
+			"This browser's encryption keys are not your account's current keys, so a terminal signed in with them could not read your messages. Restore your keys (Settings > Keys, backup passphrase) or approve from the device you normally chat on.",
 			409
 		);
 	}
