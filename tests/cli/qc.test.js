@@ -122,6 +122,24 @@ describe('archiving from qc', () => {
 	}, 20000);
 });
 
+describe('qc profile after a rename', () => {
+	it('reads the profile by token and updates the username the session cached at login', async () => {
+		const saved = [];
+		const fetch = vi.fn(async (url) => {
+			const path = new URL(url).pathname;
+			if (path === '/api/profile') return json({ user: { username: 'cha0spunk', display_name: 'cha0spunk' } });
+			if (path === '/u/cha0spunk/openprofile.md') return new Response('# cha0spunk\n');
+			return json({ error: 'User not found' }, 404);
+		});
+		const client = new QcClient({ access_token: 't', keys: await account(), user: { id: 'a', username: 'mailcoder', display_name: 'mailcoder' } }, { fetch, save: (s) => saved.push(s) });
+		expect((await client.profile()).username).toBe('cha0spunk');
+		expect(client.me).toMatchObject({ id: 'a', username: 'cha0spunk', display_name: 'cha0spunk' });
+		expect(saved).toHaveLength(1);
+		expect(await client.openProfile()).toBe('# cha0spunk\n');
+		expect(saved).toHaveLength(1);
+	}, 20000);
+});
+
 describe('the SSE reader', () => {
 	it('parses frames split across chunks', async () => {
 		const enc = new TextEncoder();

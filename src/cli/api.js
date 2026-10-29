@@ -125,7 +125,8 @@ export class QcClient {
 
 	/** Your public profile (what qrypt.chat/u/<you> shows): display name, emoji, pronouns, website, bio. */
 	async profile() {
-		const { user } = await this.request(`/api/users/by-username/${encodeURIComponent(this.me?.username ?? '')}`);
+		const { user } = await this.request('/api/profile');
+		this.remember(user);
 		return user;
 	}
 
@@ -136,14 +137,24 @@ export class QcClient {
 	 */
 	async updateProfile(fields) {
 		const { user } = await this.request('/api/profile/update', { method: 'POST', body: fields });
+		this.remember({ username: user.username, display_name: user.displayName });
 		return user;
 	}
 
 	/** Your public profile as OpenProfile.md (logicsrc.com/openprofile). */
 	async openProfile() {
-		const res = await this.fetch(`${this.base}/u/${encodeURIComponent(this.me?.username ?? '')}/openprofile.md`);
+		const { username } = await this.profile();
+		const res = await this.fetch(`${this.base}/u/${encodeURIComponent(username)}/openprofile.md`);
 		if (!res.ok) throw new QcError(`HTTP ${res.status}`, res.status);
 		return res.text();
+	}
+
+	/** Keep the saved session's name current: the username and display name can change after qc login. */
+	remember({ username, display_name } = {}) {
+		const me = this.session.user ?? {};
+		if (!username || (me.username === username && me.display_name === display_name)) return;
+		this.session = { ...this.session, user: { ...me, username, display_name: display_name ?? me.display_name } };
+		this.save(this.session);
 	}
 
 	/** Archive a chat for you (or bring it back with on = false); the others still see it. */
