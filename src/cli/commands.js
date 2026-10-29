@@ -34,7 +34,7 @@ Usage:
   qc whoami               who this terminal is signed in as
   qc keys [publish]       whether this terminal's keys are your account's; publish makes them the
                           account's again (when another device published keys qc does not hold)
-  qc profile [--emoji 🔭] [--pronouns she/her] [--website URL] [--bio TEXT]
+  qc profile [--name "Ada L"] [--emoji 🔭] [--pronouns she/her] [--website URL] [--bio TEXT]
                           show or set your public profile (an empty value clears it);
                           --openprofile prints it as OpenProfile.md
   qc chats [--archived]   list your chats (archived ones only with --archived); qc list is the same
@@ -245,12 +245,13 @@ export async function main(argv, { version = '0.0.0' } = {}) {
 			if (flags.openprofile) return out((await c.openProfile()).trimEnd());
 			const fields = {};
 			for (const k of ['emoji', 'pronouns', 'website', 'bio']) if (flags[k] !== undefined) fields[k] = flags[k] === true ? '' : String(flags[k]);
+			if (flags.name !== undefined && flags.name !== true) fields.displayName = String(flags.name);
 			const p = Object.keys(fields).length ? await c.updateProfile(fields) : await c.profile();
-			if (flags.json) return json({ username: p.username, emoji: p.emoji ?? null, pronouns: p.pronouns ?? null, website: p.website ?? null, bio: p.bio ?? null });
+			if (flags.json) return json({ username: p.username, displayName: p.displayName ?? p.display_name ?? null, emoji: p.emoji ?? null, pronouns: p.pronouns ?? null, website: p.website ?? null, bio: p.bio ?? null });
 			out(who(p));
 			if (p.website) out(`${mark('link')}${p.website}`);
 			if (p.bio) out(p.bio);
-			if (!Object.keys(fields).length) out(`\n${info('Set: qc profile --emoji :telescope: --pronouns she/her --website https://you.example  (an empty value clears)')}`);
+			if (!Object.keys(fields).length) out(`\n${info('Set: qc profile --name "Ada L" --emoji :telescope: --pronouns she/her --website https://you.example  (an empty value clears)')}`);
 			return;
 		}
 		case 'chats':

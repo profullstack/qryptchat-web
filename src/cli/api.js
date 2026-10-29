@@ -123,15 +123,16 @@ export class QcClient {
 		return this.keyCheck();
 	}
 
-	/** Your public profile (what qrypt.chat/u/<you> shows): emoji, pronouns, website, bio. */
+	/** Your public profile (what qrypt.chat/u/<you> shows): display name, emoji, pronouns, website, bio. */
 	async profile() {
 		const { user } = await this.request(`/api/users/by-username/${encodeURIComponent(this.me?.username ?? '')}`);
 		return user;
 	}
 
 	/**
-	 * Change profile fields: { emoji?, pronouns?, website?, bio? }. A field left
-	 * out is unchanged; an empty string clears it.
+	 * Change profile fields: { displayName?, emoji?, pronouns?, website?, bio? }.
+	 * A field left out is unchanged; an empty string clears it (an empty
+	 * displayName keeps the current name).
 	 */
 	async updateProfile(fields) {
 		const { user } = await this.request('/api/profile/update', { method: 'POST', body: fields });
