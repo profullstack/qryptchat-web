@@ -15,6 +15,12 @@ function getServiceRoleClient() {
 	return supabaseServiceRole;
 }
 
+function getBearerToken(request) {
+	const value = request.headers.get('authorization');
+	const match = value?.match(/^Bearer\s+(.+)$/i);
+	return match?.[1]?.trim() || null;
+}
+
 // Create regular client for JWT validation
 const supabaseClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -46,6 +52,15 @@ export function normalizePublicKeyUserIds(value) {
  */
 async function authenticateUser(request) {
 	try {
+		const bearer = getBearerToken(request);
+		if (bearer) {
+			const { data: { user }, error } = await supabaseClient.auth.getUser(bearer);
+			if (!error && user) {
+				const { data: userData, error: userError } = await getServiceRoleClient()
+					.from('users').select('id, auth_user_id, username').eq('auth_user_id', user.id).single();
+				if (!userError && userData) return { user: userData };
+			}
+		}
 		// Get access token from cookies
 		const cookieHeader = request.headers.get('cookie');
 		if (!cookieHeader) {

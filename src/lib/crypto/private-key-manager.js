@@ -7,6 +7,7 @@
 import { Base64, HKDF, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
 import { postQuantumEncryption } from './post-quantum-encryption.js';
 import { authUserIdFromToken, generateRecoveryKey, passphraseProblem, sealKeys, unsealKeys } from './key-backup-seal.js';
+import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
 
 /**
  * Export format version for compatibility
@@ -805,7 +806,8 @@ export class PrivateKeyManager {
 			const response = await fetch('/api/crypto/public-keys', {
 				method: 'PUT',
 				headers: {
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					...getClientAuthHeaders()
 				},
 				body: JSON.stringify({
 					public_key: publicKey,

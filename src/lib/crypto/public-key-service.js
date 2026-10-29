@@ -113,7 +113,8 @@ export class PublicKeyService {
 			const response = await fetch('/api/crypto/public-keys', {
 				method: 'POST',
 				headers: {
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					...getClientAuthHeaders()
 				},
 				body: JSON.stringify({
 					user_ids: userIds
@@ -166,7 +167,7 @@ export class PublicKeyService {
 	async getConversationParticipantKeys(conversationId) {
 		try {
 			// Get conversation participants via API (SvelteKit handles auth via cookies/session)
-			const response = await fetch(`/api/chat/conversations/${conversationId}/participants`);
+			const response = await fetch(`/api/chat/conversations/${conversationId}/participants`, { headers: getClientAuthHeaders() });
 			
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
