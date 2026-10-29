@@ -47,6 +47,14 @@ export default function SecurityPage() {
         <li>Open source under the MIT license so the cryptography can be independently audited and self-hosted.</li>
       </ul>
 
+      <h2 style={h2Style}>Sovereignty is also portability</h2>
+      <p style={paraStyle}>
+        A resilient messenger should not depend on one company, region, or hosting provider. QryptChat keeps
+        encrypted key backups and password-protected key exports available so you can move to another device or
+        operate a self-hosted deployment. The Settings page includes a readiness report that records only system
+        status — never message contents, private keys, or backup PINs.
+      </p>
+
       <h2 style={h2Style}>Responsible disclosure</h2>
       <p style={paraStyle}>
         Found a vulnerability? Please report it to{' '}
