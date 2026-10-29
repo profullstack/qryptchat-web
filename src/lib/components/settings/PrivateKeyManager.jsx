@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { keyManager } from '@/lib/crypto/key-manager.js';
 import { privateKeyManager } from '@/lib/crypto/private-key-manager.js';
+import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
 
 export default function PrivateKeyManager() {
   const user = useAuthStore((s) => s.user);
@@ -41,7 +42,7 @@ export default function PrivateKeyManager() {
   async function checkPin() {
     try {
       setPinLoading(true);
-      const res = await fetch('/api/auth/backup-pin', { credentials: 'include' });
+      const res = await fetch('/api/auth/backup-pin', { credentials: 'include', headers: getClientAuthHeaders() });
       if (res.ok) { const d = await res.json(); setHasPin(d.hasPin); }
     } catch {} finally { setPinLoading(false); }
   }
@@ -68,7 +69,7 @@ export default function PrivateKeyManager() {
       const encrypted = await privateKeyManager.exportPrivateKeys(backupPin);
       const res = await fetch('/api/auth/key-backup', {
         method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
         body: JSON.stringify({ encrypted_keys: encrypted }),
       });
       if (res.ok) { setHasBackup(true); setBackupPin(''); setSuccess('Keys backed up!'); }
@@ -99,7 +100,7 @@ export default function PrivateKeyManager() {
         const encrypted = await privateKeyManager.exportPrivateKeys(importPassword);
         const res = await fetch('/api/auth/key-backup', {
           method: 'PUT', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
           body: JSON.stringify({ encrypted_keys: encrypted }),
         });
         if (res.ok) { setHasBackup(true); }
@@ -133,7 +134,7 @@ export default function PrivateKeyManager() {
     try {
       const res = await fetch('/api/auth/backup-pin', {
         method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
         body: JSON.stringify({ pin }),
       });
       if (res.ok) { setHasPin(true); setPin(''); setConfirmPin(''); setChangingPin(false); setSuccess('Backup PIN set!'); }

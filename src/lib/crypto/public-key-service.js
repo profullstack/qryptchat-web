@@ -5,6 +5,7 @@
 
 import { postQuantumEncryption } from './post-quantum-encryption.js';
 import { Base64 } from './index.js';
+import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
 
 /**
  * Public key management service
@@ -46,7 +47,7 @@ export class PublicKeyService {
 			console.log(`🔑 Fetching public key for user ${userId} via API`);
 
 			// Fetch via API endpoint (SvelteKit handles auth via cookies/session)
-			const response = await fetch(`/api/crypto/public-keys?user_id=${encodeURIComponent(userId)}`);
+			const response = await fetch(`/api/crypto/public-keys?user_id=${encodeURIComponent(userId)}`, { headers: getClientAuthHeaders() });
 			
 			if (!response.ok) {
 				if (response.status === 404) {

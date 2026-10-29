@@ -4,6 +4,7 @@
  */
 
 import { postQuantumEncryption } from './post-quantum-encryption.js';
+import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
 
 /**
  * Service for synchronizing public keys between client and server
@@ -64,7 +65,8 @@ export class KeySyncService {
 					const response = await fetch('/api/crypto/public-keys', {
 						method: 'PUT',
 						headers: {
-							'Content-Type': 'application/json'
+							'Content-Type': 'application/json',
+							...getClientAuthHeaders()
 						},
 						credentials: 'include', // Include cookies for authentication
 						body: JSON.stringify({
@@ -150,7 +152,7 @@ export class KeySyncService {
 			// so there is one identity domain and no list to mis-index.
 			const response = await fetch(
 				`/api/crypto/public-keys?user_id=${encodeURIComponent(currentUserId)}`,
-				{ method: 'GET', credentials: 'include' }
+				{ method: 'GET', credentials: 'include', headers: getClientAuthHeaders() }
 			);
 
 			if (!response.ok) {

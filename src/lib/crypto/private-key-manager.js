@@ -6,6 +6,7 @@
 
 import { Base64, HKDF, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
 import { postQuantumEncryption } from './post-quantum-encryption.js';
+import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
 
 /**
  * Export format version for compatibility
@@ -603,7 +604,7 @@ export class PrivateKeyManager {
 			// Push to server
 			const response = await fetch('/api/auth/key-backup', {
 				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
 				body: JSON.stringify({ encrypted_keys: encryptedData })
 			});
 
@@ -630,7 +631,7 @@ export class PrivateKeyManager {
 
 		try {
 			// Fetch encrypted backup from server
-			const response = await fetch('/api/auth/key-backup');
+			const response = await fetch('/api/auth/key-backup', { headers: getClientAuthHeaders() });
 
 			if (response.status === 404) {
 				throw new Error('No key backup found on server');
@@ -663,10 +664,24 @@ export class PrivateKeyManager {
 		if (typeof window === 'undefined') return false;
 
 		try {
-			const response = await fetch('/api/auth/key-backup');
+			const response = await fetch('/api/auth/key-backup', { headers: getClientAuthHeaders() });
 			return response.ok;
 		} catch {
 			return false;
+		}
+	}
+
+	async getServerBackupInfo({ accessToken } = {}) {
+		if (typeof window === 'undefined') return { exists: false };
+		try {
+			const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : getClientAuthHeaders();
+			const response = await fetch('/api/auth/key-backup', { headers });
+			if (response.status === 404) return { exists: false };
+			if (!response.ok) return { exists: false, error: `HTTP ${response.status}` };
+			const data = await response.json();
+			return { exists: Boolean(data?.backup?.encrypted_keys), sealVersion: data?.backup?.seal_version ?? 2 };
+		} catch (error) {
+			return { exists: false, error: error instanceof Error ? error.message : 'Backup check failed' };
 		}
 	}
 
@@ -692,7 +707,8 @@ export class PrivateKeyManager {
 			const response = await fetch('/api/crypto/public-keys', {
 				method: 'PUT',
 				headers: {
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					...getClientAuthHeaders()
 				},
 				body: JSON.stringify({
 					public_key: publicKey,
