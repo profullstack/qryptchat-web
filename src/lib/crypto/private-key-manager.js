@@ -6,7 +6,7 @@
 
 import { Base64, HKDF, ChaCha20Poly1305, SecureRandom, CryptoUtils } from './index.js';
 import { postQuantumEncryption } from './post-quantum-encryption.js';
-import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
+import { authUserIdFromToken, generateRecoveryKey, passphraseProblem, sealKeys, unsealKeys } from './key-backup-seal.js';
 
 /**
  * Export format version for compatibility
@@ -18,6 +18,24 @@ const EXPORT_VERSION = '3.0'; // Post-quantum: ChaCha20-Poly1305 + HKDF
  * 600,000 iterations; the previous 100,000 left a password-protected key export
  * cheap enough to attack offline on a GPU.
  */
+/**
+ * A readable message for a failed backup/restore call.
+ * @param {{error?: string, code?: string, remaining?: number, retryAfter?: number}} data
+ * @param {number} status
+ */
+export function pinErrorMessage(data, status) {
+	if (data?.code === 'PIN_LOCKED') {
+		const minutes = Math.max(1, Math.ceil((data.retryAfter || 60) / 60));
+		return `Too many wrong PINs. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+	}
+	if (data?.code === 'PIN_WRONG') {
+		return typeof data.remaining === 'number'
+			? `Wrong PIN. ${data.remaining} attempt${data.remaining === 1 ? '' : 's'} left before a lockout.`
+			: 'Wrong PIN.';
+	}
+	return data?.error || `Server returned ${status}`;
+}
+
 const PBKDF2_ITERATIONS = 600000;
 
 /**
@@ -46,26 +64,7 @@ export class PrivateKeyManager {
 		}
 
 		try {
-			// Initialize post-quantum encryption service
-			await postQuantumEncryption.initialize();
-
-			// Get user post-quantum keys (both ML-KEM-1024 and ML-KEM-768)
-			const allKeys = await postQuantumEncryption.exportUserKeys();
-			if (!allKeys) {
-				throw new Error('No post-quantum keys found to export');
-			}
-
-			// Prepare both key sets for encryption
-			const keysToExport = {
-				keys1024: allKeys.keys1024,
-				keys768: allKeys.keys768,
-				timestamp: Date.now(),
-				version: EXPORT_VERSION
-			};
-
-			// Convert to JSON bytes
-			const keysJson = JSON.stringify(keysToExport);
-			const keysBytes = new TextEncoder().encode(keysJson);
+			const keysBytes = await this._serializeLocalKeys();
 
 			// Generate salt for HKDF key derivation
 			const pbkdfSalt = SecureRandom.generateSalt();
@@ -105,6 +104,74 @@ export class PrivateKeyManager {
 		} catch (error) {
 			throw new Error(`Failed to export post-quantum private keys: ${error.message}`);
 		}
+	}
+
+	/**
+	 * The device's keypairs, serialized for sealing. Never leaves the browser
+	 * unencrypted.
+	 * @returns {Promise<Uint8Array>}
+	 */
+	async _serializeLocalKeys() {
+		await postQuantumEncryption.initialize();
+		const allKeys = await postQuantumEncryption.exportUserKeys();
+		if (!allKeys) {
+			throw new Error('No post-quantum keys found to export');
+		}
+		return new TextEncoder().encode(
+			JSON.stringify({
+				keys1024: allKeys.keys1024,
+				keys768: allKeys.keys768,
+				timestamp: Date.now(),
+				version: EXPORT_VERSION
+			})
+		);
+	}
+
+	/**
+	 * Replace the device's keys with decrypted backup contents.
+	 * @param {string} decryptedJson
+	 */
+	async _importDecryptedKeys(decryptedJson) {
+		await postQuantumEncryption.initialize();
+		// Parse decrypted keys
+		const importedKeys = JSON.parse(decryptedJson);
+
+		// Validate imported keys structure
+		this._validateImportedKeys(importedKeys);
+
+		// Clear existing keys and import new ones
+		await postQuantumEncryption.clearUserKeys();
+		
+		// Import the ML-KEM-1024 keys
+		if (importedKeys.keys1024) {
+			await postQuantumEncryption.importUserKeys(
+				importedKeys.keys1024.publicKey,
+				importedKeys.keys1024.privateKey,
+				importedKeys.keys1024.algorithm
+			);
+		} else if (importedKeys.publicKey) {
+			// Handle legacy format (single key set)
+			await postQuantumEncryption.importUserKeys(
+				importedKeys.publicKey,
+				importedKeys.privateKey,
+				importedKeys.algorithm || 'ML-KEM-1024'
+			);
+		}
+		
+		// Import the ML-KEM-768 keys if available
+		if (importedKeys.keys768) {
+			await postQuantumEncryption.importUserKeys(
+				importedKeys.keys768.publicKey,
+				importedKeys.keys768.privateKey,
+				importedKeys.keys768.algorithm
+			);
+		}
+
+		console.log('🔑 Post-quantum private keys imported successfully');
+		
+		// Sync public key to database after import
+		await this._syncPublicKeyToDatabase();
+
 	}
 
 	/**
@@ -206,44 +273,7 @@ export class PrivateKeyManager {
 				throw new Error(`Unsupported export version/algorithm: ${parsedData.version}/${parsedData.algorithm}`);
 			}
 
-			// Parse decrypted keys
-			const importedKeys = JSON.parse(decryptedJson);
-
-			// Validate imported keys structure
-			this._validateImportedKeys(importedKeys);
-
-			// Clear existing keys and import new ones
-			await postQuantumEncryption.clearUserKeys();
-			
-			// Import the ML-KEM-1024 keys
-			if (importedKeys.keys1024) {
-				await postQuantumEncryption.importUserKeys(
-					importedKeys.keys1024.publicKey,
-					importedKeys.keys1024.privateKey,
-					importedKeys.keys1024.algorithm
-				);
-			} else if (importedKeys.publicKey) {
-				// Handle legacy format (single key set)
-				await postQuantumEncryption.importUserKeys(
-					importedKeys.publicKey,
-					importedKeys.privateKey,
-					importedKeys.algorithm || 'ML-KEM-1024'
-				);
-			}
-			
-			// Import the ML-KEM-768 keys if available
-			if (importedKeys.keys768) {
-				await postQuantumEncryption.importUserKeys(
-					importedKeys.keys768.publicKey,
-					importedKeys.keys768.privateKey,
-					importedKeys.keys768.algorithm
-				);
-			}
-
-			console.log('🔑 Post-quantum private keys imported successfully');
-			
-			// Sync public key to database after import
-			await this._syncPublicKeyToDatabase();
+			await this._importDecryptedKeys(decryptedJson);
 
 		} catch (error) {
 			throw new Error(`Failed to import post-quantum private keys: ${error instanceof Error ? error.message : String(error)}`);
@@ -588,50 +618,108 @@ export class PrivateKeyManager {
 	}
 
 	/**
-	 * Backup encrypted keys to the server
-	 * @param {string} password - Password to encrypt the keys
-	 * @returns {Promise<void>}
+	 * Auth for the backup endpoints. Passkey, CoinPay and phone sessions live in
+	 * localStorage and have no cookie, so cookies alone are not enough.
+	 * @returns {Record<string, string>}
 	 */
-	async backupKeysToServer(password) {
+	_authHeaders() {
+		try {
+			const token = JSON.parse(localStorage.getItem('qrypt_session') || 'null')?.access_token;
+			return token ? { Authorization: `Bearer ${token}` } : {};
+		} catch {
+			return {};
+		}
+	}
+
+	/**
+	 * @param {string} [accessToken] a session token to use instead of the stored one
+	 * @returns {Record<string, string>}
+	 */
+	_headersFor(accessToken) {
+		return accessToken ? { Authorization: `Bearer ${accessToken}` } : this._authHeaders();
+	}
+
+	/** @param {string} [accessToken] */
+	_authUserId(accessToken) {
+		if (accessToken) return authUserIdFromToken(accessToken);
+		try {
+			return authUserIdFromToken(JSON.parse(localStorage.getItem('qrypt_session') || 'null')?.access_token);
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Seal this device's keys under a passphrase plus a fresh recovery key (in
+	 * the browser) and store the sealed blob on the server. The server never
+	 * sees the passphrase or the recovery key, so it cannot open the backup;
+	 * losing both means the backup is gone for good.
+	 * @param {string} passphrase
+	 * @param {{accessToken?: string, legacyPin?: string}} [opts] legacyPin: the
+	 *   old backup PIN, needed once to replace a PIN backup the server can verify
+	 * @returns {Promise<{recoveryKey: string}>} show the recovery key once
+	 */
+	async backupKeysToServer(passphrase, { accessToken, legacyPin } = {}) {
 		if (typeof window === 'undefined') {
 			throw new Error('Key backup is only available in browser environment');
 		}
 
 		try {
-			// Export and encrypt keys using existing method
-			const encryptedData = await this.exportPrivateKeys(password);
+			const problem = passphraseProblem(passphrase);
+			if (problem) throw new Error(problem);
+			const userId = this._authUserId(accessToken);
+			if (!userId) throw new Error('Sign in again to back up your keys');
 
-			// Push to server
+			const keysBytes = await this._serializeLocalKeys();
+			const recoveryKey = generateRecoveryKey();
+			const envelope = await sealKeys(keysBytes, { passphrase, recoveryKey, userId });
+			CryptoUtils.secureClear(keysBytes);
+
 			const response = await fetch('/api/auth/key-backup', {
 				method: 'PUT',
-				headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
-				body: JSON.stringify({ encrypted_keys: encryptedData })
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json', ...this._headersFor(accessToken) },
+				body: JSON.stringify({ encrypted_keys: JSON.stringify(envelope), ...(legacyPin ? { pin: legacyPin } : {}) })
 			});
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.error || `Server returned ${response.status}`);
+				const err = new Error(pinErrorMessage(errorData, response.status));
+				err.code = errorData?.code;
+				throw err;
 			}
 
-			console.log('🔑 ✅ Keys backed up to server successfully');
+			return { recoveryKey };
 		} catch (error) {
-			throw new Error(`Failed to backup keys to server: ${error.message}`);
+			const err = new Error(`Failed to backup keys to server: ${error.message}`);
+			err.code = error.code;
+			throw err;
 		}
 	}
 
 	/**
-	 * Restore encrypted keys from the server
-	 * @param {string} password - Password to decrypt the keys
-	 * @returns {Promise<void>}
+	 * Restore keys from the server backup with the passphrase or recovery key
+	 * (or, for an old backup, its PIN). The secret stays in the browser; only a
+	 * legacy PIN is sent, because the server gates PIN backups on it.
+	 * @param {string} secret
+	 * @param {{accessToken?: string}} [opts]
+	 * @returns {Promise<{legacy: boolean}>} legacy: re-seal with a passphrase now
 	 */
-	async restoreKeysFromServer(password) {
+	async restoreKeysFromServer(secret, { accessToken } = {}) {
 		if (typeof window === 'undefined') {
 			throw new Error('Key restore is only available in browser environment');
 		}
 
 		try {
-			// Fetch encrypted backup from server
-			const response = await fetch('/api/auth/key-backup', { headers: getClientAuthHeaders() });
+			const value = typeof secret === 'string' ? secret.trim() : '';
+			if (!value) throw new Error('Enter your passphrase or recovery key');
+			const maybePin = /^\d{4,12}$/.test(value);
+			const response = await fetch('/api/auth/key-backup', {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json', ...this._headersFor(accessToken) },
+				body: JSON.stringify(maybePin ? { pin: value } : {})
+			});
 
 			if (response.status === 404) {
 				throw new Error('No key backup found on server');
@@ -639,20 +727,51 @@ export class PrivateKeyManager {
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.error || `Server returned ${response.status}`);
+				if (errorData?.code === 'PIN_REQUIRED') {
+					throw new Error('This is an older backup protected by a PIN. Enter that PIN.');
+				}
+				throw new Error(pinErrorMessage(errorData, response.status));
 			}
 
-			const { backup } = await response.json();
+			const { backup, legacy, user_id } = await response.json();
 			if (!backup || !backup.encrypted_keys) {
 				throw new Error('No key backup found on server');
 			}
 
-			// Decrypt and import using existing method
-			await this.importPrivateKeys(backup.encrypted_keys, password);
+			if ((backup.seal_version ?? 1) >= 2) {
+				const plaintext = await unsealKeys(JSON.parse(backup.encrypted_keys), {
+					secret: value,
+					userId: user_id || this._authUserId(accessToken)
+				});
+				const json = new TextDecoder().decode(plaintext);
+				CryptoUtils.secureClear(plaintext);
+				await this._importDecryptedKeys(json);
+				return { legacy: false };
+			}
 
-			console.log('🔑 ✅ Keys restored from server successfully');
+			// Legacy PIN backup: decrypt with the PIN as before. The caller should
+			// prompt for a passphrase right away and re-seal (backupKeysToServer).
+			await this.importPrivateKeys(backup.encrypted_keys, value);
+			return { legacy: !!legacy };
 		} catch (error) {
 			throw new Error(`Failed to restore keys from server: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Whether a server backup exists, and how it is sealed.
+	 * @param {{accessToken?: string}} [opts]
+	 * @returns {Promise<{exists: boolean, sealVersion: number|null}>}
+	 */
+	async getServerBackupInfo({ accessToken } = {}) {
+		if (typeof window === 'undefined') return { exists: false, sealVersion: null };
+		try {
+			const response = await fetch('/api/auth/key-backup', { credentials: 'include', headers: this._headersFor(accessToken) });
+			if (!response.ok) return { exists: false, sealVersion: null };
+			const { backup } = await response.json();
+			return { exists: true, sealVersion: backup?.seal_version ?? 1 };
+		} catch {
+			return { exists: false, sealVersion: null };
 		}
 	}
 
@@ -661,28 +780,7 @@ export class PrivateKeyManager {
 	 * @returns {Promise<boolean>}
 	 */
 	async hasServerBackup() {
-		if (typeof window === 'undefined') return false;
-
-		try {
-			const response = await fetch('/api/auth/key-backup', { headers: getClientAuthHeaders() });
-			return response.ok;
-		} catch {
-			return false;
-		}
-	}
-
-	async getServerBackupInfo({ accessToken } = {}) {
-		if (typeof window === 'undefined') return { exists: false };
-		try {
-			const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : getClientAuthHeaders();
-			const response = await fetch('/api/auth/key-backup', { headers });
-			if (response.status === 404) return { exists: false };
-			if (!response.ok) return { exists: false, error: `HTTP ${response.status}` };
-			const data = await response.json();
-			return { exists: Boolean(data?.backup?.encrypted_keys), sealVersion: data?.backup?.seal_version ?? 2 };
-		} catch (error) {
-			return { exists: false, error: error instanceof Error ? error.message : 'Backup check failed' };
-		}
+		return (await this.getServerBackupInfo()).exists;
 	}
 
 	/**
@@ -707,8 +805,7 @@ export class PrivateKeyManager {
 			const response = await fetch('/api/crypto/public-keys', {
 				method: 'PUT',
 				headers: {
-					'Content-Type': 'application/json',
-					...getClientAuthHeaders()
+					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({
 					public_key: publicKey,

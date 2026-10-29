@@ -2,16 +2,13 @@
 // Handles setting and checking the user's backup PIN hash
 
 import { NextResponse } from 'next/server';
-import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
-import { promisify } from 'node:util';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuthCookieName } from '@/lib/supabase/auth-cookie.js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role.js';
+import { PIN_ALGORITHM, resolveInternalUserId as resolveUserId } from '@/lib/auth/backup-pin.js';
 
 // node:crypto is required for scrypt, so pin this route to the Node runtime.
 export const runtime = 'nodejs';
-
-const scrypt = promisify(scryptCallback);
 
 let supabaseServiceRole = null;
 function getServiceRoleClient() {
@@ -102,60 +99,10 @@ async function authenticateUser(request) {
 	}
 }
 
-// scrypt work factors. N=2^17/r=8/p=1 is OWASP's recommended minimum; the previous
-// N=16384 (Node's default) cost only ~16MB per derivation, which left the 6-12 digit
-// PIN keyspace within reach of an offline GPU sweep. The per-user salt means there is
-// no shared work across users on top of that.
-const SCRYPT_N = 131072;
-const SCRYPT_R = 8;
-const SCRYPT_P = 1;
-// scrypt needs roughly 128 * N * r bytes; Node's default 32MB cap would reject N=2^17.
-const SCRYPT_MAXMEM = 192 * 1024 * 1024;
-const SCRYPT_KEYLEN = 64;
-const SCRYPT_SALT_BYTES = 16;
-export const PIN_ALGORITHM = `scrypt-n${SCRYPT_N}-r${SCRYPT_R}-p${SCRYPT_P}`;
+export { PIN_ALGORITHM };
 
-/**
- * Derive a PIN hash using scrypt and a per-user random salt.
- *
- * Replaces the previous unsalted `crypto.subtle.digest('SHA-256', pin)`, which
- * a rainbow table over the numeric PIN keyspace reversed instantly once the
- * hash column was readable (GHSA-jpfm-vrpc-p6rr).
- *
- * @param {string} pin
- * @param {string} [saltHex] existing salt, hex-encoded; a new one is generated when omitted
- * @returns {Promise<{hash: string, salt: string, algorithm: string}>}
- */
-async function hashPin(pin, saltHex) {
-	const salt = saltHex ?? randomBytes(SCRYPT_SALT_BYTES).toString('hex');
-	const derived = /** @type {Buffer} */ (
-		await scrypt(pin, salt, SCRYPT_KEYLEN, {
-			N: SCRYPT_N,
-			r: SCRYPT_R,
-			p: SCRYPT_P,
-			maxmem: SCRYPT_MAXMEM
-		})
-	);
-	return { hash: derived.toString('hex'), salt, algorithm: PIN_ALGORITHM };
-}
-
-/**
- * Resolve the internal users.id for a Supabase Auth user.
- * @param {{id: string}} user
- * @returns {Promise<{userId?: string, error?: string}>}
- */
 async function resolveInternalUserId(user) {
-	const { data, error } = await getServiceRoleClient()
-		.from('users')
-		.select('id')
-		.eq('auth_user_id', user.id)
-		.single();
-
-	if (error || !data?.id) {
-		return { error: error?.message ?? 'User record not found' };
-	}
-
-	return { userId: data.id };
+	return resolveUserId(getServiceRoleClient(), user);
 }
 
 /**
@@ -198,59 +145,18 @@ export async function GET(request) {
 
 /**
  * POST /api/auth/backup-pin
- * Set or update the backup PIN for the authenticated user
+ * Retired. Key backups are now sealed in the browser under a passphrase and a
+ * recovery key (seal v2), so a new PIN would protect nothing; a stored hash of a
+ * short PIN is only an offline oracle. Legacy PIN rows are still checked by the
+ * key-backup route until LEGACY_KEY_MIGRATION=off, and deleted on upgrade.
  */
 export async function POST(request) {
-	try {
-		const { user, error: authError } = await authenticateUser(request);
-		if (authError || !user) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-		}
-
-		let body;
-		try {
-			body = await request.json();
-		} catch {
-			return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-		}
-
-		const { pin } = body;
-
-		if (!pin || typeof pin !== 'string' || pin.length < 6 || pin.length > 12) {
-			return NextResponse.json({ error: 'PIN must be 6-12 digits' }, { status: 400 });
-		}
-
-		if (!/^\d+$/.test(pin)) {
-			return NextResponse.json({ error: 'PIN must contain only digits' }, { status: 400 });
-		}
-
-		const { userId, error: lookupError } = await resolveInternalUserId(user);
-		if (lookupError || !userId) {
-			console.error('Error setting backup PIN:', lookupError);
-			return NextResponse.json({ error: 'Failed to set backup PIN' }, { status: 500 });
-		}
-
-		const { hash, salt, algorithm } = await hashPin(pin);
-
-		const { error } = await getServiceRoleClient()
-			.from('user_backup_pins')
-			.upsert({
-				user_id: userId,
-				pin_hash: hash,
-				pin_salt: salt,
-				algorithm,
-				updated_at: new Date().toISOString()
-			}, { onConflict: 'user_id' });
-
-		if (error) {
-			console.error('Error setting backup PIN:', error);
-			return NextResponse.json({ error: 'Failed to set backup PIN' }, { status: 500 });
-		}
-
-		console.log(`🔑 Backup PIN set for user ${user.id}`);
-		return NextResponse.json({ success: true });
-	} catch (error) {
-		console.error('Error in POST /api/auth/backup-pin:', error);
-		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+	const { user, error: authError } = await authenticateUser(request);
+	if (authError || !user) {
+		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	return NextResponse.json(
+		{ error: 'Backup PINs are retired. Back up your keys with a passphrase instead.', code: 'PIN_RETIRED' },
+		{ status: 410 }
+	);
 }

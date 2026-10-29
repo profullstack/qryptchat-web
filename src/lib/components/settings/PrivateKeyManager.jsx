@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { keyManager } from '@/lib/crypto/key-manager.js';
 import { privateKeyManager } from '@/lib/crypto/private-key-manager.js';
-import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
+import KeyBackupSetup from '@/lib/components/KeyBackupSetup.jsx';
 
 export default function PrivateKeyManager() {
   const user = useAuthStore((s) => s.user);
@@ -12,16 +12,11 @@ export default function PrivateKeyManager() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [hasKeys, setHasKeys] = useState(false);
-  const [hasPin, setHasPin] = useState(false);
   const [hasBackup, setHasBackup] = useState(false);
-  const [pinLoading, setPinLoading] = useState(true);
+  const [sealVersion, setSealVersion] = useState(null);
   const [backupLoading, setBackupLoading] = useState(true);
-  const [pin, setPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [changingPin, setChangingPin] = useState(false);
-  const [backupPin, setBackupPin] = useState('');
-  const [restorePin, setRestorePin] = useState('');
-  const [showPin, setShowPin] = useState(false);
+  const [showBackupSetup, setShowBackupSetup] = useState(false);
+  const [restoreSecret, setRestoreSecret] = useState('');
   const [importFile, setImportFile] = useState(null);
   const [importPassword, setImportPassword] = useState('');
   const [importLoading, setImportLoading] = useState(false);
@@ -32,24 +27,19 @@ export default function PrivateKeyManager() {
   const [exportLoading, setExportLoading] = useState(false);
 
   useEffect(() => {
-    if (user) { checkKeys(); checkPin(); checkBackup(); }
+    if (user) { checkKeys(); checkBackup(); }
   }, [user?.id]);
 
   async function checkKeys() {
     try { await keyManager.initialize(); setHasKeys(await keyManager.hasUserKeys()); } catch {}
   }
 
-  async function checkPin() {
-    try {
-      setPinLoading(true);
-      const res = await fetch('/api/auth/backup-pin', { credentials: 'include', headers: getClientAuthHeaders() });
-      if (res.ok) { const d = await res.json(); setHasPin(d.hasPin); }
-    } catch {} finally { setPinLoading(false); }
-  }
-
   async function checkBackup() {
-    try { setBackupLoading(true); setHasBackup(await privateKeyManager.hasServerBackup()); }
-    catch {} finally { setBackupLoading(false); }
+    try {
+      setBackupLoading(true);
+      const info = await privateKeyManager.getServerBackupInfo();
+      setHasBackup(info.exists); setSealVersion(info.sealVersion);
+    } catch {} finally { setBackupLoading(false); }
   }
 
   async function generateKeys() {
@@ -62,29 +52,15 @@ export default function PrivateKeyManager() {
     finally { setLoading(false); }
   }
 
-  async function backupKeys() {
-    if (!backupPin) return;
-    setLoading(true); setError(''); setSuccess('');
-    try {
-      const encrypted = await privateKeyManager.exportPrivateKeys(backupPin);
-      const res = await fetch('/api/auth/key-backup', {
-        method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
-        body: JSON.stringify({ encrypted_keys: encrypted }),
-      });
-      if (res.ok) { setHasBackup(true); setBackupPin(''); setSuccess('Keys backed up!'); }
-      else { const d = await res.json(); setError(d.error || 'Backup failed'); }
-    } catch (err) { setError(err.message || 'Backup failed'); }
-    finally { setLoading(false); }
-  }
-
   async function restoreKeys() {
-    if (!restorePin) return;
+    if (!restoreSecret) return;
     setLoading(true); setError(''); setSuccess('');
     try {
-      await privateKeyManager.restoreKeysFromServer(restorePin);
-      setHasKeys(true); setRestorePin(''); setSuccess('Keys restored!');
-    } catch (err) { setError(err.message || 'Wrong PIN or restore failed'); }
+      const { legacy } = await privateKeyManager.restoreKeysFromServer(restoreSecret);
+      setHasKeys(true); setRestoreSecret('');
+      if (legacy) { setShowBackupSetup(true); setSuccess('Keys restored. Now re-seal your backup with a passphrase.'); }
+      else setSuccess('Keys restored!');
+    } catch (err) { setError((err.message || 'Restore failed').replace(/^Failed to restore keys from server: /, '')); }
     finally { setLoading(false); }
   }
 
@@ -96,19 +72,10 @@ export default function PrivateKeyManager() {
       await privateKeyManager.importPrivateKeys(text, importPassword);
       setHasKeys(true);
 
-      if (importAndBackup) {
-        const encrypted = await privateKeyManager.exportPrivateKeys(importPassword);
-        const res = await fetch('/api/auth/key-backup', {
-          method: 'PUT', credentials: 'include',
-          headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
-          body: JSON.stringify({ encrypted_keys: encrypted }),
-        });
-        if (res.ok) { setHasBackup(true); }
-      }
-
       setImportFile(null);
       setImportPassword('');
-      setSuccess(`Keys imported${importAndBackup ? ' and backed up to server' : ''} successfully!`);
+      if (importAndBackup) setShowBackupSetup(true);
+      setSuccess(`Keys imported successfully!${importAndBackup ? ' Choose a backup passphrase below to save them to the server.' : ''}`);
     } catch (err) {
       setError(err.message || 'Import failed — wrong password or invalid file');
     } finally { setImportLoading(false); }
@@ -126,21 +93,6 @@ export default function PrivateKeyManager() {
       setSuccess(`Downloaded ${filename} — store it somewhere safe. Without this password the file cannot be recovered.`);
     } catch (err) { setError(err.message || 'Export failed'); }
     finally { setExportLoading(false); }
-  }
-
-  async function setNewPin() {
-    if (!pin || pin !== confirmPin || !/^\d{6,12}$/.test(pin)) { setError('PIN must be 6–12 digits and match'); return; }
-    setLoading(true); setError(''); setSuccess('');
-    try {
-      const res = await fetch('/api/auth/backup-pin', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
-        body: JSON.stringify({ pin }),
-      });
-      if (res.ok) { setHasPin(true); setPin(''); setConfirmPin(''); setChangingPin(false); setSuccess('Backup PIN set!'); }
-      else { const d = await res.json(); setError(d.error || 'Failed to set PIN'); }
-    } catch (err) { setError(err.message || 'Failed'); }
-    finally { setLoading(false); }
   }
 
   const dot = (on) => (
@@ -161,47 +113,37 @@ export default function PrivateKeyManager() {
       </div>
 
       <div className="pkm-card">
-        <h4>Backup PIN</h4>
-        {pinLoading ? <span style={{ color: 'var(--color-text-secondary)', fontSize: '.875rem' }}>Checking...</span> : (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.75rem' }}>
-              {dot(hasPin)}<span>{hasPin ? 'Backup PIN is set' : 'No backup PIN configured'}</span>
-            </div>
-            {(!hasPin || changingPin) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-                <input type={showPin ? 'text' : 'password'} inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="6–12 digit PIN" className="pkm-input" />
-                <input type={showPin ? 'text' : 'password'} inputMode="numeric" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Confirm PIN" className="pkm-input" />
-                <label className="pkm-label"><input type="checkbox" checked={showPin} onChange={(e) => setShowPin(e.target.checked)} /> Show PIN</label>
-                <div style={{ display: 'flex', gap: '.5rem' }}>
-                  <button className="btn btn-primary btn-sm" onClick={setNewPin} disabled={loading}>Save PIN</button>
-                  {changingPin && <button className="btn btn-secondary btn-sm" onClick={() => { setChangingPin(false); setPin(''); setConfirmPin(''); }}>Cancel</button>}
-                </div>
-              </div>
-            )}
-            {hasPin && !changingPin && <button className="btn btn-secondary btn-sm" onClick={() => setChangingPin(true)}>Change PIN</button>}
-          </>
-        )}
-      </div>
-
-      <div className="pkm-card">
         <h4>Server Key Backup / Restore</h4>
         {backupLoading ? <span style={{ color: 'var(--color-text-secondary)', fontSize: '.875rem' }}>Checking...</span> : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.75rem' }}>
-              {dot(hasBackup)}<span>{hasBackup ? 'Encrypted backup exists on server' : 'No server backup'}</span>
+              {dot(hasBackup && sealVersion >= 2)}
+              <span>{!hasBackup ? 'No server backup' : sealVersion >= 2 ? 'Backup sealed with your passphrase' : 'Old PIN backup: re-seal it with a passphrase'}</span>
             </div>
-            {hasKeys && (
+            <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)', marginBottom: '.75rem' }}>
+              Backups are sealed on this device. We store only the sealed copy and cannot open it: if you lose both the
+              passphrase and the recovery key, the backup is gone and you will need to re-import your keys from a file
+              or start with new keys.
+            </p>
+            {hasKeys && (showBackupSetup || !hasBackup || sealVersion < 2 ? (
               <div style={{ marginBottom: '.75rem' }}>
-                <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)', marginBottom: '.5rem' }}>Backup your keys (encrypted with PIN):</p>
-                <input type="password" inputMode="numeric" value={backupPin} onChange={(e) => setBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Enter PIN to encrypt backup" className="pkm-input" style={{ marginBottom: '.5rem' }} />
-                <button className="btn btn-primary btn-sm" onClick={backupKeys} disabled={loading || !backupPin}>{loading ? 'Backing up...' : hasBackup ? 'Update Backup' : 'Backup Keys'}</button>
+                <KeyBackupSetup
+                  compact
+                  legacy={hasBackup && sealVersion < 2}
+                  onDone={() => { setShowBackupSetup(false); setHasBackup(true); setSealVersion(2); setSuccess('Keys backed up!'); }}
+                  onSkip={hasBackup && sealVersion >= 2 ? () => setShowBackupSetup(false) : undefined}
+                />
               </div>
-            )}
+            ) : (
+              <button className="btn btn-secondary btn-sm" style={{ marginBottom: '.75rem' }} onClick={() => setShowBackupSetup(true)}>
+                Update backup (new passphrase and recovery key)
+              </button>
+            ))}
             {hasBackup && (
               <div>
-                <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)', marginBottom: '.5rem' }}>Restore keys from server backup:</p>
-                <input type="password" inputMode="numeric" value={restorePin} onChange={(e) => setRestorePin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Backup PIN" className="pkm-input" style={{ marginBottom: '.5rem' }} />
-                <button className="btn btn-primary btn-sm" onClick={restoreKeys} disabled={loading || !restorePin}>{loading ? 'Restoring...' : 'Restore Keys'}</button>
+                <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)', marginBottom: '.5rem' }}>Restore keys from the server backup:</p>
+                <input type="password" autoComplete="current-password" value={restoreSecret} onChange={(e) => setRestoreSecret(e.target.value)} placeholder={sealVersion >= 2 ? 'Passphrase or recovery key' : 'Old backup PIN'} className="pkm-input" style={{ marginBottom: '.5rem' }} />
+                <button className="btn btn-primary btn-sm" onClick={restoreKeys} disabled={loading || !restoreSecret}>{loading ? 'Restoring...' : 'Restore Keys'}</button>
               </div>
             )}
           </>
