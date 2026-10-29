@@ -64,9 +64,9 @@ describe('keySyncService.needsKeySync', () => {
 		await expect(keySyncService.needsKeySync()).resolves.toBe(true);
 	});
 
-	it('syncs when the stored key belongs to a different keypair', async () => {
+	it('does not replace a published key from a different keypair automatically', async () => {
 		stubFetch({ body: { public_key: 'some-other-key-bbbb' } });
-		await expect(keySyncService.needsKeySync()).resolves.toBe(true);
+		await expect(keySyncService.needsKeySync()).resolves.toBe(false);
 	});
 
 	// Publishing replaces the key everyone encrypts to, so an unknown answer must not

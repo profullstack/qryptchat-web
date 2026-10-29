@@ -73,6 +73,23 @@ export class MultiRecipientEncryptionService {
 				throw new Error('No participant keys found for conversation');
 			}
 
+			// The database key is the published key used by other devices, but this
+			// browser must encrypt its own copy to the private key it actually holds.
+			// If the published key belongs to another device, using it here creates a
+			// message that the sender cannot decrypt after the SSE reload.
+			if (typeof window !== 'undefined') {
+				try {
+					const storedUser = JSON.parse(localStorage.getItem('qrypt_user') || 'null');
+					const ownUserId = storedUser?.id;
+					if (ownUserId && participantKeys.has(ownUserId)) {
+						const ownPublicKey = await publicKeyService.getMyPublicKey();
+						if (ownPublicKey) participantKeys.set(ownUserId, ownPublicKey);
+					}
+				} catch (error) {
+					console.warn('🔐 [MULTI] Could not resolve the active local key for self-encryption:', error);
+				}
+			}
+
 			console.log(`🔐 [MULTI] Found ${participantKeys.size} participants to encrypt for`);
 
 			// Encrypt the message for each participant

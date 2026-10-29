@@ -171,8 +171,11 @@ export class KeySyncService {
 			}
 
 			if (dbKey !== publicKey) {
-				console.log('🔑 Database public key differs from local key (rotated/new device), sync needed');
-				return true;
+			// A mismatch means this browser may have a different device key. Replacing
+			// the published key would strand every message encrypted for the existing
+			// key, so rotation must be an explicit recovery action.
+			console.warn('🔑 Database public key differs from local key; refusing automatic replacement');
+			return false;
 			}
 
 			console.log('🔑 Public key already synced to database');
