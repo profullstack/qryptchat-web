@@ -5,6 +5,7 @@ import { multiRecipientEncryption } from '@/lib/crypto/multi-recipient-encryptio
 import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '@/lib/crypto/public-key-service.js';
 import * as conversationUtils from '@/lib/utils/conversation-utils.js';
+import { getClientAuthHeaders } from '@/lib/auth/client-session.js';
 
 export const useChatStore = create((set, get) => {
   let eventSource = null;
@@ -19,7 +20,7 @@ export const useChatStore = create((set, get) => {
   async function apiPost(endpoint, data = {}) {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getClientAuthHeaders() },
       body: JSON.stringify(data),
       credentials: 'include',
     });
