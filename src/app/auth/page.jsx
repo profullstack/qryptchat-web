@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { afterSignInPath } from '@/lib/auth/after-sign-in.js';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useMessagesStore } from '@/lib/stores/messages.js';
@@ -10,6 +11,20 @@ import { keyManager } from '@/lib/crypto/key-manager.js';
 import { privateKeyManager } from '@/lib/crypto/private-key-manager.js';
 import { indexedDBManager } from '@/lib/crypto/indexed-db-manager.js';
 import Message from '@/lib/components/Message.jsx';
+import KeyBackupSetup from '@/lib/components/KeyBackupSetup.jsx';
+import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
+
+/** Why a sign-in came back to /auth, in words a person can act on. */
+const AUTH_ERRORS = {
+  coinpay_denied: 'CoinPay sign-in was cancelled.',
+  coinpay_missing_code: 'CoinPay did not finish the sign-in. Please try again.',
+  coinpay_state_mismatch: 'That CoinPay sign-in expired or was opened in another tab. Please try again.',
+  coinpay_unavailable: 'CoinPay sign-in is not available right now.',
+  coinpay_no_subject: 'CoinPay did not say who you are. Please try again.',
+  coinpay_provision_failed: 'We could not set up your account from CoinPay. Please try again.',
+  coinpay_session_failed: 'We could not start your session. Please try again.',
+  coinpay_login_failed: 'CoinPay sign-in failed. Please try again.',
+};
 
 export default function AuthPage() {
   const router = useRouter();
@@ -29,72 +44,147 @@ export default function AuthPage() {
   const [canResend, setCanResend] = useState(true);
   const [verifiedSession, setVerifiedSession] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
-  const [backupPin, setBackupPin] = useState('');
-  const [confirmBackupPin, setConfirmBackupPin] = useState('');
-  const [showBackupPin, setShowBackupPin] = useState(false);
+  const [backupLegacy, setBackupLegacy] = useState(false);
+  const [legacyPin, setLegacyPin] = useState('');
   const [restorePin, setRestorePin] = useState('');
   const [showRestorePin, setShowRestorePin] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreAttempts, setRestoreAttempts] = useState(0);
   const MAX_RESTORE = 5;
   const msgStore = useMessagesStore.getState();
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+
+  useEffect(() => { setPasskeySupported(browserSupportsWebAuthn()); }, []);
+
+  /**
+   * Finish any sign-in that produced a Supabase session: store it the way the
+   * app reads it (qrypt_user + qrypt_session in localStorage, not cookies),
+   * then run the E2EE key lifecycle. CoinPay and passkeys both land here.
+   * `isNew` means the account was just made: generate keys, then ask for a PIN,
+   * exactly as a new phone account does.
+   */
+  async function completeLogin(rawSession, user, { isNew = false } = {}) {
+    // Keep the FULL session (incl. expires_at): the auth store's init() drops
+    // any stored session without it, bouncing the user back to /auth.
+    const session = {
+      access_token: rawSession.access_token,
+      refresh_token: rawSession.refresh_token,
+      expires_at: rawSession.expires_at,
+      expires_in: rawSession.expires_in,
+      token_type: rawSession.token_type,
+    };
+    if (user) {
+      localStorage.setItem('qrypt_user', JSON.stringify(user));
+      useAuthStore.setState({ user, loading: false });
+    }
+    localStorage.setItem('qrypt_session', JSON.stringify(session));
+    localStorage.setItem('supabase.auth.token', JSON.stringify(session));
+    await createSupabaseClient().auth.setSession(session);
+
+    if (isNew) {
+      try { await keyManager.generateUserKeys(); } catch {}
+      setVerifiedSession(session); setStep('backup'); return;
+    }
+    const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
+    const info = await privateKeyManager.getServerBackupInfo({ accessToken: session.access_token });
+    if (info.exists && !hasLocalKeys) { setVerifiedSession(session); setStep('restore'); return; }
+    if (!hasLocalKeys && !info.exists) {
+      // Brand-new keys for this account, then prompt for a backup passphrase.
+      try { await keyManager.generateUserKeys(); } catch {}
+      setVerifiedSession(session); setStep('backup'); return;
+    }
+    // Keys here but no backup, or an old PIN backup: (re-)seal with a passphrase.
+    if (hasLocalKeys && (!info.exists || info.sealVersion < 2)) {
+      setBackupLegacy(info.exists); setVerifiedSession(session); setStep('backup'); return;
+    }
+    router.push(afterSignInPath());
+  }
+
+  // A CoinPay redirect (popups blocked) hands the session over in a short-lived
+  // cookie only our callback can set (never the URL, which anyone could craft to
+  // sign you into their account); an error comes back as ?error=. Read once.
+  useEffect(() => {
+    const err = new URLSearchParams(window.location.search).get('error');
+    if (err) {
+      msgStore.error?.(AUTH_ERRORS[err] || 'Sign-in failed. Please try again.');
+      window.history.replaceState(null, '', '/auth');
+    }
+    const handoff = document.cookie.split('; ').find((c) => c.startsWith('qrypt_coinpay_handoff='));
+    if (handoff) {
+      document.cookie = 'qrypt_coinpay_handoff=; Max-Age=0; Path=/auth; SameSite=Lax';
+      try {
+        const b64 = handoff.slice('qrypt_coinpay_handoff='.length).replace(/-/g, '+').replace(/_/g, '/');
+        const d = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))));
+        if (d?.type === 'coinpay-session' && d.access_token) {
+          completeLogin(d, d.user).catch(() => msgStore.error?.('CoinPay login failed. Please try again.'));
+        }
+      } catch { msgStore.error?.('CoinPay login failed. Please try again.'); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function passkeyRequest(path, body, token) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Passkey request failed');
+    return data;
+  }
+
+  function passkeyMessage(err) {
+    // The browser's own cancel/timeout is not an error worth shouting about.
+    if (err?.name === 'NotAllowedError' || err?.name === 'AbortError') return 'Passkey was cancelled.';
+    return err?.message || 'Passkey sign-in failed.';
+  }
+
+  async function signInWithPasskey() {
+    if (passkeyBusy) return;
+    setPasskeyBusy(true);
+    try {
+      const { challengeId, options } = await passkeyRequest('/api/auth/passkey/login-options');
+      const response = await startAuthentication({ optionsJSON: options });
+      const { session, user } = await passkeyRequest('/api/auth/passkey/login-verify', { challengeId, response });
+      await completeLogin(session, user);
+    } catch (err) {
+      msgStore.error?.(passkeyMessage(err));
+    } finally { setPasskeyBusy(false); }
+  }
+
+  async function signUpWithPasskey(e) {
+    e?.preventDefault();
+    if (passkeyBusy || !username.trim()) return;
+    setPasskeyBusy(true);
+    try {
+      const { challengeId, options } = await passkeyRequest('/api/auth/passkey/register-options', { username: username.trim(), displayName: displayName.trim() || username.trim() });
+      const response = await startRegistration({ optionsJSON: options });
+      const { session, user } = await passkeyRequest('/api/auth/passkey/register-verify', { challengeId, response, name: 'First passkey' });
+      msgStore.success?.('Account created. Now set a Backup PIN for your keys.');
+      await completeLogin(session, user, { isNew: true });
+    } catch (err) {
+      msgStore.error?.(passkeyMessage(err));
+    } finally { setPasskeyBusy(false); }
+  }
 
   useEffect(() => {
-    if (authenticated) router.replace('/chat');
+    if (authenticated) router.replace(afterSignInPath());
   }, [authenticated]);
 
-  // CoinPay popup flow: the popup completes OAuth and postMessages the session +
-  // user back. Establish the session the SAME way the phone flow does — set the
-  // store user + localStorage (the app keys "signed in" off qrypt_user, not the
-  // Supabase session) — so it works inside the TronBrowser embed.
+  // CoinPay popup flow: the popup completes OAuth and postMessages the session
+  // (or why it failed) back here, which works inside the TronBrowser embed too.
   useEffect(() => {
     function onCoinpayMessage(e) {
       if (e.origin !== window.location.origin) return;
       const d = e.data;
+      if (d?.type === 'coinpay-error') {
+        msgStore.error?.(AUTH_ERRORS[d.code] || 'CoinPay login failed. Please try again.');
+        return;
+      }
       if (!d || d.type !== 'coinpay-session' || !d.access_token) return;
-      // Keep the FULL session (incl. expires_at) — the auth store's init()
-      // drops any stored session without it, bouncing the user back to /auth.
-      const session = {
-        access_token: d.access_token,
-        refresh_token: d.refresh_token,
-        expires_at: d.expires_at,
-        expires_in: d.expires_in,
-        token_type: d.token_type,
-      };
-      (async () => {
-        try {
-          if (d.user) {
-            localStorage.setItem('qrypt_user', JSON.stringify(d.user));
-            useAuthStore.setState({ user: d.user, loading: false });
-          }
-          localStorage.setItem('qrypt_session', JSON.stringify(session));
-          localStorage.setItem('supabase.auth.token', JSON.stringify(session));
-          await createSupabaseClient().auth.setSession(session);
-
-          // E2EE key lifecycle — identical to the phone flow, so a CoinPay
-          // account actually gets usable keys instead of landing in /chat with
-          // nothing to decrypt with.
-          const authHeaders = { Authorization: `Bearer ${session.access_token}` };
-          const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
-          let hasBackup = false;
-          try { hasBackup = (await fetch('/api/auth/key-backup', { headers: authHeaders })).ok; } catch {}
-          if (hasBackup && !hasLocalKeys) { setVerifiedSession(session); setStep('restore'); return; }
-          if (!hasLocalKeys && !hasBackup) {
-            // Brand-new account: generate keys, then prompt to set a backup PIN.
-            try { await keyManager.generateUserKeys(); } catch {}
-            setVerifiedSession(session); setStep('backup'); return;
-          }
-          let hasPin = false;
-          try {
-            const r = await fetch('/api/auth/backup-pin', { headers: authHeaders });
-            hasPin = r.ok ? (await r.json()).hasPin : false;
-          } catch {}
-          if (!hasPin && hasLocalKeys) { setVerifiedSession(session); setStep('backup'); return; }
-          router.push('/chat');
-        } catch {
-          msgStore.error?.('CoinPay login failed — please try again.');
-        }
-      })();
+      completeLogin(d, d.user).catch(() => msgStore.error?.('CoinPay login failed. Please try again.'));
     }
     window.addEventListener('message', onCoinpayMessage);
     return () => window.removeEventListener('message', onCoinpayMessage);
@@ -137,28 +227,25 @@ export default function AuthPage() {
 
     if (result.success) {
       if (result.isNewUser) {
-        router.push('/chat');
+        router.push(afterSignInPath());
       } else {
         const sessionToken = result.session?.access_token;
-        const authHeaders = sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {};
         try {
           const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
-          const backupRes = await fetch('/api/auth/key-backup', { headers: authHeaders });
-          const hasBackup = backupRes.ok;
-          const pinCheckRes = await fetch('/api/auth/backup-pin', { headers: authHeaders });
-          const pinData = pinCheckRes.ok ? await pinCheckRes.json() : { hasPin: false };
-          if (hasBackup && !hasLocalKeys) {
+          const info = await privateKeyManager.getServerBackupInfo({ accessToken: sessionToken });
+          if (info.exists && !hasLocalKeys) {
             setVerifiedSession(result.session);
             setStep('restore');
             return;
           }
-          if (!pinData.hasPin && hasLocalKeys) {
+          if (hasLocalKeys && (!info.exists || info.sealVersion < 2)) {
+            setBackupLegacy(info.exists);
             setVerifiedSession(result.session);
             setStep('backup');
             return;
           }
         } catch { setVerifiedSession(result.session); setStep('restore'); return; }
-        router.push('/chat');
+        router.push(afterSignInPath());
       }
     } else if (result.requiresUsername) {
       setVerifiedSession(result.session);
@@ -187,29 +274,10 @@ export default function AuthPage() {
         try {
           await keyManager.generateUserKeys();
           setStep('backup');
-          msgStore.success('Account created! Please set a Backup PIN.');
-        } catch { msgStore.warning('Account created but failed to generate encryption keys.'); router.push('/chat'); }
+          msgStore.success('Account created! Now back up your keys.');
+        } catch { msgStore.warning('Account created but failed to generate encryption keys.'); router.push(afterSignInPath()); }
       } else { msgStore.error(data.error || 'Failed to create account'); }
     } catch { msgStore.error('Failed to create account. Please try again.'); }
-  }
-
-  async function setBackupPinFn(e) {
-    e?.preventDefault();
-    if (!backupPin || !/^\d+$/.test(backupPin) || backupPin.length < 6 || backupPin.length > 12) { msgStore.error('PIN must be 6-12 digits'); return; }
-    if (backupPin !== confirmBackupPin) { msgStore.error('PINs do not match'); return; }
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (verifiedSession?.access_token) headers['Authorization'] = `Bearer ${verifiedSession.access_token}`;
-      const pinRes = await fetch('/api/auth/backup-pin', { method: 'POST', headers, body: JSON.stringify({ pin: backupPin }) });
-      if (!pinRes.ok) { const err = await pinRes.json().catch(() => ({})); throw new Error(err.error || 'Failed to save PIN'); }
-      const encryptedData = await privateKeyManager.exportPrivateKeys(backupPin);
-      const backupHeaders = { 'Content-Type': 'application/json' };
-      if (verifiedSession?.access_token) backupHeaders['Authorization'] = `Bearer ${verifiedSession.access_token}`;
-      const backupRes = await fetch('/api/auth/key-backup', { method: 'PUT', headers: backupHeaders, body: JSON.stringify({ encrypted_keys: encryptedData }) });
-      if (!backupRes.ok) { const e = await backupRes.json().catch(() => ({})); throw new Error(e.error || 'Key backup failed'); }
-      msgStore.success('Backup PIN set and keys backed up! Welcome to QryptChat!');
-      router.push('/chat');
-    } catch (err) { msgStore.error('Failed to set backup PIN: ' + (err.message || 'Unknown error')); }
   }
 
   async function restoreWithPin(e) {
@@ -217,16 +285,26 @@ export default function AuthPage() {
     if (!restorePin || restoreAttempts >= MAX_RESTORE) return;
     setIsRestoring(true);
     try {
-      await privateKeyManager.restoreKeysFromServer(restorePin);
+      const { legacy } = await privateKeyManager.restoreKeysFromServer(restorePin, { accessToken: verifiedSession?.access_token });
       msgStore.success('Encryption keys restored successfully!');
+      if (legacy) {
+        // An old PIN backup: re-seal it under a passphrase right away.
+        setLegacyPin(restorePin); setBackupLegacy(true);
+        setRestorePin(''); setRestoreAttempts(0);
+        setStep('backup'); return;
+      }
       setRestorePin(''); setRestoreAttempts(0);
-      router.push('/chat');
-    } catch {
+      router.push(afterSignInPath());
+    } catch (err) {
+      // The server counts wrong PINs and locks restore; its message says how
+      // many tries are left or how long to wait.
+      const message = String(err?.message || '').replace(/^Failed to restore keys from server: /, '');
       const remaining = MAX_RESTORE - restoreAttempts - 1;
       setRestoreAttempts((a) => a + 1);
       setRestorePin('');
-      if (remaining <= 0) msgStore.error('Too many failed attempts.');
-      else msgStore.error(`Wrong PIN. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+      if (/wrong|too many|older backup|no longer served/i.test(message)) msgStore.error(message);
+      else if (remaining <= 0) msgStore.error('Too many failed attempts.');
+      else msgStore.error(message || 'Restore failed.');
     } finally { setIsRestoring(false); }
   }
 
@@ -267,6 +345,38 @@ export default function AuthPage() {
             >
               <span className="coinpay-icon">🪙</span> Log in with CoinPay
             </button>
+            {passkeySupported && (
+              <>
+                <button type="button" className="coinpay-button passkey-button" onClick={signInWithPasskey} disabled={passkeyBusy}>
+                  <span className="coinpay-icon">🔑</span> {passkeyBusy ? 'Waiting for your passkey…' : 'Sign in with a passkey'}
+                </button>
+                <p className="passkey-signup-link">
+                  No phone number? <button type="button" className="link-button" onClick={() => setStep('passkey-signup')}>Create an account with a passkey</button>
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {step === 'passkey-signup' && (
+          <div className="auth-step">
+            <button className="back-button" onClick={() => setStep('phone')}>← Back</button>
+            <h2>Create an account with a passkey</h2>
+            <p className="step-description">Your device keeps the passkey (Face ID, a fingerprint, Windows Hello or a security key). No phone number or password.</p>
+            <form onSubmit={signUpWithPasskey}>
+              <div className="input-group">
+                <label htmlFor="pk-username">Username</label>
+                <input id="pk-username" type="text" value={username} onChange={(e) => setUsername(e.target.value.replace(/[^A-Za-z0-9_]/g, '').slice(0, 30))} placeholder="3-30 letters, digits or _" required minLength={3} autoComplete="username webauthn" />
+              </div>
+              <div className="input-group">
+                <label htmlFor="pk-display">Display name (optional)</label>
+                <input id="pk-display" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value.slice(0, 60))} placeholder="How people see you" />
+              </div>
+              <button type="submit" className="primary-button" disabled={passkeyBusy || username.trim().length < 3}>
+                {passkeyBusy ? <><span className="loading-spinner" /> Waiting for your passkey…</> : 'Create passkey'}
+              </button>
+            </form>
+            <p className="step-description">Already have one? <button type="button" className="link-button" onClick={signInWithPasskey}>Sign in with your passkey</button></p>
           </div>
         )}
 
@@ -313,42 +423,27 @@ export default function AuthPage() {
 
         {step === 'backup' && (
           <div className="auth-step">
-            <h2>Set Your Backup PIN</h2>
-            <p className="step-description">This PIN protects your encryption keys.</p>
-            <div className="backup-warning"><p><strong>Important:</strong> Remember this PIN! Without it, you cannot restore your encryption keys.</p></div>
-            <form onSubmit={setBackupPinFn}>
-              <div className="input-group">
-                <label>Backup PIN (6-12 digits) *</label>
-                <div className="password-input">
-                  <input type={showBackupPin ? 'text' : 'password'} inputMode="numeric" value={backupPin} onChange={(e) => setBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Enter 6-12 digit PIN" required disabled={loading} className="code-input" />
-                  <button type="button" className="toggle-password" onClick={() => setShowBackupPin(!showBackupPin)}>{showBackupPin ? '👁️' : '👁️‍🗨️'}</button>
-                </div>
-              </div>
-              <div className="input-group">
-                <label>Confirm PIN *</label>
-                <div className="password-input">
-                  <input type={showBackupPin ? 'text' : 'password'} inputMode="numeric" value={confirmBackupPin} onChange={(e) => setConfirmBackupPin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Confirm your PIN" required disabled={loading} className="code-input" />
-                </div>
-              </div>
-              <div className="button-group">
-                <button type="submit" disabled={loading || !backupPin || !confirmBackupPin} className="primary-button">
-                  {loading ? <><span className="loading-spinner" /> Setting PIN...</> : 'Set Backup PIN'}
-                </button>
-                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Backup PIN skipped. You can set one later in Settings.'); router.push('/chat'); }}>Skip (Not Recommended)</button>
-              </div>
-            </form>
+            <h2>{backupLegacy ? 'Upgrade Your Key Backup' : 'Back Up Your Encryption Keys'}</h2>
+            <KeyBackupSetup
+              accessToken={verifiedSession?.access_token}
+              legacy={backupLegacy}
+              initialLegacyPin={legacyPin}
+              onError={(m) => msgStore.error(m)}
+              onDone={() => { setLegacyPin(''); msgStore.success('Keys backed up. Welcome to QryptChat!'); router.push(afterSignInPath()); }}
+              onSkip={() => { setLegacyPin(''); msgStore.warning('Backup skipped. You can back up later in Settings.'); router.push(afterSignInPath()); }}
+            />
           </div>
         )}
 
         {step === 'restore' && (
           <div className="auth-step">
             <h2>Restore Your Encryption Keys</h2>
-            <p className="step-description">Enter your Backup PIN to restore your encryption keys on this device.</p>
+            <p className="step-description">Enter your backup passphrase or recovery key (older backups: your PIN) to restore your encryption keys on this device. It is checked on this device; we never see it.</p>
             <form onSubmit={restoreWithPin}>
               <div className="input-group">
-                <label>Backup PIN *</label>
+                <label>Passphrase, recovery key or PIN *</label>
                 <div className="password-input">
-                  <input type={showRestorePin ? 'text' : 'password'} inputMode="numeric" value={restorePin} onChange={(e) => setRestorePin(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="Enter your PIN" required disabled={isRestoring} className="code-input" />
+                  <input type={showRestorePin ? 'text' : 'password'} autoComplete="current-password" value={restorePin} onChange={(e) => setRestorePin(e.target.value)} placeholder="Passphrase or recovery key" required disabled={isRestoring} className="code-input" />
                   <button type="button" className="toggle-password" onClick={() => setShowRestorePin(!showRestorePin)}>{showRestorePin ? '👁️' : '👁️‍🗨️'}</button>
                 </div>
               </div>
@@ -356,7 +451,7 @@ export default function AuthPage() {
                 <button type="submit" disabled={isRestoring || !restorePin} className="primary-button">
                   {isRestoring ? <><span className="loading-spinner" /> Restoring...</> : 'Restore Keys'}
                 </button>
-                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Key restore skipped.'); router.push('/chat'); }}>Skip</button>
+                <button type="button" className="secondary-button" onClick={() => { msgStore.warning('Key restore skipped.'); router.push(afterSignInPath()); }}>Skip</button>
               </div>
             </form>
           </div>
@@ -410,6 +505,10 @@ export default function AuthPage() {
         .coinpay-button { width: 100%; box-sizing: border-box; padding: .75rem; background: var(--color-bg-secondary); color: var(--color-text-primary); border: 1px solid var(--color-border-primary); border-radius: .5rem; font-size: 1rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: .5rem; text-decoration: none; }
         .coinpay-button:hover { background: var(--color-bg-tertiary); }
         .coinpay-icon { font-size: 1.1rem; }
+        .passkey-button { margin-top: .75rem; }
+        .coinpay-button:disabled { opacity: .6; cursor: not-allowed; }
+        .passkey-signup-link { margin: .75rem 0 0; text-align: center; font-size: .875rem; color: var(--color-text-secondary); }
+        .link-button { background: none; border: none; padding: 0; color: var(--color-brand-primary); cursor: pointer; font: inherit; text-decoration: underline; }
       `}</style>
     </div>
   );
