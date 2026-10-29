@@ -9,6 +9,7 @@ import SMSNotificationSettings from '@/lib/components/settings/SMSNotificationSe
 import WebhookSettings from '@/lib/components/settings/WebhookSettings.jsx';
 import InviteAnon from '@/lib/components/settings/InviteAnon.jsx';
 import PasskeySettings from '@/lib/components/settings/PasskeySettings.jsx';
+import CoinpaySettings from '@/lib/components/settings/CoinpaySettings.jsx';
 import ProfileSettings from '@/lib/components/settings/ProfileSettings.jsx';
 import AgentSettings from '@/lib/components/settings/AgentSettings.jsx';
 import { CURRENT_BUILD } from '@/lib/app-update.js';
@@ -59,6 +60,10 @@ export default function SettingsPage() {
           <section className="settings-section-card">
             <h2>AI agents</h2>
             <AgentSettings />
+          </section>
+          <section className="settings-section-card" id="coinpay">
+            <h2>CoinPay</h2>
+            <CoinpaySettings />
           </section>
           <section className="settings-section-card">
             <h2>Passkeys</h2>

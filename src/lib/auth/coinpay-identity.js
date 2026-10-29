@@ -45,6 +45,11 @@ export async function findAuthUserByCoinpaySub(service, sub) {
 	return null;
 }
 
+/** Whether an auth email is one of the placeholders CoinPay sign-in makes. */
+export function isCoinpayEmail(email) {
+	return typeof email === 'string' && email.toLowerCase().endsWith(`@${COINPAY_EMAIL_DOMAIN}`);
+}
+
 /** `<sub>@coinpay.qrypt.chat`, with the sub reduced to address-safe characters. */
 export function coinpayEmail(sub) {
 	const local = String(sub).toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/^[.-]+|[.-]+$/g, '').slice(0, 60);
