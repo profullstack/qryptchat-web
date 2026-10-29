@@ -15,6 +15,7 @@ function createUsersQuery() {
 	const query = {
 		select: vi.fn(() => query),
 		eq: mocks.eq,
+		order: vi.fn().mockResolvedValue({ data: [{ username: 'alices_bot', display_name: 'Bot' }], error: null }),
 		single: vi.fn().mockResolvedValue({
 			data: {
 				id: 'user-1',
@@ -48,6 +49,14 @@ describe('GET /api/users/by-username/[username]', () => {
 		expect(response.status).toBe(200);
 		expect(body.user.username).toBe('alice');
 		expect(mocks.eq).toHaveBeenCalledWith('username', 'alice');
+	});
+
+	it('lists the agents a person owns', async () => {
+		const { GET } = await import('./route.js');
+		const body = await (await GET(new Request('https://qrypt.chat/api/users/by-username/alice'), { params: Promise.resolve({ username: 'alice' }) })).json();
+		expect(mocks.eq).toHaveBeenCalledWith('operator_user_id', 'user-1');
+		expect(mocks.eq).toHaveBeenCalledWith('account_type', 'agent');
+		expect(body).toMatchObject({ operator: null, agents: [{ username: 'alices_bot' }] });
 	});
 
 	it('trims usernames before database lookup', async () => {

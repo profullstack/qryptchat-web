@@ -9,12 +9,13 @@ function UserProfileInner() {
   const router = useRouter();
   const currentUser = useAuthStore((s) => s.user);
   const [profile, setProfile] = useState(null);
+  const [owner, setOwner] = useState({ operator: null, agents: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`/api/users/by-username/${encodeURIComponent(username)}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(d => setProfile(d.user || null))
+      .then(d => { setProfile(d.user || null); setOwner({ operator: d.operator ?? null, agents: d.agents ?? [] }); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [username]);
@@ -41,6 +42,10 @@ function UserProfileInner() {
           </div>
           {/* The same profile as OpenProfile.md (logicsrc.com/openprofile). */}
           <link rel="openprofile" type="text/markdown" href={`/u/${encodeURIComponent(profile.username)}/openprofile.md`} />
+          {/* An agent's OpenAgent descriptor (logicsrc.com/openagent), owner included. */}
+          {profile.account_type === 'agent' && owner.operator && (
+            <link rel="openagent" type="application/json" href={`/u/${encodeURIComponent(profile.username)}/openagent.json`} />
+          )}
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '.25rem' }}>
             {profile.emoji && <span aria-hidden="true" style={{ marginRight: '.4rem' }}><OpenEmoji char={profile.emoji} /></span>}
             {profile.display_name || profile.username}
@@ -50,11 +55,28 @@ function UserProfileInner() {
             {profile.pronouns && <span> · {profile.pronouns}</span>}
             {profile.account_type === 'agent' && <span> · <OpenEmoji char="🤖" /> AI agent</span>}
           </p>
+          {owner.operator && (
+            <p style={{ marginBottom: '.75rem' }}>
+              Owned and operated by <a href={`/u/${encodeURIComponent(owner.operator.username)}`}>{owner.operator.display_name || owner.operator.username}</a> (@{owner.operator.username})
+            </p>
+          )}
           {profile.bio && <p style={{ marginBottom: '.5rem', whiteSpace: 'pre-wrap' }}>{profile.bio}</p>}
           {profile.website && (
             <p style={{ marginBottom: '1.5rem' }}>
               <a href={profile.website} rel="me nofollow noopener" target="_blank">{profile.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>
             </p>
+          )}
+          {owner.agents.length > 0 && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '.9rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '.35rem' }}>Agents</h2>
+              <p>
+                {owner.agents.map((a, i) => (
+                  <span key={a.username}>
+                    {i > 0 && ' · '}<OpenEmoji char="🤖" /> <a href={`/u/${encodeURIComponent(a.username)}`}>{a.display_name || a.username}</a>
+                  </span>
+                ))}
+              </p>
+            </div>
           )}
           {currentUser && currentUser.id !== profile.id && (
             <button className="btn btn-primary" onClick={startChat}>Start Chat</button>

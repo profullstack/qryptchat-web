@@ -1,30 +1,20 @@
 import { getServiceRoleClient } from '@/lib/supabase/service-role.js';
-import { PUBLIC_PROFILE_COLUMNS, toOpenProfile } from '@/lib/profile/fields.js';
+import { loadPublicProfile, toOpenProfile } from '@/lib/profile/fields.js';
 
 /**
  * GET /u/<username>/openprofile.md: the public profile (exactly what /u/<username>
  * shows) as OpenProfile.md, logicsrc.com/openprofile. The page links it with
- * rel="openprofile".
+ * rel="openprofile". An agent names its owner; a person lists the agents they own.
  */
 export async function GET(request, { params } = {}) {
 	const { username } = (await params) || {};
 	const name = username?.trim().toLowerCase();
 	if (!name) return new Response('Username required\n', { status: 400 });
 
-	const { data, error } = await getServiceRoleClient()
-		.from('users')
-		.select(PUBLIC_PROFILE_COLUMNS)
-		.eq('username', name)
-		.single();
-	if (error || !data) return new Response('Profile not found\n', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+	const profile = await loadPublicProfile(getServiceRoleClient(), name);
+	if (!profile) return new Response('Profile not found\n', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 
-	let operator = null;
-	if (data.account_type === 'agent' && data.operator_user_id) {
-		const { data: op } = await getServiceRoleClient().from('users').select('username, display_name').eq('id', data.operator_user_id).maybeSingle();
-		operator = op ?? null;
-	}
-
-	return new Response(toOpenProfile(data, operator), {
+	return new Response(toOpenProfile(profile.user, profile.operator, profile.agents), {
 		headers: {
 			'Content-Type': 'text/markdown; charset=utf-8',
 			'Cache-Control': 'public, max-age=300'
