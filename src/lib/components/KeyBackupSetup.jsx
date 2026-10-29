@@ -62,6 +62,7 @@ export default function KeyBackupSetup({ accessToken, legacy = false, initialLeg
 	const input = compact ? 'pkm-input' : 'code-input';
 	const primary = compact ? 'btn btn-primary btn-sm' : 'primary-button';
 	const secondary = compact ? 'btn btn-secondary btn-sm' : 'secondary-button';
+	const passphraseIssue = passphrase ? passphraseProblem(passphrase) : '';
 
 	if (recoveryKey) {
 		return (
@@ -102,6 +103,7 @@ export default function KeyBackupSetup({ accessToken, legacy = false, initialLeg
 			</p>
 			<div className="input-group">
 				<input type={show ? 'text' : 'password'} autoComplete="new-password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} placeholder="Backup passphrase" disabled={busy} className={input} />
+				{passphrase && <small style={{ display: 'block', marginTop: '.25rem', color: passphraseIssue ? '#92400e' : '#065f46' }}>{passphrase.length}/{PASSPHRASE_MIN} characters{passphraseIssue ? ` — ${passphraseIssue}` : ' — ready'}</small>}
 			</div>
 			<div className="input-group">
 				<input type={show ? 'text' : 'password'} autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm passphrase" disabled={busy} className={input} />
@@ -116,7 +118,7 @@ export default function KeyBackupSetup({ accessToken, legacy = false, initialLeg
 			</label>
 			{error && compact && <p style={{ color: '#991b1b', fontSize: '.8125rem' }}>{error}</p>}
 			<div className="button-group" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
-				<button type="submit" disabled={busy || !passphrase || !confirm} className={primary}>
+				<button type="submit" disabled={busy || !passphrase || !confirm || !!passphraseIssue} className={primary}>
 					{busy ? 'Sealing...' : legacy ? 'Re-seal backup' : 'Back up keys'}
 				</button>
 				{onSkip && (
