@@ -10,6 +10,7 @@ import { createSupabaseClient } from '@/lib/supabase.js';
 import { keyManager } from '@/lib/crypto/key-manager.js';
 import { privateKeyManager } from '@/lib/crypto/private-key-manager.js';
 import { indexedDBManager } from '@/lib/crypto/indexed-db-manager.js';
+import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import Message from '@/lib/components/Message.jsx';
 import KeyBackupSetup from '@/lib/components/KeyBackupSetup.jsx';
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
@@ -86,7 +87,9 @@ export default function AuthPage() {
       try { await keyManager.generateUserKeys(); } catch {}
       setVerifiedSession(session); setStep('backup'); return;
     }
-    const hasLocalKeys = await indexedDBManager.get('qryptchat_pq_keypair');
+    await postQuantumEncryption.initialize();
+    const localKeys = await postQuantumEncryption.getUserKeys();
+    const hasLocalKeys = Boolean(localKeys?.publicKey && localKeys?.privateKey);
     const info = await privateKeyManager.getServerBackupInfo({ accessToken: session.access_token });
     if (info.exists && !hasLocalKeys) { setVerifiedSession(session); setStep('restore'); return; }
     if (!hasLocalKeys && !info.exists) {

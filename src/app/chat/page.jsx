@@ -14,6 +14,7 @@ import MLKEMCallInterface from '@/lib/components/calls/MLKEMCallInterface.jsx';
 import { MLKEMCallManager, CALL_STATES } from '@/lib/webrtc/ml-kem-call-manager.js';
 import { callAudioManager } from '@/lib/audio/call-sounds.js';
 import { pwaSessionManager } from '@/lib/utils/pwa-session-manager.js';
+import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import '@/lib/debug/encryption-debug.js';
 
 function ChatPageInner() {
@@ -33,11 +34,28 @@ function ChatPageInner() {
   const [mlkemCallManager, setMlkemCallManager] = useState(null);
   const [showCallInterface, setShowCallInterface] = useState(false);
   const [callState, setCallState] = useState(CALL_STATES.IDLE);
+  const [encryptionReady, setEncryptionReady] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) { router.replace('/auth'); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        await postQuantumEncryption.initialize();
+        const keys = await postQuantumEncryption.getUserKeys();
+        if (cancelled) return;
+        if (!keys?.publicKey || !keys?.privateKey) {
+          router.replace('/settings?restore=1');
+          return;
+        }
+        setEncryptionReady(true);
+      } catch {
+        if (!cancelled) router.replace('/settings?restore=1');
+      }
+    })();
     if (!connected) initWebSocket();
     setupPWASessionHandling();
+    return () => { cancelled = true; };
 
     const welcome = searchParams.get('welcome') === 'true';
     setShowWelcome(welcome);
@@ -127,7 +145,9 @@ function ChatPageInner() {
 
   const canAddParticipants = currentConversation && ['group', 'direct'].includes(currentConversation.type);
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated || encryptionReady !== true) {
+    return isAuthenticated ? <div className="chat-welcome"><h2>Preparing encrypted keys…</h2><p>Open Settings to restore your keys if needed.</p></div> : null;
+  }
 
   return (
     <div className="chat-container">

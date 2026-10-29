@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { keyManager } from '@/lib/crypto/key-manager.js';
+import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 
 export default function EncryptionWarning() {
   const router = useRouter();
@@ -14,8 +15,9 @@ export default function EncryptionWarning() {
   useEffect(() => {
     async function check() {
       try {
-        await keyManager.initialize();
-        setHasKeys(await keyManager.hasUserKeys());
+        await postQuantumEncryption.initialize();
+        const keys = await postQuantumEncryption.getUserKeys();
+        setHasKeys(Boolean(keys?.publicKey && keys?.privateKey));
       } catch {
         setHasKeys(false);
       }

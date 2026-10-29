@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/stores/auth.js';
 import { keyManager } from '@/lib/crypto/key-manager.js';
 import { privateKeyManager } from '@/lib/crypto/private-key-manager.js';
 import KeyBackupSetup from '@/lib/components/KeyBackupSetup.jsx';
+import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 
 export default function PrivateKeyManager() {
   const user = useAuthStore((s) => s.user);
@@ -31,7 +32,11 @@ export default function PrivateKeyManager() {
   }, [user?.id]);
 
   async function checkKeys() {
-    try { await keyManager.initialize(); setHasKeys(await keyManager.hasUserKeys()); } catch {}
+    try {
+      await postQuantumEncryption.initialize();
+      const keys = await postQuantumEncryption.getUserKeys();
+      setHasKeys(Boolean(keys?.publicKey && keys?.privateKey));
+    } catch { setHasKeys(false); }
   }
 
   async function checkBackup() {
@@ -142,7 +147,7 @@ export default function PrivateKeyManager() {
             {hasBackup && (
               <div>
                 <p style={{ fontSize: '.8125rem', color: 'var(--color-text-secondary)', marginBottom: '.5rem' }}>Restore keys from the server backup:</p>
-                <input type="password" autoComplete="current-password" value={restoreSecret} onChange={(e) => setRestoreSecret(e.target.value)} placeholder={sealVersion >= 2 ? 'Passphrase or recovery key' : 'Old backup PIN'} className="pkm-input" style={{ marginBottom: '.5rem' }} />
+                <input type="password" autoFocus={!hasKeys && hasBackup} autoComplete="current-password" value={restoreSecret} onChange={(e) => setRestoreSecret(e.target.value)} placeholder={sealVersion >= 2 ? 'Passphrase or recovery key' : 'Old backup PIN'} className="pkm-input" style={{ marginBottom: '.5rem' }} />
                 <button className="btn btn-primary btn-sm" onClick={restoreKeys} disabled={loading || !restoreSecret}>{loading ? 'Restoring...' : 'Restore Keys'}</button>
               </div>
             )}
