@@ -24,6 +24,7 @@ const AUTH_ERRORS = {
   coinpay_provision_failed: 'We could not set up your account from CoinPay. Please try again.',
   coinpay_session_failed: 'We could not start your session. Please try again.',
   coinpay_login_failed: 'CoinPay sign-in failed. Please try again.',
+  coinpay_id_token: 'CoinPay sign-in could not be verified. Please try again.',
 };
 
 export default function AuthPage() {
@@ -322,6 +323,19 @@ export default function AuthPage() {
 
         {step === 'phone' && (
           <div className="auth-step">
+            {/* CoinPay is the house master account, so it comes first. */}
+            <button
+              type="button"
+              className="coinpay-button"
+              onClick={() => {
+                // Popup keeps the OAuth provider out of any embedding iframe.
+                const w = window.open('/api/auth/coinpay/login?popup=1', 'coinpay-login', 'width=480,height=720');
+                if (!w) window.location.href = '/api/auth/coinpay/login'; // popups blocked → top-level
+              }}
+            >
+              <span className="coinpay-icon">🪙</span> Sign in with CoinPay
+            </button>
+            <div className="auth-divider"><span>or use your phone</span></div>
             <h2>Enter your phone number</h2>
             <p className="step-description">We'll send you a verification code via SMS</p>
             <form onSubmit={handleSendSMS}>
@@ -334,17 +348,6 @@ export default function AuthPage() {
               </button>
             </form>
             <div className="auth-divider"><span>or</span></div>
-            <button
-              type="button"
-              className="coinpay-button"
-              onClick={() => {
-                // Popup keeps the OAuth provider out of any embedding iframe.
-                const w = window.open('/api/auth/coinpay/login?popup=1', 'coinpay-login', 'width=480,height=720');
-                if (!w) window.location.href = '/api/auth/coinpay/login'; // popups blocked → top-level
-              }}
-            >
-              <span className="coinpay-icon">🪙</span> Log in with CoinPay
-            </button>
             {passkeySupported && (
               <>
                 <button type="button" className="coinpay-button passkey-button" onClick={signInWithPasskey} disabled={passkeyBusy}>

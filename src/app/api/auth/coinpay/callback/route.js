@@ -26,12 +26,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import {
-	validateCoinPayState,
-	exchangeCoinPayCode,
-	fetchCoinPayUserinfo,
-	COINPAY_STATE_COOKIE
-} from '@profullstack/stack/coinpay';
+import { finishSignIn, sameState } from '@profullstack/coinpay-onboard/oauth';
 import {
 	getCoinpayConfig,
 	getAppOrigin,
@@ -40,6 +35,7 @@ import {
 } from '@/lib/auth/coinpay.js';
 import { mintSession, serviceClient } from '@/lib/auth/cli-auth.js';
 import { COINPAY_HANDOFF_COOKIE, coinpayEmail, findAuthUserByCoinpaySub, sessionMessage } from '@/lib/auth/coinpay-identity.js';
+import { COINPAY_PENDING_COOKIE, COINPAY_PENDING_PATH, decideConnect, unsealPending } from '@/lib/auth/coinpay-flow.js';
 
 /** Postgres unique-violation error code. */
 const PG_UNIQUE_VIOLATION = '23505';
@@ -47,8 +43,8 @@ const PG_UNIQUE_VIOLATION = '23505';
 const PG_NO_ROWS = 'PGRST116';
 
 const clearState = (res) => {
-	res.cookies.set(COINPAY_STATE_COOKIE, '', {
-		httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0
+	res.cookies.set(COINPAY_PENDING_COOKIE, '', {
+		httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: COINPAY_PENDING_PATH, maxAge: 0
 	});
 	return res;
 };
@@ -74,50 +70,52 @@ export async function GET(request) {
 	const url = new URL(request.url);
 	const appOrigin = getAppOrigin(url.origin);
 
-	let popup = false;
+	const { issuer, clientId, clientSecret } = getCoinpayConfig();
+	// The sealed pending sign-in from the login/connect route (state, PKCE
+	// verifier, nonce, popup flag, and for connect the signed-in account).
+	const pending = unsealPending(request.cookies.get(COINPAY_PENDING_COOKIE)?.value, clientSecret);
+	const popup = !!pending?.popup;
 	const fail = (code) =>
 		popup
 			? popupPage(appOrigin, { type: 'coinpay-error', code })
-			: clearState(NextResponse.redirect(`${appOrigin}/auth?error=${encodeURIComponent(code)}`));
+			: clearState(
+					NextResponse.redirect(
+						pending?.mode === 'connect'
+							? `${appOrigin}/settings?coinpay=${encodeURIComponent(code)}`
+							: `${appOrigin}/auth?error=${encodeURIComponent(code)}`
+					)
+				);
 
 	try {
-		// --- Validate state against the cookie, then consume it ---
-		const stateCookie = request.cookies.get(COINPAY_STATE_COOKIE)?.value;
-		let storedState = null;
-		let codeVerifier;
-		if (stateCookie) {
-			try {
-				const parsed = JSON.parse(stateCookie);
-				storedState = parsed.state;
-				codeVerifier = parsed.codeVerifier;
-				popup = !!parsed.popup;
-			} catch {
-				storedState = null;
-			}
+		if (!clientId || !clientSecret) {
+			console.error('coinpay/callback: client credentials not configured');
+			return fail('coinpay_unavailable');
 		}
+		if (!pending || !sameState(pending.state, url.searchParams.get('state'))) return fail('coinpay_state_mismatch');
 
 		// No code means CoinPay sent the user back without one: cancelled
 		// (?error=…) or broken. The provider's error text is not logged.
 		const code = url.searchParams.get('code');
 		if (!code) return fail(url.searchParams.has('error') ? 'coinpay_denied' : 'coinpay_missing_code');
-		if (!validateCoinPayState(url.searchParams.get('state'), storedState)) return fail('coinpay_state_mismatch');
 
-		const { issuer, clientId, clientSecret } = getCoinpayConfig();
-		if (!clientId || !clientSecret) {
-			console.error('coinpay/callback: client credentials not configured');
-			return fail('coinpay_unavailable');
+		// --- Code exchange (PKCE + client secret), id_token checks (iss, aud,
+		// exp, nonce), then userinfo, whose sub must match the id_token's ---
+		let claims;
+		try {
+			const r = await finishSignIn({
+				code,
+				verifier: pending.verifier,
+				nonce: pending.nonce,
+				clientId,
+				clientSecret,
+				redirectUri: getRedirectUri(appOrigin),
+				base: issuer
+			});
+			claims = { ...r.userinfo, sub: r.sub, email: r.email ?? undefined, name: r.name ?? undefined };
+		} catch (err) {
+			console.error('coinpay/callback: sign-in not verified:', err?.message || err);
+			return fail('coinpay_id_token');
 		}
-
-		// --- Exchange code for tokens, then read who this is ---
-		const tokens = await exchangeCoinPayCode({
-			issuer,
-			code,
-			redirectUri: getRedirectUri(appOrigin),
-			clientId,
-			clientSecret,
-			codeVerifier
-		});
-		const claims = await fetchCoinPayUserinfo({ issuer, accessToken: tokens.access_token });
 		const coinpaySub = typeof claims.sub === 'string' || typeof claims.sub === 'number' ? String(claims.sub) : '';
 		if (!coinpaySub) {
 			console.error('coinpay/callback: userinfo had no sub');
@@ -126,6 +124,34 @@ export async function GET(request) {
 		const claimedEmail = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
 
 		const service = serviceClient();
+
+		// --- Connect: link this CoinPay sub to the account that started it ---
+		if (pending.mode === 'connect') {
+			const { data: me, error: meError } = await service.auth.admin.getUserById(pending.userId);
+			if (meError || !me?.user) return fail('coinpay_not_signed_in');
+			const boundTo = await findAuthUserByCoinpaySub(service, coinpaySub);
+			const decision = decideConnect({
+				userId: me.user.id,
+				sub: coinpaySub,
+				boundTo,
+				currentSub: me.user.app_metadata?.coinpay_sub || null
+			});
+			if (!decision.ok) return fail(decision.code);
+			if (!decision.already) {
+				const { error: linkError } = await service.auth.admin.updateUserById(me.user.id, {
+					// app_metadata: only the service role can write it. The email is
+					// unverified contact info, never an identity.
+					app_metadata: { coinpay_sub: coinpaySub, coinpay_email: claimedEmail || null }
+				});
+				if (linkError) {
+					console.error('coinpay/callback: link failed', linkError.message);
+					return fail('coinpay_provision_failed');
+				}
+			}
+			if (popup) return popupPage(appOrigin, { type: 'coinpay-connected' });
+			return clearState(NextResponse.redirect(`${appOrigin}/settings?coinpay=connected`));
+		}
+
 
 		// --- a) Find-or-create the auth user BY SUB ---
 		let authUser = await findAuthUserByCoinpaySub(service, coinpaySub);
