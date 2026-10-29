@@ -85,6 +85,31 @@ describe('profile update', () => {
 		expect('bio' in data).toBe(false);
 	});
 
+	it('saves a display name, trimmed, with control and bidi characters stripped', async () => {
+		const { POST } = await import('./route.js');
+		const response = await POST(profileRequest('Bearer t', { displayName: '  Daniel\u202E  C.\u0007B  ' }));
+		const body = await response.json();
+		expect(response.status).toBe(200);
+		expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ display_name: 'Daniel C. B' }));
+		expect(body.user.displayName).toBe('Daniel C. B');
+	});
+
+	it('accepts display_name as well as displayName', async () => {
+		const { POST } = await import('./route.js');
+		await POST(profileRequest('Bearer t', { display_name: 'DB' }));
+		expect(mocks.update.mock.calls[0][0].display_name).toBe('DB');
+	});
+
+	it('keeps the current display name when it is sent empty, and never touches it when left out', async () => {
+		const { POST } = await import('./route.js');
+		const response = await POST(profileRequest('Bearer t', { displayName: '  \u200B ' }));
+		expect(response.status).toBe(200);
+		expect('display_name' in mocks.update.mock.calls[0][0]).toBe(false);
+		expect((await response.json()).user.displayName).toBe('Alice');
+		await POST(profileRequest('Bearer t', { bio: 'hi' }));
+		expect('display_name' in mocks.update.mock.calls[1][0]).toBe(false);
+	});
+
 	it.each([
 		[{ emoji: 'abc' }, 'Pick a single emoji'],
 		[{ emoji: '🔭🚀' }, 'Pick a single emoji'],
@@ -94,7 +119,10 @@ describe('profile update', () => {
 		[{ website: 'not a url' }, 'Please enter a valid website URL'],
 		[{ bio: false }, 'Bio must be a string'],
 		[{ bio: 'x'.repeat(501) }, 'Bio must be 500 characters or less'],
-		[{ website: 0 }, 'Website must be text']
+		[{ website: 0 }, 'Website must be text'],
+		[{ displayName: 'x'.repeat(51) }, 'Display name can be at most 50 characters'],
+		[{ displayName: '<b>DB</b>' }, 'Display name contains characters that are not allowed'],
+		[{ displayName: 42 }, 'Display name must be text']
 	])('rejects %j', async (payload, error) => {
 		const { POST } = await import('./route.js');
 		const response = await POST(profileRequest('Bearer t', payload));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emoji, parseOpenProfile, pronouns, web, accounts } from '@profullstack/openprofile';
-import { cleanEmoji, cleanPronouns, cleanWebsite, PUBLIC_PROFILE_COLUMNS, toOpenProfile } from './fields.js';
+import { cleanDisplayName, cleanEmoji, cleanPronouns, cleanWebsite, PUBLIC_PROFILE_COLUMNS, toOpenProfile } from './fields.js';
 
 describe('profile fields', () => {
 	it('emoji: exactly one emoji grapheme, empty clears', () => {
@@ -12,6 +12,19 @@ describe('profile fields', () => {
 		expect(cleanEmoji('ab')).toHaveProperty('error');
 		expect(cleanEmoji('🔭🔭')).toHaveProperty('error');
 		expect(cleanEmoji('<script>')).toHaveProperty('error');
+	});
+
+	it('display name: trimmed, collapsed, 1-50 characters, no control characters, empty keeps current', () => {
+		expect(cleanDisplayName('  Daniel   B ')).toEqual({ value: 'Daniel B' });
+		expect(cleanDisplayName('Zoë 🔭')).toEqual({ value: 'Zoë 🔭' });
+		expect(cleanDisplayName('a\u0000b\nc')).toEqual({ value: 'a b c' });
+		expect(cleanDisplayName('\u202Eevil')).toEqual({ value: 'evil' });
+		expect(cleanDisplayName('é'.repeat(50))).toEqual({ value: 'é'.repeat(50) });
+		expect(cleanDisplayName('')).toEqual({ value: null });
+		expect(cleanDisplayName(null)).toEqual({ value: null });
+		expect(cleanDisplayName('x'.repeat(51))).toHaveProperty('error');
+		expect(cleanDisplayName('<script>')).toHaveProperty('error');
+		expect(cleanDisplayName(1)).toHaveProperty('error');
 	});
 
 	it('pronouns: as written, trimmed, bounded, no markup', () => {

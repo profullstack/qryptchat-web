@@ -9,9 +9,20 @@ import OpenEmoji from '@/lib/components/OpenEmoji.jsx';
  * Settings > Profile: the public profile at /u/<username>, also served as
  * OpenProfile.md. Emoji, Pronouns and Website are OpenProfile 0.4's defaults.
  */
+
+const toForm = (p) => ({ displayName: p.display_name ?? p.displayName ?? '', emoji: p.emoji ?? '', pronouns: p.pronouns ?? '', website: p.website ?? '', bio: p.bio ?? '' });
+
+/** Show a new display name in the navbar now, and after a reload. */
+function rememberDisplayName(displayName) {
+  const user = useAuthStore.getState().user;
+  if (!user || !displayName || user.displayName === displayName) return;
+  const next = { ...user, displayName, display_name: displayName };
+  useAuthStore.setState({ user: next });
+  try { localStorage.setItem('qrypt_user', JSON.stringify(next)); } catch {}
+}
 export default function ProfileSettings() {
   const user = useAuthStore((s) => s.user);
-  const [form, setForm] = useState({ emoji: '', pronouns: '', website: '', bio: '' });
+  const [form, setForm] = useState(toForm({}));
   const [loaded, setLoaded] = useState(false);
   const [picking, setPicking] = useState(false);
   const emojiBtnRef = useRef(null);
@@ -23,8 +34,7 @@ export default function ProfileSettings() {
     fetch(`/api/users/by-username/${encodeURIComponent(user.username)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        const p = d?.user ?? {};
-        setForm({ emoji: p.emoji ?? '', pronouns: p.pronouns ?? '', website: p.website ?? '', bio: p.bio ?? '' });
+        setForm(toForm(d?.user ?? {}));
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
@@ -44,7 +54,8 @@ export default function ProfileSettings() {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'Could not save your profile');
-      setForm({ emoji: d.user.emoji ?? '', pronouns: d.user.pronouns ?? '', website: d.user.website ?? '', bio: d.user.bio ?? '' });
+      setForm(toForm(d.user));
+      rememberDisplayName(d.user.displayName);
       setMessage({ ok: true, text: 'Profile saved.' });
     } catch (err) {
       setMessage({ ok: false, text: err.message });
@@ -57,6 +68,12 @@ export default function ProfileSettings() {
 
   return (
     <form onSubmit={save} className="profile-settings">
+      <div className="ps-row">
+        <label htmlFor="ps-display-name">Display name</label>
+        <input id="ps-display-name" className="ps-input" value={form.displayName} onChange={set('displayName')} maxLength={50} placeholder={user.username} autoComplete="name" disabled={!loaded} />
+        <span className="ps-hint">The name people see in chats. Your username @{user.username} stays the same.</span>
+      </div>
+
       <div className="ps-row">
         <label htmlFor="ps-emoji">Emoji</label>
         <div className="ps-emoji">
@@ -95,7 +112,7 @@ export default function ProfileSettings() {
 
       <p className="ps-hint">
         Public at <a href={`/u/${encodeURIComponent(user.username)}`}>qrypt.chat/u/{user.username}</a>, and as{' '}
-        <a href={`/u/${encodeURIComponent(user.username)}/openprofile.md`}>OpenProfile.md</a>. Leave a field empty to hide it.
+        <a href={`/u/${encodeURIComponent(user.username)}/openprofile.md`}>OpenProfile.md</a>. Leave a field empty to hide it (an empty display name keeps the current one).
       </p>
 
       {message && <div className={`ps-alert ${message.ok ? 'ps-ok' : 'ps-err'}`}>{message.text}</div>}

@@ -29,6 +29,22 @@ export function cleanEmoji(input) {
 }
 
 /**
+ * The display name shown in chats, on /u/<username> and in OpenProfile.md.
+ * Control and bidi-override characters are stripped and whitespace collapsed.
+ * `users.display_name` is NOT NULL, so empty means "keep the current name".
+ * @returns {{ value: string | null } | { error: string }}
+ */
+export function cleanDisplayName(input) {
+	if (input === null || input === undefined) return { value: null };
+	if (typeof input !== 'string') return { error: 'Display name must be text' };
+	const text = input.replace(/[\p{Cc}\u200B\u200E\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, ' ').trim().replace(/\s+/g, ' ');
+	if (!text) return { value: null };
+	if ([...text].length > 50) return { error: 'Display name can be at most 50 characters' };
+	if (/[<>]/.test(text)) return { error: 'Display name contains characters that are not allowed' };
+	return { value: text };
+}
+
+/**
  * Pronouns as the person writes them (she/her, they/them, any), or empty to clear.
  * @returns {{ value: string | null } | { error: string }}
  */

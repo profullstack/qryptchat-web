@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClientWithToken } from '@/lib/supabase.js';
 import { bearerToken } from '@/lib/auth/bearer.js';
-import { cleanEmoji, cleanPronouns, cleanWebsite } from '@/lib/profile/fields.js';
+import { cleanDisplayName, cleanEmoji, cleanPronouns, cleanWebsite } from '@/lib/profile/fields.js';
 
 /**
- * POST /api/profile/update  { bio?, website?, emoji?, pronouns? }
+ * POST /api/profile/update  { displayName?, bio?, website?, emoji?, pronouns? }
  * Updates the caller's public profile. A field left out is unchanged; an
- * empty string clears it. Emoji, Pronouns and Web are OpenProfile 0.4's
+ * empty string clears it (except displayName, which keeps the current name). Emoji, Pronouns and Web are OpenProfile 0.4's
  * default fields (logicsrc.com/openprofile).
  */
 export async function POST(request) {
@@ -33,12 +33,18 @@ export async function POST(request) {
 		}
 
 		const { bio, website, emoji, pronouns } = body ?? {};
+		const displayName = body?.displayName ?? body?.display_name;
 		const updateData = { updated_at: new Date().toISOString() };
 
 		if (bio !== undefined) {
 			if (bio !== null && typeof bio !== 'string') return NextResponse.json({ error: 'Bio must be a string' }, { status: 400 });
 			if (bio && bio.length > 500) return NextResponse.json({ error: 'Bio must be 500 characters or less' }, { status: 400 });
 			updateData.bio = bio?.trim() || null;
+		}
+		if (displayName !== undefined) {
+			const result = cleanDisplayName(displayName);
+			if ('error' in result) return NextResponse.json({ error: result.error, field: 'displayName' }, { status: 400 });
+			if (result.value) updateData.display_name = result.value;
 		}
 		for (const [field, value, clean] of [
 			['website', website, cleanWebsite],
