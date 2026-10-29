@@ -241,6 +241,21 @@ export const useChatStore = create((set, get) => {
           } else {
             sentMessage.content = content;
           }
+
+          // The send endpoint acknowledges the write before the SSE broadcast
+          // reaches this tab. Add the acknowledged message locally so the
+          // sender sees it immediately even when the self-broadcast is delayed
+          // or the app is running behind a different server instance.
+          set((state) => {
+            if (
+              state.activeConversation === conversationId &&
+              !state.messages.some((message) => message.id === sentMessage.id)
+            ) {
+              return { messages: [...state.messages, sentMessage] };
+            }
+            return {};
+          });
+
           return { success: true, data: sentMessage };
         }
       } catch (error) {
