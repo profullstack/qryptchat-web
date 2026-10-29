@@ -17,6 +17,15 @@ export const useChatStore = create((set, get) => {
   let reconnectTimeout = null;
   let connectionToken = null;
 
+  function getLocalUserId() {
+    if (typeof window === 'undefined') return null;
+    try {
+      return JSON.parse(localStorage.getItem('qrypt_user') || 'null')?.id || null;
+    } catch {
+      return null;
+    }
+  }
+
   async function apiPost(endpoint, data = {}) {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -95,6 +104,10 @@ export const useChatStore = create((set, get) => {
     const { activeConversation } = get();
 
     if (messagePayload.shouldReloadMessages) {
+      // The sender already has the server acknowledgement in local state. A
+      // self-broadcast reload can race that acknowledgement and replace it
+      // with an incomplete encrypted-recipient response, making it disappear.
+      if (message.sender_id === getLocalUserId()) return;
       if (activeConversation === message.conversation_id) {
         await get().loadMessages(message.conversation_id);
       } else {
@@ -200,6 +213,9 @@ export const useChatStore = create((set, get) => {
         const response = await apiPost('/api/messages/load', { conversationId });
         if (response.success) {
           const msgs = response.messages || [];
+          const localMessages = get().activeConversation === conversationId
+            ? get().messages.filter((message) => message.localOnly && !msgs.some((loaded) => loaded.id === message.id))
+            : [];
           for (const message of msgs) {
             if (message.encrypted_content) {
               try {
@@ -216,7 +232,13 @@ export const useChatStore = create((set, get) => {
               message.content = '[No content]';
             }
           }
-          set({ activeConversation: conversationId, messages: msgs, loading: false, error: null, typingUsers: [] });
+          set({
+            activeConversation: conversationId,
+            messages: [...msgs, ...localMessages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+            loading: false,
+            error: null,
+            typingUsers: []
+          });
         }
       } catch {
         set({ loading: false, error: 'Failed to load messages' });
@@ -231,7 +253,7 @@ export const useChatStore = create((set, get) => {
         if (replyToId) payload.replyToId = replyToId;
         const response = await apiPost('/api/messages/send', payload);
         if (response.success) {
-          const sentMessage = response.message;
+          const sentMessage = { ...response.message, localOnly: true };
           if (sentMessage.encrypted_content) {
             try {
               sentMessage.content = await postQuantumEncryption.decryptFromSender(sentMessage.encrypted_content, '');
@@ -247,13 +269,13 @@ export const useChatStore = create((set, get) => {
           // sender sees it immediately even when the self-broadcast is delayed
           // or the app is running behind a different server instance.
           set((state) => {
-            if (
-              state.activeConversation === conversationId &&
-              !state.messages.some((message) => message.id === sentMessage.id)
-            ) {
+            if (state.activeConversation !== conversationId) {
+              return { activeConversation: conversationId, messages: [sentMessage] };
+            }
+            if (!state.messages.some((message) => message.id === sentMessage.id)) {
               return { messages: [...state.messages, sentMessage] };
             }
-            return {};
+            return { activeConversation: conversationId };
           });
 
           return { success: true, data: sentMessage };
