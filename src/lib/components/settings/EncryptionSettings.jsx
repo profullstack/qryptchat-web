@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/stores/auth.js';
 import { postQuantumEncryption } from '@/lib/crypto/post-quantum-encryption.js';
 import { publicKeyService } from '@/lib/crypto/public-key-service.js';
+import { keySyncService } from '@/lib/crypto/key-sync-service.js';
 
 export default function EncryptionSettings() {
   const user = useAuthStore((s) => s.user);
@@ -50,6 +51,8 @@ export default function EncryptionSettings() {
       await publicKeyService.initialize();
       await postQuantumEncryption.getUserKeys();
       await publicKeyService.initializeUserEncryption();
+      const syncResult = await keySyncService.forceSyncPublicKey();
+      if (!syncResult.success) throw new Error(syncResult.error || 'Failed to sync public key');
       const keys = await postQuantumEncryption.getUserKeys();
       if (keys?.publicKey) setPublicKey(keys.publicKey);
       setHasKeys(true); setKeyStatus('enabled'); setKeyInDB(true);
@@ -63,6 +66,8 @@ export default function EncryptionSettings() {
     setSyncing(true); setError(''); setSuccess('');
     try {
       await publicKeyService.initializeUserEncryption();
+      const syncResult = await keySyncService.forceSyncPublicKey();
+      if (!syncResult.success) throw new Error(syncResult.error || 'Failed to sync public key');
       setKeyInDB(true);
       setSuccess('Public key synced to server successfully!');
     } catch (err) {
