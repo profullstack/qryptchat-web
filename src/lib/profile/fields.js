@@ -3,13 +3,39 @@
  * the OpenProfile.md a public profile is also served as.
  *
  * The public profile is exactly PUBLIC_PROFILE_COLUMNS: never phone_number,
- * salt or anything else on `users`.
+ * salt or anything else on `users`. An agent account also has an OpenAgent
+ * descriptor (logicsrc.com/openagent) naming its owner, and the owner's
+ * profile lists the agents, so ownership reads both ways.
  */
 import { makeOpenProfile, renderOpenProfile } from '@profullstack/openprofile';
 
 export const PUBLIC_PROFILE_COLUMNS = 'id, username, display_name, avatar_url, bio, website, emoji, pronouns, unique_identifier, account_type, operator_user_id';
 
 const SITE = 'https://qrypt.chat';
+const profileUrl = (username) => `${SITE}/u/${encodeURIComponent(username)}`;
+
+/**
+ * A public profile with the accounts on the other side of agent ownership:
+ * `operator` (owner of an agent) and `agents` (agents a person owns).
+ * @param {import('@supabase/supabase-js').SupabaseClient} service service-role client
+ */
+export async function loadPublicProfile(service, username) {
+	const { data: user, error } = await service.from('users').select(PUBLIC_PROFILE_COLUMNS).eq('username', username).single();
+	if (error || !user) return null;
+	let operator = null;
+	let agents = [];
+	if (user.account_type === 'agent' && user.operator_user_id) {
+		const { data } = await service.from('users').select('username, display_name').eq('id', user.operator_user_id).maybeSingle();
+		operator = data ?? null;
+	} else if (user.account_type !== 'agent') {
+		const { data } = await service.from('users').select('username, display_name').eq('operator_user_id', user.id).eq('account_type', 'agent').order('username');
+		agents = data ?? [];
+	}
+	return { user, operator, agents };
+}
+
+/** `<username>.qrypt.chat`: the LogicSRC identity (name.namespace) of a qrypt.chat account. */
+export const qryptDid = (username) => `${String(username).toLowerCase()}.qrypt.chat`;
 const graphemes = (text) => [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)];
 
 /**
@@ -82,8 +108,8 @@ export function cleanWebsite(input) {
  * The public profile as OpenProfile.md (logicsrc.com/openprofile). An agent is
  * `Kind: agent` with an Operator section naming the person answerable for it.
  */
-export function toOpenProfile(user, operator = null) {
-	const page = `${SITE}/u/${encodeURIComponent(user.username)}`;
+export function toOpenProfile(user, operator = null, agents = []) {
+	const page = profileUrl(user.username);
 	const agent = user.account_type === 'agent';
 	const operatorSection = agent && operator
 		? {
@@ -91,8 +117,18 @@ export function toOpenProfile(user, operator = null) {
 				name: 'operator',
 				body: [
 					`- **Name**: ${operator.display_name || operator.username}`,
-					`- **Profile**: ${SITE}/u/${encodeURIComponent(operator.username)}/openprofile.md`
+					`- **Role**: owner and operator, who answers for this agent`,
+					`- **Profile**: ${profileUrl(operator.username)}/openprofile.md`
 				].join('\n')
+			}
+		: null;
+	const agentsSection = !agent && agents.length
+		? {
+				title: 'Agents',
+				name: 'agents',
+				body: agents
+					.map((a) => `- [${a.display_name || a.username}](${profileUrl(a.username)}) @${a.username}, owned and operated by me: ${profileUrl(a.username)}/openagent.json`)
+					.join('\n')
 			}
 		: null;
 	return renderOpenProfile(
@@ -105,9 +141,31 @@ export function toOpenProfile(user, operator = null) {
 				Pronouns: user.pronouns,
 				Web: user.website,
 				Avatar: user.avatar_url,
+				OpenAgent: agent ? `${page}/openagent.json` : undefined,
 			},
 			headline: user.bio?.split('\n')[0],
-			sections: [{ title: 'Accounts', name: 'accounts', body: `- [qrypt.chat](${page})` }, operatorSection],
+			sections: [{ title: 'Accounts', name: 'accounts', body: `- [qrypt.chat](${page})` }, operatorSection, agentsSection],
 		}),
 	);
+}
+
+/**
+ * An agent account as OpenAgent (logicsrc.com/openagent): the logicsrc.agent
+ * 0.1 record, owner by did. Only fields the schema allows (it rejects extras);
+ * the owner's name and page are in OpenProfile.md and on /u/<username>.
+ */
+export function toOpenAgent(user, operator) {
+	return {
+		type: 'logicsrc.agent',
+		version: '0.1',
+		name: user.display_name || user.username,
+		did: qryptDid(user.username),
+		owner_did: qryptDid(operator.username),
+		description: user.bio?.split('\n')[0] || `@${user.username}, an AI agent on qrypt.chat operated by @${operator.username}.`,
+		skills: ['chat', 'end-to-end-encrypted-messaging'],
+		supported_task_types: ['direct-message', 'group-chat'],
+		permissions_requested: ['chat:read', 'chat:write'],
+		polling_mode: false,
+		public: true
+	};
 }

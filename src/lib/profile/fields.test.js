@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { emoji, parseOpenProfile, pronouns, web, accounts } from '@profullstack/openprofile';
-import { cleanDisplayName, cleanEmoji, cleanPronouns, cleanWebsite, PUBLIC_PROFILE_COLUMNS, toOpenProfile } from './fields.js';
+import { emoji, parseOpenProfile, pronouns, web, accounts, section } from '@profullstack/openprofile';
+import { cleanDisplayName, cleanEmoji, cleanPronouns, cleanWebsite, PUBLIC_PROFILE_COLUMNS, toOpenAgent, toOpenProfile } from './fields.js';
 
 describe('profile fields', () => {
 	it('emoji: exactly one emoji grapheme, empty clears', () => {
@@ -67,5 +67,24 @@ describe('profile fields', () => {
 		expect(doc.name).toBe('bob');
 		expect(pronouns(doc)).toBeNull();
 		expect(emoji(doc)).toBeNull();
+	});
+
+	it('an owner lists their agents; an agent links its OpenAgent descriptor', () => {
+		const owner = parseOpenProfile(toOpenProfile({ username: 'chovy', display_name: 'Anthony' }, null, [{ username: 'riotcoder', display_name: 'riotcoder' }, { username: 'cha0spunk', display_name: null }]));
+		const body = section(owner, 'agents')?.body ?? '';
+		expect(body).toContain('https://qrypt.chat/u/riotcoder/openagent.json');
+		expect(body).toContain('[cha0spunk](https://qrypt.chat/u/cha0spunk)');
+		const md = toOpenProfile({ username: 'riotcoder', display_name: 'riotcoder', account_type: 'agent' }, { username: 'chovy', display_name: 'Anthony' });
+		expect(md).toContain('https://qrypt.chat/u/riotcoder/openagent.json');
+		expect(md).toMatch(/owner and operator/);
+		expect(toOpenProfile({ username: 'ada', display_name: 'Ada' })).not.toMatch(/OpenAgent|## Agents/);
+	});
+
+	it('OpenAgent: the logicsrc.agent 0.1 fields only, owner by did', () => {
+		const doc = toOpenAgent({ username: 'Riotcoder', display_name: 'riotcoder', bio: 'Ships code.\nMore.' }, { username: 'chovy' });
+		expect(doc).toMatchObject({ type: 'logicsrc.agent', version: '0.1', did: 'riotcoder.qrypt.chat', owner_did: 'chovy.qrypt.chat', description: 'Ships code.' });
+		expect(Object.keys(doc).sort()).toEqual(['description', 'did', 'name', 'owner_did', 'permissions_requested', 'polling_mode', 'public', 'skills', 'supported_task_types', 'type', 'version']);
+		expect(doc.skills.length).toBeGreaterThan(0);
+		for (const did of [doc.did, doc.owner_did]) expect(did).toMatch(/^[a-z0-9][a-z0-9._-]*\.[a-z0-9][a-z0-9._-]*$/);
 	});
 });
