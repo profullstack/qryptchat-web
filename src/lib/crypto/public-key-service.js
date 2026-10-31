@@ -211,7 +211,9 @@ export class PublicKeyService {
 			const userIds = participants.map(/** @param {any} p */ (p) => p.user_id);
 			console.log(`🔑 Getting public keys for ${userIds.length} participants in conversation ${conversationId}`);
 
-			return await this.getMultipleUserPublicKeys(userIds);
+			const participantKeys = await this.getMultipleUserPublicKeys(userIds);
+			participantKeys.currentUserId = data.current_user_id || null;
+			return participantKeys;
 
 		} catch (error) {
 			console.error(`🔑 ❌ Failed to get participant keys for conversation ${conversationId}:`, error);

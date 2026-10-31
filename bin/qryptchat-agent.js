@@ -1,471 +1,328 @@
 #!/usr/bin/env node
 
 /**
- * @fileoverview QryptChat headless agent CLI
- * A non-interactive CLI for bots/agents and terminal power users. No TUI.
+ * Backwards-compatible headless agent CLI.
  *
- * Commands:
- *   register --invite <token> [--username <name>] [--display <name>]
- *   whoami
- *   conversations
- *   send <conversationId> <text...>
- *   listen [--json]
- *
- * Reuses MESSAGE_TYPES + the WS auth handshake from bin/qryptchat-cli.js and
- * the ML-KEM keypair generation from src/lib/crypto/ml-kem.js.
- *
- * Env:
- *   QRYPTCHAT_API_URL          (default http://localhost:5173)
- *   QRYPTCHAT_WS_URL           (default ws://localhost:8080)
- *   NEXT_PUBLIC_SUPABASE_URL   (required for `register`)
- *   NEXT_PUBLIC_SUPABASE_ANON_KEY (required for `register`)
+ * The former WebSocket service was retired when qrypt.chat moved to REST +
+ * server-sent events. Keep the old command name and local identity file, but
+ * use the same authenticated, encrypted API as `qc` so existing agents keep
+ * working without a dead `/ws` connection.
  */
 
-import WebSocket from 'ws';
-import { randomUUID } from 'crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { QcClient } from '../src/cli/api.js';
+import { ephemeralKeypair } from '../src/cli/crypto.js';
+import { joinAsAgent } from '../src/cli/agent.js';
+import { unlockSession } from '../src/cli/config.js';
 
-// --- Configuration ---
-
-const API_URL = process.env.QRYPTCHAT_API_URL || 'http://localhost:5173';
-const WS_URL = process.env.QRYPTCHAT_WS_URL || 'ws://localhost:8080';
+const API_URL = (process.env.QRYPTCHAT_API_URL || process.env.QC_URL || 'https://qrypt.chat').replace(/\/+$/, '');
 const CONFIG_DIR = join(homedir(), '.qryptchat');
 const AGENT_FILE = join(CONFIG_DIR, 'agent.json');
 
-// --- Message protocol (mirrors src/lib/websocket/utils/protocol.js) ---
-
-const MESSAGE_TYPES = {
-	AUTH: 'auth',
-	AUTH_SUCCESS: 'auth_success',
-	AUTH_ERROR: 'auth_error',
-	LOAD_CONVERSATIONS: 'load_conversations',
-	CONVERSATIONS_LOADED: 'conversations_loaded',
-	JOIN_CONVERSATION: 'join_conversation',
-	CONVERSATION_JOINED: 'conversation_joined',
-	LEAVE_CONVERSATION: 'leave_conversation',
-	SEND_MESSAGE: 'send_message',
-	MESSAGE_SENT: 'message_sent',
-	MESSAGE_RECEIVED: 'message_received',
-	LOAD_MESSAGES: 'load_messages',
-	MESSAGES_LOADED: 'messages_loaded',
-	TYPING_START: 'typing_start',
-	TYPING_STOP: 'typing_stop',
-	TYPING_UPDATE: 'typing_update',
-	USER_ONLINE: 'user_online',
-	USER_OFFLINE: 'user_offline',
-	PING: 'ping',
-	PONG: 'pong',
-	ERROR: 'error'
-};
-
-function createMessage(type, payload = {}) {
-	return JSON.stringify({
-		type,
-		payload,
-		requestId: randomUUID(),
-		timestamp: new Date().toISOString()
-	});
-}
-
-// --- Identity persistence (~/.qryptchat/agent.json, mode 0600) ---
-
 function saveAgent(agent) {
-	if (!existsSync(CONFIG_DIR)) {
-		mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-	}
+	if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
 	writeFileSync(AGENT_FILE, JSON.stringify(agent, null, 2), { mode: 0o600 });
 }
 
 function loadAgent() {
 	try {
-		if (existsSync(AGENT_FILE)) {
-			return JSON.parse(readFileSync(AGENT_FILE, 'utf-8'));
-		}
+		return existsSync(AGENT_FILE) ? JSON.parse(readFileSync(AGENT_FILE, 'utf8')) : null;
 	} catch {
-		// ignore corrupt agent file
+		return null;
 	}
-	return null;
 }
 
-function requireAgent() {
-	const agent = loadAgent();
-	const token = agent?.session?.access_token;
-	if (!agent || !token) {
-		fail('Not registered. Run `qryptchat-agent register --invite <token>` first.');
-	}
-	return agent;
-}
-
-// --- Output helpers ---
-
-function printJSON(obj) {
-	process.stdout.write(JSON.stringify(obj, null, 2) + '\n');
-}
-
-function printNDJSON(obj) {
-	process.stdout.write(JSON.stringify(obj) + '\n');
-}
-
-function fail(msg, code = 1) {
-	process.stderr.write(`${msg}\n`);
-	process.exit(code);
-}
-
-// --- Arg parsing ---
-
-/**
- * Split argv into positional args + flags.
- * Flags: --key value, or --bool (no value when next token is another flag/absent).
- */
-function parseArgs(argv, booleanFlags = []) {
+function parseArgs(argv) {
 	const positional = [];
 	const flags = {};
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
-		if (arg.startsWith('--')) {
-			const key = arg.slice(2);
-			if (booleanFlags.includes(key)) {
-				flags[key] = true;
-			} else {
-				const next = argv[i + 1];
-				if (next === undefined || next.startsWith('--')) {
-					flags[key] = true;
-				} else {
-					flags[key] = next;
-					i++;
-				}
-			}
-		} else {
+		if (!arg.startsWith('--')) {
 			positional.push(arg);
+			continue;
+		}
+		const key = arg.slice(2);
+		const next = argv[i + 1];
+		if (next === undefined || next.startsWith('--')) flags[key] = true;
+		else {
+			flags[key] = next;
+			i++;
 		}
 	}
 	return { positional, flags };
 }
 
-// --- WebSocket connect + auth ---
-
-/**
- * Connect to the WS server, authenticate with the saved access_token, and
- * resolve once AUTH_SUCCESS is received. Inbound messages are delivered to
- * onMessage. PING is auto-answered with PONG.
- * @param {string} accessToken
- * @param {(msg: object, ws: WebSocket) => void} onMessage
- * @returns {Promise<WebSocket>}
- */
-function connectAndAuth(accessToken, onMessage) {
-	return new Promise((resolve, reject) => {
-		const url = `${WS_URL}?token=${encodeURIComponent(accessToken)}`;
-		const ws = new WebSocket(url);
-		let authed = false;
-
-		const timeout = setTimeout(() => {
-			if (!authed) {
-				ws.close();
-				reject(new Error('WebSocket connection/auth timeout'));
-			}
-		}, 10000);
-
-		ws.on('open', () => {
-			ws.send(createMessage(MESSAGE_TYPES.AUTH, { token: accessToken }));
-		});
-
-		ws.on('message', (data) => {
-			let msg;
-			try {
-				msg = JSON.parse(data.toString());
-			} catch {
-				return; // ignore malformed
-			}
-
-			// Always answer PING with PONG.
-			if (msg.type === MESSAGE_TYPES.PING) {
-				ws.send(JSON.stringify({
-					type: MESSAGE_TYPES.PONG,
-					payload: {},
-					requestId: msg.requestId,
-					timestamp: new Date().toISOString()
-				}));
-				return;
-			}
-
-			if (msg.type === MESSAGE_TYPES.AUTH_SUCCESS) {
-				authed = true;
-				clearTimeout(timeout);
-				resolve(ws);
-				return;
-			}
-			if (msg.type === MESSAGE_TYPES.AUTH_ERROR) {
-				clearTimeout(timeout);
-				reject(new Error(msg.payload?.error || 'Authentication failed'));
-				return;
-			}
-
-			if (onMessage) onMessage(msg, ws);
-		});
-
-		ws.on('error', (err) => {
-			clearTimeout(timeout);
-			reject(err);
-		});
-
-		ws.on('close', () => {
-			if (!authed) {
-				clearTimeout(timeout);
-				reject(new Error('WebSocket closed before authentication'));
-			}
-		});
-	});
+function usernameFor(name) {
+	const stem = String(name || 'agent')
+		.toLowerCase()
+		.replace(/[^a-z0-9_]+/g, '_')
+		.replace(/^_+|_+$/g, '')
+		.slice(0, 20) || 'agent';
+	return `${stem.length >= 3 ? stem : `${stem}_agent`}_${randomBytes(3).toString('hex')}`.slice(0, 30);
 }
 
-// --- Commands ---
+function inviteToken(input) {
+	const text = String(input || '').trim();
+	if (!text) throw new Error('Provide the agent invite URL or token.');
+	if (!/^https?:\/\//i.test(text)) return text;
+	const url = new URL(text);
+	return url.hash.replace(/^#/, '') || url.searchParams.get('token') || '';
+}
+
+function toQcSession(agent) {
+	const keys1024 = agent.keys?.keys1024 || {
+		publicKey: agent.publicKey,
+		privateKey: agent.privateKey,
+	};
+	const user = agent.user || {
+		id: agent.userId,
+		username: agent.username,
+		display_name: agent.displayName || agent.username,
+	};
+	if (!agent.session?.access_token || !user.id || !keys1024.publicKey || !keys1024.privateKey) {
+		throw new Error('Agent identity is incomplete. Run `qryptchat-agent join <agent invite>` to make a current agent identity.');
+	}
+	return {
+		base: API_URL,
+		...agent.session,
+		user,
+		keys: { ...(agent.keys || {}), keys1024 },
+	};
+}
+
+async function createAgentClient() {
+	const env = { ...process.env, QC_URL: API_URL };
+	const unlocked = await unlockSession(env);
+	if (unlocked?.session) {
+		return new QcClient(unlocked.session, { env, save: unlocked.save });
+	}
+
+	const agent = agentOrFail();
+	const session = toQcSession(agent);
+	const client = new QcClient(session, {
+		env,
+		save: (next) => {
+			agent.session = {
+				access_token: next.access_token,
+				refresh_token: next.refresh_token,
+				expires_at: next.expires_at,
+			};
+			agent.user = next.user;
+			agent.userId = next.user?.id || agent.userId;
+			agent.username = next.user?.username || agent.username;
+			saveAgent(agent);
+		},
+	});
+
+	// Older agent registrations use Supabase refresh tokens instead of qc's
+	// PKCE token. Keep those existing identities alive while they migrate.
+	const refreshQcSession = client.refresh.bind(client);
+	client.refresh = async () => {
+		try {
+			return await refreshQcSession();
+		} catch (qcError) {
+			const supabaseUrl = agent.supabase?.url || process.env.NEXT_PUBLIC_SUPABASE_URL;
+			const anonKey = agent.supabase?.anonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+			if (!supabaseUrl || !anonKey || !client.session.refresh_token) throw qcError;
+			const response = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/token?grant_type=refresh_token`, {
+				method: 'POST',
+				headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+				body: JSON.stringify({ refresh_token: client.session.refresh_token }),
+			});
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok || !body.access_token) throw qcError;
+			client.session = {
+				...client.session,
+				access_token: body.access_token,
+				refresh_token: body.refresh_token || client.session.refresh_token,
+				expires_at: body.expires_at || Math.floor(Date.now() / 1000) + (body.expires_in || 3600),
+			};
+			client.save(client.session);
+		};
+	};
+	return client;
+}
+
+function agentOrFail() {
+	const agent = loadAgent();
+	if (!agent) throw new Error('Not registered. Run `qryptchat-agent join <agent invite>` first.');
+	return agent;
+}
+
+function printJSON(value) {
+	process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function fail(message, code = 1) {
+	process.stderr.write(`${message}\n`);
+	process.exitCode = code;
+}
 
 async function cmdRegister(argv) {
 	const { flags } = parseArgs(argv);
-	const inviteToken = flags.invite;
-	if (!inviteToken) {
-		fail('register requires --invite <token>');
-	}
-
+	const token = flags.invite;
+	if (!token) throw new Error('register requires --invite <anonymous invite token>. For agent identities use `join <agent invite>`.');
 	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-	const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-	if (!supabaseUrl || !supabaseAnonKey) {
-		fail('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required for register.');
-	}
+	const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+	if (!supabaseUrl || !anonKey) throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required for legacy register.');
 
-	// 1) Anonymous Supabase auth.
 	const { createClient } = await import('@supabase/supabase-js');
-	const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-		auth: { persistSession: false, autoRefreshToken: false }
-	});
+	const supabase = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+	const { data, error } = await supabase.auth.signInAnonymously();
+	if (error || !data?.session?.access_token) throw new Error(`Anonymous sign-in failed: ${error?.message || 'no session returned'}`);
 
-	const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-	if (authError) {
-		fail(`signInAnonymously failed: ${authError.message}`);
-	}
-	const session = authData?.session;
-	if (!session?.access_token) {
-		fail('signInAnonymously returned no session/access_token.');
-	}
-
-	// 2) Generate an ML-KEM-1024 keypair locally (reusing the app's module).
-	const { MLKEMKeyExchange, MLKEMUtils } = await import('../src/lib/crypto/ml-kem.js');
-	const mlkem = new MLKEMKeyExchange('ML_KEM_1024');
-	const { publicKey, privateKey } = await mlkem.generateKeyPair();
-	const publicKeyB64 = MLKEMUtils.toBase64(publicKey);
-	const privateKeyB64 = MLKEMUtils.toBase64(privateKey);
-
-	// 3) POST to /api/auth/register-anon with the anon Bearer token.
-	const res = await fetch(`${API_URL}/api/auth/register-anon`, {
+	const keys1024 = await ephemeralKeypair();
+	const response = await fetch(`${API_URL}/api/auth/register-anon`, {
 		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${session.access_token}`
-		},
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
 		body: JSON.stringify({
-			inviteToken,
-			username: flags.username,
-			displayName: flags.display,
-			publicKey: publicKeyB64
-		})
+			inviteToken: token,
+			username: flags.username || usernameFor(flags.display || 'agent'),
+			displayName: flags.display || flags.name,
+			publicKey: keys1024.publicKey,
+		}),
 	});
-
-	let body;
-	try {
-		body = await res.json();
-	} catch {
-		fail(`register-anon returned non-JSON (HTTP ${res.status}).`);
-	}
-
-	if (!res.ok || !body?.success) {
-		fail(`Registration failed (HTTP ${res.status}): ${body?.error || 'unknown error'}`);
-	}
-
-	const user = body.user;
-
-	// 4) Persist identity (incl. private key) to ~/.qryptchat/agent.json (0600).
-	saveAgent({
+	const body = await response.json().catch(() => ({}));
+	if (!response.ok || !body.user) throw new Error(body.error || `Registration failed (HTTP ${response.status})`);
+	const agent = {
 		session: {
-			access_token: session.access_token,
-			refresh_token: session.refresh_token,
-			expires_at: session.expires_at
+			access_token: data.session.access_token,
+			refresh_token: data.session.refresh_token,
+			expires_at: data.session.expires_at,
 		},
-		privateKey: privateKeyB64,
-		publicKey: publicKeyB64,
-		userId: user?.id,
-		username: user?.username
-	});
-
-	printJSON(user);
+		keys: { keys1024 },
+		publicKey: keys1024.publicKey,
+		privateKey: keys1024.privateKey,
+		user: body.user,
+		userId: body.user.id,
+		username: body.user.username,
+		supabase: { url: supabaseUrl, anonKey },
+	};
+	saveAgent(agent);
+	printJSON(body.user);
 }
 
-function cmdWhoami() {
-	const agent = loadAgent();
-	if (!agent) {
-		fail('Not registered. Run `qryptchat-agent register --invite <token>` first.');
-	}
-	// NEVER print the private key.
-	printJSON({
-		userId: agent.userId,
-		username: agent.username,
-		publicKey: agent.publicKey,
-		hasSession: Boolean(agent.session?.access_token)
+async function cmdJoin(argv) {
+	const { positional, flags } = parseArgs(argv);
+	const input = flags.invite || positional[0];
+	const token = inviteToken(input);
+	const inviteUrl = /^https?:\/\//i.test(String(input || '')) ? input : `${API_URL}/agents/join#${encodeURIComponent(token)}`;
+	const result = await joinAsAgent(inviteUrl, {
+		name: flags.name,
+		username: flags.username || usernameFor(flags.name),
+		env: process.env,
 	});
+	printJSON({ user: result.session.user, operator: result.operator, conversation_id: result.conversationId, savedIn: 'qc secure session vault' });
+}
+
+async function cmdWhoami() {
+	const client = await createAgentClient();
+	printJSON({ userId: client.me?.id, username: client.me?.username, display_name: client.me?.display_name, hasSession: Boolean(client.session?.access_token) });
 }
 
 async function cmdConversations() {
-	const agent = requireAgent();
-	const ws = await connectAndAuth(agent.session.access_token, (msg) => {
-		if (msg.type === MESSAGE_TYPES.CONVERSATIONS_LOADED) {
-			printJSON(msg.payload?.conversations || []);
-			ws.close();
-			process.exit(0);
-		}
-		if (msg.type === MESSAGE_TYPES.ERROR) {
-			fail(`Server error: ${msg.payload?.error || 'unknown'}`);
-		}
-	});
-	ws.send(createMessage(MESSAGE_TYPES.LOAD_CONVERSATIONS, {}));
-
-	setTimeout(() => fail('Timed out waiting for conversations.'), 15000);
+	const client = await createAgentClient();
+	printJSON(await client.conversations());
 }
 
 async function cmdSend(argv) {
 	const { positional } = parseArgs(argv);
 	const conversationId = positional[0];
 	const text = positional.slice(1).join(' ');
-	if (!conversationId || !text) {
-		fail('send requires <conversationId> <text...>');
-	}
-
-	const agent = requireAgent();
-	const ws = await connectAndAuth(agent.session.access_token, (msg) => {
-		if (msg.type === MESSAGE_TYPES.MESSAGE_SENT) {
-			printJSON(msg.payload || {});
-			ws.close();
-			process.exit(0);
-		}
-		if (msg.type === MESSAGE_TYPES.ERROR) {
-			fail(`Server error: ${msg.payload?.error || 'unknown'}`);
-		}
-	});
-
-	ws.send(createMessage(MESSAGE_TYPES.SEND_MESSAGE, {
-		conversationId,
-		content: text,
-		messageType: 'text'
-	}));
-
-	setTimeout(() => fail('Timed out waiting for message_sent.'), 15000);
+	if (!conversationId || !text) throw new Error('send requires <conversationId> <text...>');
+	const client = await createAgentClient();
+	const result = await client.send(conversationId, text);
+	printJSON({ success: true, conversationId, messageId: result.message?.id, skipped: result.skipped || 0 });
 }
 
 async function cmdListen(argv) {
-	const { flags } = parseArgs(argv, ['json']);
+	const { flags } = parseArgs(argv);
 	const jsonMode = Boolean(flags.json);
-
-	const agent = requireAgent();
-
-	const emit = (obj) => (jsonMode ? printNDJSON(obj) : printJSON(obj));
-
-	const ws = await connectAndAuth(agent.session.access_token, (msg) => {
-		// Stream all inbound events (PING/PONG handled in connectAndAuth).
-		emit(msg);
-	});
-
-	if (!jsonMode) {
-		process.stderr.write('Listening for events. Press Ctrl-C to exit.\n');
+	const client = await createAgentClient();
+	const chats = await client.conversations();
+	const titles = new Map(chats.map((chat) => [chat.id, chat.title]));
+	for (const chat of chats) await client.messages(chat.id, { limit: 1 }).catch(() => {});
+	const seen = new Set();
+	const abort = new AbortController();
+	const emit = (event) => process.stdout.write(`${JSON.stringify(event)}\n`);
+	const shutdown = () => abort.abort();
+	process.once('SIGINT', shutdown);
+	process.once('SIGTERM', shutdown);
+	if (!jsonMode) process.stderr.write('Listening to qrypt.chat over SSE. Press Ctrl-C to exit.\n');
+	try {
+		await client.events(async ({ type, data }) => {
+			if (type !== 'NEW_MESSAGE' || !data?.message?.conversation_id) {
+				if (jsonMode && type !== 'CONNECTED') emit({ type, payload: data });
+				return;
+			}
+			const conversationId = data.message.conversation_id;
+			const { messages } = await client.messages(conversationId, { limit: 100 });
+			const message = messages.find((item) => item.id === data.message.id);
+			if (!message || seen.has(message.id)) return;
+			seen.add(message.id);
+			const event = {
+				type: 'message_received',
+				payload: {
+					id: message.id,
+					conversation_id: conversationId,
+					conversation_title: titles.get(conversationId) || conversationId,
+					sender: message.sender,
+					sender_id: message.senderId,
+					mine: message.mine,
+					content: message.text,
+					created_at: message.at,
+				},
+			};
+			if (jsonMode) emit(event);
+			else process.stdout.write(`[${event.payload.conversation_title}] ${event.payload.sender}: ${event.payload.content}\n`);
+		}, { signal: abort.signal, onStatus: (status) => { if (!jsonMode) process.stderr.write(`qryptchat-agent: ${status}\n`); } });
+	} finally {
+		process.removeListener('SIGINT', shutdown);
+		process.removeListener('SIGTERM', shutdown);
 	}
-
-	const shutdown = () => {
-		try { ws.close(); } catch { /* noop */ }
-		process.exit(0);
-	};
-	process.on('SIGINT', shutdown);
-	process.on('SIGTERM', shutdown);
-
-	ws.on('close', () => {
-		if (!jsonMode) process.stderr.write('Connection closed.\n');
-		process.exit(0);
-	});
 }
 
-// --- Usage ---
-
-const USAGE = `qryptchat-agent — headless agent CLI for qrypt.chat
-
-USAGE
-  qryptchat-agent <command> [options]
+const USAGE = `qryptchat-agent — headless qrypt.chat agent CLI (REST + SSE)
 
 COMMANDS
-  register --invite <token> [--username <name>] [--display <name>]
-        signInAnonymously (Supabase) → generate ML-KEM-1024 keypair →
-        POST /api/auth/register-anon → persist identity to
-        ~/.qryptchat/agent.json (mode 0600). Prints the new user as JSON.
-
+  join <agent invite> [--name NAME] [--username NAME]
+  register --invite <anonymous invite> [--username NAME] [--display NAME]  (legacy)
   whoami
-        Print the saved identity as JSON (never the private key).
-
   conversations
-        Connect WS, auth, load conversations, print the list as JSON, exit.
-
   send <conversationId> <text...>
-        Connect WS, auth, send a message, print the result JSON, exit.
-
   listen [--json]
-        Connect WS, auth, stream inbound events. With --json, emit one
-        compact JSON object per line (NDJSON) to stdout — pipeable for agents.
-        Handles PING→PONG. Exits cleanly on SIGINT.
-
-  help, --help, -h
-        Show this usage.
+  help
 
 ENVIRONMENT
-  QRYPTCHAT_API_URL              API base URL   (default http://localhost:5173)
-  QRYPTCHAT_WS_URL               WS server URL  (default ws://localhost:8080)
-  NEXT_PUBLIC_SUPABASE_URL       Supabase project URL   (required for register)
-  NEXT_PUBLIC_SUPABASE_ANON_KEY  Supabase anon key      (required for register)
-
-EXAMPLES
-  qryptchat-agent register --invite qci1.xxx.yyy --username mybot
-  qryptchat-agent conversations
-  qryptchat-agent send 1234-uuid "hello from a bot"
-  qryptchat-agent listen --json | jq -c 'select(.type=="message_received")'
+  QRYPTCHAT_API_URL   API base URL (default https://qrypt.chat)
+  QC_URL              Alias for QRYPTCHAT_API_URL
+  NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are only needed by legacy register.
 `;
 
-// --- Main ---
-
 async function main() {
-	const [, , command, ...rest] = process.argv;
-
-	if (!command || command === 'help' || command === '--help' || command === '-h') {
-		process.stdout.write(USAGE);
-		process.exit(command ? 0 : 1);
-	}
-
+	const [, , command, ...argv] = process.argv;
 	try {
 		switch (command) {
-			case 'register':
-				await cmdRegister(rest);
+			case 'help':
+			case '--help':
+			case '-h':
+			case undefined:
+				process.stdout.write(USAGE);
 				break;
-			case 'whoami':
-				cmdWhoami();
-				break;
-			case 'conversations':
-				await cmdConversations();
-				break;
-			case 'send':
-				await cmdSend(rest);
-				break;
-			case 'listen':
-				await cmdListen(rest);
-				break;
-			default:
-				fail(`Unknown command: ${command}\nRun \`qryptchat-agent --help\` for usage.`);
+			case 'register': await cmdRegister(argv); break;
+			case 'join': await cmdJoin(argv); break;
+			case 'whoami': await cmdWhoami(); break;
+			case 'conversations': await cmdConversations(); break;
+			case 'send': await cmdSend(argv); break;
+			case 'listen': await cmdListen(argv); break;
+			default: throw new Error(`Unknown command: ${command}\n\n${USAGE}`);
 		}
-	} catch (err) {
-		fail(`Error: ${err?.message || err}`);
+	} catch (error) {
+		fail(error?.message || String(error));
 	}
 }
 
-main();
+await main();

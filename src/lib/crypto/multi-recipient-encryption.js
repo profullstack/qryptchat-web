@@ -46,6 +46,7 @@ export class MultiRecipientEncryptionService {
 			if (!this.isInitialized) {
 				await this.initialize();
 			}
+			await postQuantumEncryption.refreshUserKeysFromStorage();
 
 			// Reset error collection for this encryption attempt
 			this.encryptionErrors = [];
@@ -72,6 +73,18 @@ export class MultiRecipientEncryptionService {
 				console.warn(`🔐 [MULTI] No participant keys found for conversation ${conversationId}`);
 				throw new Error('No participant keys found for conversation');
 			}
+
+			// The published key can belong to a different device or a previous key
+			// backup. Encrypt this sender's copy to the keypair this device holds.
+			const ownUserId = participantKeys.currentUserId;
+			if (!ownUserId || !participantKeys.has(ownUserId)) {
+				throw new Error('Could not identify your own recipient key. Refresh the chat and try again.');
+			}
+			const ownPublicKey = await publicKeyService.getMyPublicKey();
+			if (!ownPublicKey) {
+				throw new Error('Your local encryption key is unavailable. Restore your keys in Settings.');
+			}
+			participantKeys.set(ownUserId, ownPublicKey);
 
 			console.log(`🔐 [MULTI] Found ${participantKeys.size} participants to encrypt for`);
 
@@ -110,12 +123,19 @@ export class MultiRecipientEncryptionService {
 						messageContent,
 						publicKey
 					);
+					if (userId === ownUserId) {
+						const decrypted = await postQuantumEncryption.decryptFromSender(encryptedContent, '');
+						if (decrypted !== messageContent) {
+							throw new Error('Your message copy failed its local decrypt check. No message was sent.');
+						}
+					}
 					
 					encryptedContents[userId] = encryptedContent;
 					this.successfulEncryptionCount++;
 					console.log(`🔐 [MULTI] ✅ Encrypted for participant: ${userId} using ML-KEM`);
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error);
+					if (userId === ownUserId) throw new Error(errorMessage);
 					this.failedEncryptionCount++;
 					
 					// Collect detailed error information
