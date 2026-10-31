@@ -26,6 +26,30 @@ export const useChatStore = create((set, get) => {
   let reconnectTimeout = null;
   let connectionToken = null;
 
+  function getLocalUserId() {
+    if (typeof window === 'undefined') return null;
+    try {
+      return JSON.parse(localStorage.getItem('qrypt_user') || 'null')?.id || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeEncryptedContent(value) {
+    if (value && typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
+      value = new TextDecoder().decode(new Uint8Array(value.data));
+    }
+    if (typeof value !== 'string') return value;
+    const text = value.trim();
+    if (text.startsWith('{')) return text;
+    try {
+      const decoded = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+      return decoded.trimStart().startsWith('{') ? decoded : value;
+    } catch {
+      return value;
+    }
+  }
+
   async function apiPost(endpoint, data = {}) {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -111,6 +135,10 @@ export const useChatStore = create((set, get) => {
     const { activeConversation } = get();
 
     if (messagePayload.shouldReloadMessages) {
+      // The send acknowledgement is already in local state. Don't let a
+      // self-broadcast race that acknowledgement and replace it with an
+      // incomplete database row.
+      if (message.sender_id === getLocalUserId()) return;
       if (activeConversation === message.conversation_id) {
         await get().loadMessages(message.conversation_id);
       } else {
@@ -121,7 +149,8 @@ export const useChatStore = create((set, get) => {
 
     if (message.encrypted_content) {
       try {
-        message.content = await postQuantumEncryption.decryptFromSender(message.encrypted_content, '');
+        await postQuantumEncryption.refreshUserKeysFromStorage();
+        message.content = await postQuantumEncryption.decryptFromSender(normalizeEncryptedContent(message.encrypted_content), '');
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg.includes('Algorithm mismatch') || msg.includes('invalid encapsulation key')) {
@@ -220,10 +249,11 @@ export const useChatStore = create((set, get) => {
         const response = await apiPost('/api/messages/load', { conversationId });
         if (response.success) {
           const msgs = response.messages || [];
+          await postQuantumEncryption.refreshUserKeysFromStorage();
           for (const message of msgs) {
             if (message.encrypted_content) {
               try {
-                message.content = await postQuantumEncryption.decryptFromSender(message.encrypted_content, '');
+                message.content = await postQuantumEncryption.decryptFromSender(normalizeEncryptedContent(message.encrypted_content), '');
               } catch (error) {
                 const errMsg = error instanceof Error ? error.message : String(error);
                 if (errMsg.includes('Algorithm mismatch') || errMsg.includes('invalid encapsulation key') || errMsg.includes('invalid ciphertext')) {
@@ -236,7 +266,19 @@ export const useChatStore = create((set, get) => {
               message.content = '[No content]';
             }
           }
-          set({ activeConversation: conversationId, messages: msgs, loading: false, error: null, typingUsers: [] });
+          // Read the optimistic rows at commit time so a send that completed
+          // while this fetch was in flight cannot be erased by this response.
+          const loadedIds = new Set(msgs.map((message) => message.id));
+          const localMessages = get().activeConversation === conversationId
+            ? get().messages.filter((message) => message.localOnly && !loadedIds.has(message.id))
+            : [];
+          set({
+            activeConversation: conversationId,
+            messages: [...msgs, ...localMessages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+            loading: false,
+            error: null,
+            typingUsers: []
+          });
         }
       } catch {
         set({ loading: false, error: 'Failed to load messages' });
@@ -251,16 +293,26 @@ export const useChatStore = create((set, get) => {
         if (replyToId) payload.replyToId = replyToId;
         const response = await apiPost('/api/messages/send', payload);
         if (response.success) {
-          const sentMessage = response.message;
+          const sentMessage = { ...response.message, localOnly: true };
           if (sentMessage.encrypted_content) {
             try {
-              sentMessage.content = await postQuantumEncryption.decryptFromSender(sentMessage.encrypted_content, '');
+              sentMessage.content = await postQuantumEncryption.decryptFromSender(normalizeEncryptedContent(sentMessage.encrypted_content), '');
             } catch {
               sentMessage.content = content;
             }
           } else {
             sentMessage.content = content;
           }
+
+          set((state) => {
+            if (state.activeConversation !== conversationId) {
+              return { activeConversation: conversationId, messages: [sentMessage] };
+            }
+            if (!state.messages.some((message) => message.id === sentMessage.id)) {
+              return { messages: [...state.messages, sentMessage] };
+            }
+            return { activeConversation: conversationId };
+          });
           return { success: true, data: sentMessage };
         }
       } catch (error) {

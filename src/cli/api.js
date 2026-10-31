@@ -257,14 +257,24 @@ export class QcClient {
 		const userIds = participants.map((p) => p.user_id);
 		if (!userIds.length) throw new QcError('This conversation has no participants');
 		const { public_keys: keys = {} } = await this.request('/api/crypto/public-keys', { method: 'POST', body: { user_ids: userIds } });
+		const ownId = this.me?.id;
+		const ownPublicKey = this.session.keys?.keys1024?.publicKey;
+		if (!ownId || !userIds.includes(ownId) || !ownPublicKey) {
+			throw new QcError('Could not identify this device’s own key in the conversation. Sign in again and retry.');
+		}
 		const encryptedContents = {};
 		const missing = [];
 		for (const id of userIds) {
-			if (!keys[id]) {
+			const publicKey = id === ownId ? ownPublicKey : keys[id];
+			if (!publicKey) {
 				missing.push(id);
 				continue;
 			}
-			encryptedContents[id] = await this.ring.encrypt(text, keys[id]);
+			const encrypted = await this.ring.encrypt(text, publicKey);
+			if (id === ownId && (await this.ring.decrypt(encrypted)) !== text) {
+				throw new QcError('This device could not decrypt its own encrypted message. No message was sent.');
+			}
+			encryptedContents[id] = encrypted;
 		}
 		if (!Object.keys(encryptedContents).length) throw new QcError('No participant has a public key yet');
 		const { message } = await this.request('/api/messages/send', {

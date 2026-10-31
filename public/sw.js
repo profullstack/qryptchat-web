@@ -3,10 +3,8 @@
  * Basic offline functionality without ES module imports
  */
 
-// Bumped to v1 -> v2 so clients running the old cache-first worker drop the
-// stale app shell they precached on install. v3: page loads skip the HTTP
-// cache's stale copies (see the fetch handler).
-const CACHE_NAME = 'qryptchat-v3';
+// v4 drops stale chat code that could encrypt a sender copy to an old key.
+const CACHE_NAME = 'qryptchat-v4';
 const OFFLINE_SHELL = '/';
 const STATIC_CACHE_URLS = [
   OFFLINE_SHELL,

@@ -37,23 +37,52 @@ export async function POST(request, { params } = {}) {
 			return NextResponse.json({ error: 'User not found' }, { status: 404 });
 		}
 
-		// Mark all unread messages in this conversation as read
-		const { error: updateError } = await supabase
-			.from('deliveries')
-			.update({ read_ts: new Date().toISOString() })
-			.eq('recipient_user_id', internalUser.id)
-			.is('read_ts', null)
-			.is('deleted_ts', null)
-			.in('message_id',
-				supabase
-					.from('messages')
-					.select('id')
-					.eq('conversation_id', normalizedConversationId)
-			);
+		const { data: participant, error: participantError } = await supabase
+			.from('conversation_participants')
+			.select('id')
+			.eq('conversation_id', normalizedConversationId)
+			.eq('user_id', internalUser.id)
+			.maybeSingle();
 
-		if (updateError) {
-			console.error('Error marking messages as read:', updateError);
-			return NextResponse.json({ error: 'Failed to mark messages as read' }, { status: 500 });
+		if (participantError || !participant) {
+			return NextResponse.json({ error: 'Access denied to conversation' }, { status: 403 });
+		}
+
+		// PostgREST `.in()` accepts an array, not a nested query builder. Page the
+		// conversation's IDs and update deliveries in bounded batches.
+		const batchSize = 500;
+		let offset = 0;
+		while (true) {
+			const { data: messageRows, error: messagesError } = await supabase
+				.from('messages')
+				.select('id')
+				.eq('conversation_id', normalizedConversationId)
+				.order('id')
+				.range(offset, offset + batchSize - 1);
+
+			if (messagesError) {
+				console.error('Error loading conversation messages to mark read:', messagesError);
+				return NextResponse.json({ error: 'Failed to mark messages as read' }, { status: 500 });
+			}
+
+			const messageIds = (messageRows || []).map(({ id }) => id).filter(Boolean);
+			if (!messageIds.length) break;
+
+			const { error: updateError } = await supabase
+				.from('deliveries')
+				.update({ read_ts: new Date().toISOString() })
+				.eq('recipient_user_id', internalUser.id)
+				.is('read_ts', null)
+				.is('deleted_ts', null)
+				.in('message_id', messageIds);
+
+			if (updateError) {
+				console.error('Error marking messages as read:', updateError);
+				return NextResponse.json({ error: 'Failed to mark messages as read' }, { status: 500 });
+			}
+
+			if (messageIds.length < batchSize) break;
+			offset += batchSize;
 		}
 
 		return NextResponse.json({ 

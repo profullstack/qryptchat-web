@@ -193,7 +193,12 @@ export const POST = withAuth(async ({ request, locals }) => {
 
 		return NextResponse.json({
 			success: true,
-			message: newMessage
+			// The messages row intentionally has no ciphertext. Return the sender's
+			// own recipient copy so the client can decrypt and render its acknowledgement.
+			message: {
+				...newMessage,
+				encrypted_content: encryptedContents[userId] || null
+			}
 		});
 	} catch (error) {
 		console.error('Send message error:', error);

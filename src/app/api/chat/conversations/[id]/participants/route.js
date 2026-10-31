@@ -185,6 +185,7 @@ export async function GET(request, { params } = {}) {
 		return NextResponse.json({
 			success: true,
 			participants: transformedParticipants,
+			current_user_id: user.id,
 			conversation_id: conversationId
 		});
 

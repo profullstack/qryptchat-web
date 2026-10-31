@@ -6,7 +6,10 @@ vi.mock('../../src/lib/crypto/multi-recipient-encryption.js', () => ({
 }));
 
 vi.mock('../../src/lib/crypto/post-quantum-encryption.js', () => ({
-  postQuantumEncryption: { decryptFromSender: vi.fn().mockResolvedValue('Decrypted message') },
+  postQuantumEncryption: {
+    decryptFromSender: vi.fn().mockResolvedValue('Decrypted message'),
+    refreshUserKeysFromStorage: vi.fn().mockResolvedValue(false),
+  },
 }));
 
 vi.mock('../../src/lib/crypto/public-key-service.js', () => ({

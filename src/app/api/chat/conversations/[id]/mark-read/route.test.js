@@ -38,9 +38,20 @@ function createUsersQuery() {
 function createMessagesQuery() {
 	const query = {
 		select: vi.fn(() => query),
-		eq: mocks.messagesEq
+		eq: mocks.messagesEq,
+		order: vi.fn(() => query),
+		range: vi.fn().mockResolvedValue({ data: [{ id: 'message-id' }], error: null })
 	};
 	mocks.messagesEq.mockReturnValue(query);
+	return query;
+}
+
+function createParticipantsQuery() {
+	const query = {
+		select: vi.fn(() => query),
+		eq: vi.fn(() => query),
+		maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'participant-id' }, error: null })
+	};
 	return query;
 }
 
@@ -68,6 +79,7 @@ describe('POST /api/chat/conversations/[id]/mark-read', () => {
 
 		mocks.from.mockImplementation((table) => {
 			if (table === 'users') return createUsersQuery();
+			if (table === 'conversation_participants') return createParticipantsQuery();
 			if (table === 'messages') return createMessagesQuery();
 			if (table === 'deliveries') return createDeliveriesQuery();
 			throw new Error(`Unexpected table: ${table}`);
@@ -82,7 +94,7 @@ describe('POST /api/chat/conversations/[id]/mark-read', () => {
 
 		expect(response.status).toBe(200);
 		expect(mocks.messagesEq).toHaveBeenCalledWith('conversation_id', 'conversation-1');
-		expect(mocks.deliveriesIn).toHaveBeenCalledWith('message_id', expect.any(Object));
+		expect(mocks.deliveriesIn).toHaveBeenCalledWith('message_id', ['message-id']);
 	});
 
 	it('rejects requests without a conversation id', async () => {

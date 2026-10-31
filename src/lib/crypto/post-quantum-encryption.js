@@ -63,6 +63,37 @@ export class PostQuantumEncryptionService {
 	}
 
 	/**
+	 * Refresh in-memory keys from IndexedDB before encrypting or decrypting.
+	 * Another open tab may have restored or rotated this device's keys while
+	 * this singleton remained alive.
+	 */
+	async refreshUserKeysFromStorage() {
+		if (typeof window === 'undefined') return false;
+
+		try {
+			const [keyData1024, keyData768] = await Promise.all([
+				indexedDBManager.get(this.storageKey),
+				indexedDBManager.get(this.storageKey768)
+			]);
+			let refreshed = false;
+
+			if (keyData1024?.publicKey && keyData1024?.privateKey && keyData1024.algorithm === this.kemName) {
+				this.userKeys = { publicKey: keyData1024.publicKey, privateKey: keyData1024.privateKey };
+				refreshed = true;
+			}
+			if (keyData768?.publicKey && keyData768?.privateKey && keyData768.algorithm === this.kemName768) {
+				this.userKeys768 = { publicKey: keyData768.publicKey, privateKey: keyData768.privateKey };
+				refreshed = true;
+			}
+
+			return refreshed;
+		} catch (error) {
+			console.warn('🔐 Could not refresh encryption keys from local storage:', error);
+			return false;
+		}
+	}
+
+	/**
 	 * Generate or load user's post-quantum key pair
 	 * @returns {Promise<{publicKey: string, privateKey: string}>}
 	 */
