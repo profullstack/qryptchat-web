@@ -161,6 +161,9 @@ export default function RootLayout({ children }) {
                 { label: 'Privacy', href: '/privacy' },
                 { label: 'Terms', href: '/terms' },
                 { label: 'GitHub', href: 'https://github.com/profullstack/qryptchat-web' },
+                ...(process.env.NEXT_PUBLIC_ONION_URL && !new URL(SITE_URL).hostname.endsWith('.onion')
+                  ? [{ label: 'Also on Tor', href: process.env.NEXT_PUBLIC_ONION_URL }]
+                  : []),
               ]}
             />
           }
