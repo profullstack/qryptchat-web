@@ -1,22 +1,33 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import { createPlayer } from '@profullstack/player';
+import '@profullstack/player/player.css';
 
-export default function EnhancedVideoPlayer({ src, type = 'video/mp4', controls = true, autoPlay = false }) {
-  const videoRef = useRef(null);
+/**
+ * Plays a video or audio attachment in the house player (@profullstack/player):
+ * one control bar with auto-hide, full screen including iPhone.
+ *
+ * Attachments are decrypted into blob: URLs, which carry no file extension, so
+ * the caller passes the MIME type and the player is told the kind outright
+ * instead of sniffing the URL.
+ */
+export default function EnhancedVideoPlayer({ src, type = 'video/mp4', audio = false, autoPlay = false, className = '' }) {
+  const rootRef = useRef(null);
 
   useEffect(() => {
-    if (videoRef.current && src) {
-      videoRef.current.load();
-    }
-  }, [src]);
+    const root = rootRef.current;
+    if (!root || !src) return undefined;
+    const isAudio = audio || (type || '').toLowerCase().startsWith('audio/');
+    const handle = createPlayer(root, {
+      src,
+      kind: isAudio ? 'audio' : 'mp4',
+      audio: isAudio,
+      ...(type ? { mimeType: type } : {}),
+      autoplay: autoPlay,
+    });
+    return () => handle.destroy();
+  }, [src, type, audio, autoPlay]);
 
-  return (
-    <div className="video-player">
-      <video ref={videoRef} controls={controls} autoPlay={autoPlay} style={{ width: '100%', borderRadius: '.5rem' }}>
-        <source src={src} type={type} />
-        Your browser does not support the video tag.
-      </video>
-    </div>
-  );
+  return <div ref={rootRef} className={`video-player ${className}`.trim()} />;
 }

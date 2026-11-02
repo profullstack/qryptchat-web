@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { decryptFileContent } from '@/lib/utils/file-decryption.js';
+import EnhancedVideoPlayer from '@/lib/components/media/EnhancedVideoPlayer.jsx';
 
 function base64ToBlobUrl(base64, mimeType) {
   const bin = atob(base64);
@@ -105,9 +106,9 @@ export default function MessageAttachments({ messageId }) {
               <img className="att-image" src={it.url} alt={it.filename} />
             </a>
           ) : it.kind === 'video' ? (
-            <video className="att-video" src={it.url} controls preload="metadata" />
+            <EnhancedVideoPlayer className="att-video" src={it.url} type={it.mimeType || 'video/mp4'} />
           ) : it.kind === 'audio' ? (
-            <audio className="att-audio" src={it.url} controls preload="metadata" />
+            <EnhancedVideoPlayer className="att-audio" src={it.url} type={it.mimeType || 'audio/mpeg'} audio />
           ) : (
             <a className="att-file" href={it.url} download={it.filename}>
               <span className="att-file-icon">📎</span>
@@ -124,7 +125,7 @@ export default function MessageAttachments({ messageId }) {
         .att-error { color: var(--color-error); }
         .att-spinner { width: 13px; height: 13px; border: 2px solid rgba(127,127,127,.3); border-top-color: var(--color-brand-primary); border-radius: 50%; animation: spin .8s linear infinite; }
         .att-image { max-width: 260px; max-height: 320px; border-radius: .5rem; display: block; cursor: pointer; }
-        .att-video { max-width: 280px; max-height: 320px; border-radius: .5rem; display: block; background: #000; }
+        .att-video { width: 280px; max-width: 100%; aspect-ratio: 16 / 9; max-height: 320px; border-radius: .5rem; display: block; background: #000; }
         .att-audio { width: 240px; }
         .att-file { display: flex; align-items: center; gap: .4rem; padding: .5rem .625rem; background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary); border-radius: .5rem; text-decoration: none; color: var(--color-text-primary); max-width: 260px; }
         .att-file:hover { background: var(--color-bg-secondary); }
