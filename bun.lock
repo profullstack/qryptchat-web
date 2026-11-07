@@ -7,7 +7,7 @@
       "dependencies": {
         "@noble/ciphers": "^2.4.0",
         "@noble/hashes": "^2.4.0",
-        "@profullstack/autoblog": "github:profullstack/autoblog#75e54af77cbcf61dbd90fb3ed529c1b2dad1ed6f",
+        "@profullstack/autoblog": "0.5.0",
         "@profullstack/coinpay-onboard": "0.3.1",
         "@profullstack/encrypt": "^0.1.0",
         "@profullstack/footer": "latest",
@@ -372,7 +372,9 @@
 
     "@posthog/types": ["@posthog/types@1.416.1", "", {}, "sha512-PG06HE2axHNyyZ9CKSSHKSW4pWfQwEtPA1dewFqIwggcIgk1BsQ+tHSNqvZz+IvE2WnBZ8OcOkF9SWI55VxQfA=="],
 
-    "@profullstack/autoblog": ["@profullstack/autoblog@github:profullstack/autoblog#75e54af", {}, "profullstack-autoblog-75e54af", "sha512-f/YwwiVTzKz659+6RHgeGueSdUrWAnon5OHT1YfOI5TdLZPDrLFGE88051fzQXAlsBrkDK1jrm216OIrKygnRA=="],
+    "@profullstack/ai-providers": ["@profullstack/ai-providers@0.1.0", "", { "bin": { "ai-providers": "src/cli.js" } }, "sha512-vc7aFjozyiwIhREWLhB3xWpUPeGggM348ng5W6j4IA+gxYF3S7TNLoGWrF/ax2NttsK40C801CRkD9JSVA4aOg=="],
+
+    "@profullstack/autoblog": ["@profullstack/autoblog@0.5.0", "", { "dependencies": { "@profullstack/ai-providers": "0.1.0" } }, "sha512-KewpX0rM55o+7TMYeU35gqZceQFNF6zmo8zDoZRP5zoPU+XqTRcBlv6bZvl9oQHUXKXAsePJVNZKtDNhTrNEfw=="],
 
     "@profullstack/coinpay-onboard": ["@profullstack/coinpay-onboard@0.3.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.32.2", "zod": "^4.6.7" }, "bin": { "coinpay-onboard": "bin/coinpay-onboard" } }, "sha512-+K7D6uaX10y+0V5sg7To1jKwNG8iCNbN9SSW6q5ACzoiDNswMox3G7gzY/Swxd128klq7ecN2Ni4JVNr50nRIQ=="],
 
