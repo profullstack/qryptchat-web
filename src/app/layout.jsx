@@ -145,6 +145,22 @@ export default function RootLayout({ children }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
+        {/* WebMCP (@profullstack/webmcp): site_info and open_page only. Chats
+            are end-to-end encrypted in the page, so no message tools. */}
+        <script
+          type="module"
+          data-webmcp=""
+          src="https://cdn.jsdelivr.net/npm/@profullstack/webmcp@0/src/embed.js"
+          data-pages={JSON.stringify({
+            home: '/',
+            chat: '/chat',
+            about: '/about',
+            security: '/security',
+            encryption: '/encryption-test',
+            premium: '/premium',
+            faq: '/faq',
+          })}
+        />
       </head>
       <body suppressHydrationWarning>
         <ClientLayout
