@@ -56,6 +56,10 @@ export default function MessageInput({ conversationId, disabled = false }) {
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  // Sending disables the editor, which drops focus (and a Send click moves it
+  // to the button). Put the caret back once the send settles so the next
+  // message can be typed straight away.
+  const refocusAfterSend = useRef(false);
 
   const user = useAuthStore((s) => s.user);
   const { conversations, messages, sendMessage, setTyping, stopTyping, loadMessages, replyingTo, clearReplyingTo } = useChatStore(
@@ -334,6 +338,7 @@ export default function MessageInput({ conversationId, disabled = false }) {
     const hasFiles = selectedFiles.length > 0;
     if (!hasText && !hasFiles) return;
 
+    refocusAfterSend.current = true;
     setIsSending(true);
     setIsUploadingFiles(hasFiles);
     setUploadError('');
@@ -386,6 +391,12 @@ export default function MessageInput({ conversationId, disabled = false }) {
       if (conversationId) stopTyping(conversationId);
     }
   }
+
+  useEffect(() => {
+    if (isSending || !refocusAfterSend.current) return;
+    refocusAfterSend.current = false;
+    editorRef.current?.focus();
+  }, [isSending]);
 
   const canSend = !disabled && !isSending && !isUploadingFiles && (messageText.trim() || selectedFiles.length > 0);
 
