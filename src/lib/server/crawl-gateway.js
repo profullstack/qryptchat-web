@@ -1,5 +1,6 @@
 import { createGateway } from '@profullstack/x402-gateway';
 import { x402Proxy } from '@profullstack/x402-gateway/next';
+import { coinpayFetch } from './coinpay-ua.js';
 
 /**
  * Sells crawl access to AI training crawlers (GPTBot, ClaudeBot, CCBot, ...)
@@ -18,6 +19,8 @@ export const gateway = createGateway({
   siteName: 'QryptChat',
   coinpay: { apiKey: env('COINPAY_X402_KEY') },
   payTo: env('CRAWL_PAY_TO'),
+  // x402-gateway 0.16 has no User-Agent of its own; this names the app to CoinPay.
+  fetch: coinpayFetch,
   contact: 'mailto:anthony@profullstack.com',
   // The API (health checks, auth hooks, webhooks, chat), the realtime socket
   // and the crawl manifests are never charged.

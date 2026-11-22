@@ -27,6 +27,7 @@
 
 import { NextResponse } from 'next/server';
 import { finishSignIn, sameState } from '@profullstack/coinpay-onboard/oauth';
+import { coinpayFetch } from '@/lib/server/coinpay-ua.js';
 import {
 	getCoinpayConfig,
 	getAppOrigin,
@@ -109,7 +110,8 @@ export async function GET(request) {
 				clientId,
 				clientSecret,
 				redirectUri: getRedirectUri(appOrigin),
-				base: issuer
+				base: issuer,
+				fetch: coinpayFetch
 			});
 			claims = { ...r.userinfo, sub: r.sub, email: r.email ?? undefined, name: r.name ?? undefined };
 		} catch (err) {
